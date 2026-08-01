@@ -1,0 +1,152 @@
+[
+  {
+    "borrower_id": "B001",
+    "case_id": "ALPHA-SUM-APRIL",
+    "covenant_id": "COV-ALPHA-SUM",
+    "document_file": "alpha_trade_contract.pdf",
+    "evaluation_date": "2026-04-30",
+    "expected": {
+      "evidence_transaction_id": null,
+      "explanation": "5M + 6M + 5M = 16M KZT; USD row and May row are excluded.",
+      "number": "16000000.000000",
+      "status": "success",
+      "verdict": "violated"
+    },
+    "question": "Соблюдён ли месячный лимит исходящих KZT-платежей Alpha Trade за апрель?"
+  },
+  {
+    "borrower_id": "B001",
+    "case_id": "ALPHA-MAX-APRIL",
+    "covenant_id": "COV-ALPHA-MAX",
+    "document_file": "alpha_trade_contract.pdf",
+    "evaluation_date": "2026-04-30",
+    "expected": {
+      "evidence_transaction_id": "A002",
+      "explanation": "A002 is the largest matching transfer and exceeds 5M KZT.",
+      "number": "6000000.000000",
+      "status": "success",
+      "verdict": "violated"
+    },
+    "question": "Каков максимальный исходящий KZT-перевод Alpha Trade за апрель?"
+  },
+  {
+    "borrower_id": "B001",
+    "case_id": "ALPHA-COUNT-TRIGGER",
+    "covenant_id": "COV-ALPHA-COUNT",
+    "document_file": "alpha_trade_contract.pdf",
+    "evaluation_date": "2026-04-30",
+    "expected": {
+      "evidence_transaction_id": "A003",
+      "explanation": "A001, A002, and A003 match; A003 is the threshold-crossing third transaction.",
+      "number": 3,
+      "status": "success",
+      "verdict": "violated"
+    },
+    "question": "Какая операция третьей превысила месячный лимит операций Alpha Trade свыше 4M?"
+  },
+  {
+    "borrower_id": "B001",
+    "case_id": "ALPHA-MIN-INCOMING",
+    "covenant_id": "COV-ALPHA-MIN",
+    "document_file": "alpha_trade_contract.pdf",
+    "evaluation_date": "2026-04-30",
+    "expected": {
+      "evidence_transaction_id": null,
+      "explanation": "The only matching incoming KZT transaction equals the 2M boundary.",
+      "number": "2000000.000000",
+      "status": "success",
+      "verdict": "complied"
+    },
+    "question": "Соблюдён ли минимальный размер входящего пополнения Alpha Trade за апрель?"
+  },
+  {
+    "borrower_id": "B002",
+    "case_id": "BETA-AVG-APRIL",
+    "covenant_id": "COV-BETA-AVG",
+    "document_file": "borrower_limits_appendix.pdf",
+    "evaluation_date": "2026-04-30",
+    "expected": {
+      "evidence_transaction_id": null,
+      "explanation": "(3M + 3M + 6M) / 3 equals the permitted 4M boundary.",
+      "number": "4000000.000000",
+      "status": "success",
+      "verdict": "complied"
+    },
+    "question": "Превысил ли средний исходящий платёж Beta Logistics 4M KZT в апреле?"
+  },
+  {
+    "borrower_id": "B002",
+    "case_id": "BETA-SUM-BOUNDARY",
+    "covenant_id": "COV-BETA-SUM",
+    "document_file": "borrower_limits_appendix.pdf",
+    "evaluation_date": "2026-04-30",
+    "expected": {
+      "evidence_transaction_id": null,
+      "explanation": "The total equals 12M and <= is satisfied at the boundary.",
+      "number": "12000000.000000",
+      "status": "success",
+      "verdict": "complied"
+    },
+    "question": "Соблюдён ли суммарный лимит Beta Logistics за апрель?"
+  },
+  {
+    "borrower_id": "B001",
+    "case_id": "ALPHA-SUM-EMPTY",
+    "covenant_id": "COV-ALPHA-SUM",
+    "document_file": "alpha_trade_contract.pdf",
+    "evaluation_date": "2026-06-30",
+    "expected": {
+      "evidence_transaction_id": null,
+      "explanation": "Empty SUM has explicit zero semantics.",
+      "number": "0.000000",
+      "status": "success",
+      "verdict": "complied"
+    },
+    "question": "Каков исходящий объём Alpha Trade за июнь при отсутствии операций?"
+  },
+  {
+    "borrower_id": "B001",
+    "case_id": "ALPHA-MAX-EMPTY",
+    "covenant_id": "COV-ALPHA-MAX",
+    "document_file": "alpha_trade_contract.pdf",
+    "evaluation_date": "2026-06-30",
+    "expected": {
+      "evidence_transaction_id": null,
+      "explanation": "Empty MAX is undefined and must remain an explicit partial result.",
+      "number": null,
+      "status": "partial",
+      "verdict": "unknown"
+    },
+    "question": "Каков максимальный перевод Alpha Trade за июнь при отсутствии операций?"
+  },
+  {
+    "borrower_id": "000777",
+    "case_id": "GAMMA-SUM-DUPLICATE",
+    "covenant_id": "COV-GAMMA-SUM",
+    "document_file": "borrower_limits_appendix.pdf",
+    "evaluation_date": "2026-04-30",
+    "expected": {
+      "evidence_transaction_id": null,
+      "explanation": "1M + 2M + 2M + duplicated 2M = 7M; ingestion does not silently deduplicate.",
+      "number": "7000000.000000",
+      "status": "success",
+      "verdict": "violated"
+    },
+    "question": "Каков исходящий объём 000777 с сохранённой дублированной строкой?"
+  },
+  {
+    "borrower_id": "B002",
+    "case_id": "BETA-MAX-ISOLATION",
+    "covenant_id": "COV-BETA-MAX",
+    "document_file": "borrower_limits_appendix.pdf",
+    "evaluation_date": "2026-04-30",
+    "expected": {
+      "evidence_transaction_id": null,
+      "explanation": "Only B002 rows are considered; its maximum is 6M against a 7M limit.",
+      "number": "6000000.000000",
+      "status": "success",
+      "verdict": "complied"
+    },
+    "question": "Не смешивает ли расчёт максимума Beta Logistics операции других заёмщиков?"
+  }
+]

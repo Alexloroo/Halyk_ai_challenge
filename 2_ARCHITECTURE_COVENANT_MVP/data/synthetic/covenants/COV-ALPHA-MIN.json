@@ -1,0 +1,50 @@
+{
+  "borrower_ids": [
+    "B001"
+  ],
+  "condition": {
+    "comparator": ">=",
+    "currency": "KZT",
+    "threshold": "2000000",
+    "unit": "KZT"
+  },
+  "confidence": 1.0,
+  "covenant_id": "COV-ALPHA-MIN",
+  "effective_from": "2026-03-15",
+  "effective_to": null,
+  "evidence_mode": "none",
+  "metric": {
+    "denominator": null,
+    "field": "amount",
+    "metric_type": "min",
+    "numerator": null,
+    "unit": "KZT"
+  },
+  "raw_text": "Каждое входящее пополнение должно быть не менее 2 000 000 KZT.",
+  "source": {
+    "bbox": null,
+    "document_id": "alpha_trade_contract.pdf",
+    "page": 1,
+    "row_id": null,
+    "table_id": null,
+    "transaction_id": null
+  },
+  "time_window": {
+    "end_date": null,
+    "rolling_days": null,
+    "start_date": null,
+    "type": "calendar_month"
+  },
+  "transaction_filters": [
+    {
+      "field": "direction",
+      "operator": "eq",
+      "value": "incoming"
+    },
+    {
+      "field": "currency",
+      "operator": "eq",
+      "value": "KZT"
+    }
+  ]
+}

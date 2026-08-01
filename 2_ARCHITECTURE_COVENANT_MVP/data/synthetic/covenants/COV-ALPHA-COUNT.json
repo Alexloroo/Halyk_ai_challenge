@@ -1,0 +1,55 @@
+{
+  "borrower_ids": [
+    "B001"
+  ],
+  "condition": {
+    "comparator": "<=",
+    "currency": null,
+    "threshold": 2,
+    "unit": "count"
+  },
+  "confidence": 1.0,
+  "covenant_id": "COV-ALPHA-COUNT",
+  "effective_from": "2026-03-15",
+  "effective_to": null,
+  "evidence_mode": "trigger_transaction",
+  "metric": {
+    "denominator": null,
+    "field": "transaction_id",
+    "metric_type": "count",
+    "numerator": null,
+    "unit": "count"
+  },
+  "raw_text": "Не более двух исходящих операций свыше 4 000 000 KZT в месяц.",
+  "source": {
+    "bbox": null,
+    "document_id": "alpha_trade_contract.pdf",
+    "page": 1,
+    "row_id": null,
+    "table_id": null,
+    "transaction_id": null
+  },
+  "time_window": {
+    "end_date": null,
+    "rolling_days": null,
+    "start_date": null,
+    "type": "calendar_month"
+  },
+  "transaction_filters": [
+    {
+      "field": "direction",
+      "operator": "eq",
+      "value": "outgoing"
+    },
+    {
+      "field": "currency",
+      "operator": "eq",
+      "value": "KZT"
+    },
+    {
+      "field": "amount",
+      "operator": "gt",
+      "value": 4000000
+    }
+  ]
+}
