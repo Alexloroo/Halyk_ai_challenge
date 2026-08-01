@@ -1,0 +1,31 @@
+name: halyk-covenant-benchmark
+
+x-common: &common
+  build:
+    context: .
+    dockerfile: Dockerfile
+    target: runtime
+  image: halyk-covenants:synthetic
+  user: appuser
+  healthcheck:
+    test: ["CMD", "/app/scripts/docker-healthcheck.sh"]
+    interval: 30s
+    timeout: 5s
+    retries: 3
+    start_period: 5s
+  volumes:
+    - type: bind
+      source: ./data
+      target: /app/data
+
+services:
+  generate-synthetic:
+    <<: *common
+    command: ["generate-synthetic", "--output", "/app/data/synthetic"]
+
+  benchmark:
+    <<: *common
+    command: ["benchmark", "--dataset", "/app/data/synthetic"]
+    depends_on:
+      generate-synthetic:
+        condition: service_completed_successfully
