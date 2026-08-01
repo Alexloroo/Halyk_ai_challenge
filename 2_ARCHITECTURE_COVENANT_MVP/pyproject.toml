@@ -1,0 +1,46 @@
+[build-system]
+requires = ["hatchling>=1.25"]
+build-backend = "hatchling.build"
+
+[project]
+name = "halyk-covenants"
+version = "0.1.0"
+description = "Deterministic covenant evaluation MVP"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+  "duckdb>=1.1",
+  "openpyxl>=3.1",
+  "pandas>=2.2",
+  "pydantic>=2.8",
+  "pydantic-settings>=2.4",
+  "pyarrow>=17",
+  "pyyaml>=6.0",
+  "typer>=0.12",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.3",
+  "ruff>=0.6",
+]
+
+[project.scripts]
+halyk-covenants = "halyk_covenants.cli:app"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/halyk_covenants"]
+
+[tool.pytest.ini_options]
+addopts = "-ra"
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM", "RUF"]
+
+[tool.ruff.format]
+quote-style = "double"

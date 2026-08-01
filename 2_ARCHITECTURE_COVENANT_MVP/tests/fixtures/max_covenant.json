@@ -1,0 +1,31 @@
+{
+  "covenant_id": "COV-MAX",
+  "raw_text": "No individual outgoing transfer may exceed 5,000,000 KZT.",
+  "borrower_ids": ["B001"],
+  "metric": {
+    "metric_type": "max",
+    "field": "amount",
+    "unit": "KZT"
+  },
+  "condition": {
+    "comparator": "<=",
+    "threshold": "5000000",
+    "currency": "KZT"
+  },
+  "transaction_filters": [
+    {
+      "field": "direction",
+      "operator": "eq",
+      "value": "outgoing"
+    }
+  ],
+  "time_window": {
+    "type": "calendar_month"
+  },
+  "evidence_mode": "violating_transaction",
+  "source": {
+    "document_id": "synthetic-contract",
+    "page": 1
+  },
+  "confidence": 1
+}

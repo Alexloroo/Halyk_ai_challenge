@@ -1,0 +1,6 @@
+storage:
+  duckdb_path: data/duckdb/hackathon.duckdb
+
+evaluation:
+  continue_on_error: true
+  store_calculation_sql: true

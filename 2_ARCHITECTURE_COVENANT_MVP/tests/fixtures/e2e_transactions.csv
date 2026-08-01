@@ -1,0 +1,4 @@
+transaction_id,borrower_id,date,amount,currency,direction
+TX1,B001,2026-04-01,5000000,KZT,outgoing
+TX2,B001,2026-04-10,6000000,KZT,outgoing
+TX3,B001,2026-04-20,5000000,KZT,outgoing
