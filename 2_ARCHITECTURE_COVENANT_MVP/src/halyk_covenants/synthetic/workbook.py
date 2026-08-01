@@ -1,5 +1,8 @@
+import os
+from datetime import datetime
 from decimal import Decimal
 from pathlib import Path
+from zipfile import ZIP_DEFLATED, ZipFile, ZipInfo
 
 from openpyxl import Workbook
 from openpyxl.styles import Alignment, Font, PatternFill
@@ -26,6 +29,9 @@ TRANSACTION_HEADERS = [
 def render_workbook(definition: SyntheticDatasetDefinition, path: Path) -> Path:
     path.parent.mkdir(parents=True, exist_ok=True)
     workbook = Workbook()
+    fixed_timestamp = datetime(2026, 8, 2, 0, 0, 0)
+    workbook.properties.created = fixed_timestamp
+    workbook.properties.modified = fixed_timestamp
     transactions = workbook.active
     transactions.title = "transactions"
     transactions.append(TRANSACTION_HEADERS)
@@ -91,6 +97,7 @@ def render_workbook(definition: SyntheticDatasetDefinition, path: Path) -> Path:
     _style_table(anomalies, text_columns={1})
 
     workbook.save(path)
+    _normalize_xlsx_archive(path)
     return path
 
 
@@ -117,3 +124,17 @@ def _style_table(sheet: Worksheet, *, text_columns: set[int]) -> None:
         width = min(max(len(str(cell.value or "")) for cell in column) + 2, 48)
         sheet.column_dimensions[get_column_letter(index)].width = max(width, 12)
 
+
+def _normalize_xlsx_archive(path: Path) -> None:
+    temporary = path.with_suffix(".normalized.xlsx")
+    with ZipFile(path, "r") as source, ZipFile(
+        temporary, "w", compression=ZIP_DEFLATED, compresslevel=9
+    ) as target:
+        for name in sorted(source.namelist()):
+            original = source.getinfo(name)
+            normalized = ZipInfo(name, date_time=(1980, 1, 1, 0, 0, 0))
+            normalized.compress_type = ZIP_DEFLATED
+            normalized.external_attr = original.external_attr
+            normalized.create_system = original.create_system
+            target.writestr(normalized, source.read(name))
+    os.replace(temporary, path)

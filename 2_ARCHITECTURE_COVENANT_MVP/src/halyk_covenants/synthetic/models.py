@@ -50,3 +50,27 @@ class SyntheticDatasetDefinition(BaseModel):
     cases: list[BenchmarkCase]
     known_anomalies: list[dict[str, str]]
 
+
+class ArtifactEntry(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    path: str
+    sha256: str
+    size_bytes: int
+
+
+class DatasetManifest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    dataset_version: str
+    artifacts: list[ArtifactEntry]
+    document_defects: dict[str, list[str]]
+    known_limitations: list[str]
+
+
+class ValidationReport(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    valid: bool
+    checks: list[str]
+    errors: list[str]
