@@ -385,7 +385,9 @@ def build_synthetic_definition() -> SyntheticDatasetDefinition:
         ),
         BenchmarkCase(
             case_id="ALPHA-COUNT-TRIGGER",
-            question="Какая операция третьей превысила месячный лимит операций Alpha Trade свыше 4M?",
+            question=(
+                "Какая операция третьей превысила месячный лимит операций Alpha Trade свыше 4M?"
+            ),
             covenant_id="COV-ALPHA-COUNT",
             borrower_id="B001",
             evaluation_date=date(2026, 4, 30),
@@ -575,4 +577,3 @@ def build_synthetic_definition() -> SyntheticDatasetDefinition:
         cases=cases,
         known_anomalies=anomalies,
     )
-

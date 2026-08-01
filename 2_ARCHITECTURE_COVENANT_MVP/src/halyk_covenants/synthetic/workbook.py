@@ -1,4 +1,5 @@
 import os
+import re
 from datetime import datetime
 from decimal import Decimal
 from pathlib import Path
@@ -24,6 +25,10 @@ TRANSACTION_HEADERS = [
     "purpose",
     "source_row_id",
 ]
+
+_FIXED_MODIFIED_ELEMENT = (
+    b'<dcterms:modified xsi:type="dcterms:W3CDTF">2026-08-02T00:00:00Z</dcterms:modified>'
+)
 
 
 def render_workbook(definition: SyntheticDatasetDefinition, path: Path) -> Path:
@@ -127,14 +132,22 @@ def _style_table(sheet: Worksheet, *, text_columns: set[int]) -> None:
 
 def _normalize_xlsx_archive(path: Path) -> None:
     temporary = path.with_suffix(".normalized.xlsx")
-    with ZipFile(path, "r") as source, ZipFile(
-        temporary, "w", compression=ZIP_DEFLATED, compresslevel=9
-    ) as target:
+    with (
+        ZipFile(path, "r") as source,
+        ZipFile(temporary, "w", compression=ZIP_DEFLATED, compresslevel=9) as target,
+    ):
         for name in sorted(source.namelist()):
             original = source.getinfo(name)
             normalized = ZipInfo(name, date_time=(1980, 1, 1, 0, 0, 0))
             normalized.compress_type = ZIP_DEFLATED
             normalized.external_attr = original.external_attr
             normalized.create_system = original.create_system
-            target.writestr(normalized, source.read(name))
+            payload = source.read(name)
+            if name == "docProps/core.xml":
+                payload = re.sub(
+                    rb'<dcterms:modified xsi:type="dcterms:W3CDTF">[^<]+</dcterms:modified>',
+                    _FIXED_MODIFIED_ELEMENT,
+                    payload,
+                )
+            target.writestr(normalized, payload)
     os.replace(temporary, path)

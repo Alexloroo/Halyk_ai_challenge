@@ -5,7 +5,6 @@ from pathlib import Path
 
 import pytest
 
-
 PROJECT_ROOT = Path(__file__).parents[2]
 
 
@@ -23,9 +22,7 @@ def test_compose_config_sequences_two_services_on_one_image_and_shared_dataset()
     config = json.loads(completed.stdout)
     services = config["services"]
     assert set(services) == {"generate-synthetic", "benchmark"}
-    assert {service["image"] for service in services.values()} == {
-        "halyk-covenants:synthetic"
-    }
+    assert {service["image"] for service in services.values()} == {"halyk-covenants:synthetic"}
     assert services["benchmark"]["depends_on"]["generate-synthetic"]["condition"] == (
         "service_completed_successfully"
     )
@@ -44,9 +41,7 @@ def test_compose_config_sequences_two_services_on_one_image_and_shared_dataset()
         "CMD",
         "/app/scripts/docker-healthcheck.sh",
     ]
-    volume_targets = {
-        volume["target"] for volume in services["benchmark"]["volumes"]
-    }
+    volume_targets = {volume["target"] for volume in services["benchmark"]["volumes"]}
     # Mount the parent: the generator atomically swaps the synthetic directory,
     # which is impossible when that directory is itself a mount point.
     assert volume_targets == {"/app/data"}

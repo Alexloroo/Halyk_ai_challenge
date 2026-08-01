@@ -115,7 +115,7 @@ def validate_dataset(root: Path) -> ValidationReport:
         qa_records = [json.loads(line) for line in qa_path.read_text(encoding="utf-8").splitlines()]
         if [record["case_id"] for record in qa_records] != [case.case_id for case in cases]:
             errors.append("Q&A case order or IDs do not match cases.json")
-        for case, record in zip(cases, qa_records):
+        for case, record in zip(cases, qa_records, strict=True):
             if record.get("answer") != case.expected.model_dump(mode="json"):
                 errors.append(f"Q&A answer does not match case expectation: {case.case_id}")
     except Exception as exc:

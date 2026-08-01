@@ -36,5 +36,6 @@ def register_cyrillic_fonts() -> FontFamily:
                 boldItalic=bold_name,
             )
             return FontFamily(regular=regular_name, bold=bold_name)
-    raise FileNotFoundError("DejaVuSans.ttf and DejaVuSans-Bold.ttf are required for PDF generation")
-
+    raise FileNotFoundError(
+        "DejaVuSans.ttf and DejaVuSans-Bold.ttf are required for PDF generation"
+    )

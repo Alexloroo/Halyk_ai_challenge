@@ -50,4 +50,3 @@ def summarize_scores(scores: list[CaseScore]) -> BenchmarkSummary:
         ),
         failed_case_ids=[score.case_id for score in scores if not score.full_exact_match],
     )
-

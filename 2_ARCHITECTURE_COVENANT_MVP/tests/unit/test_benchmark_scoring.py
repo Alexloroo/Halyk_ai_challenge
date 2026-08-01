@@ -81,9 +81,7 @@ def test_evidence_miss_preserves_number_and_verdict_credit() -> None:
 
 def test_summary_computes_component_and_exact_match_rates_from_literal_scores() -> None:
     exact = score_answer("CASE-1", expected(1), actual(1))
-    evidence_miss = score_answer(
-        "CASE-2", expected(2, evidence="TX2"), actual(2, evidence=None)
-    )
+    evidence_miss = score_answer("CASE-2", expected(2, evidence="TX2"), actual(2, evidence=None))
 
     summary = summarize_scores([exact, evidence_miss])
 

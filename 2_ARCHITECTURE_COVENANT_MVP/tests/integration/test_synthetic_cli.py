@@ -5,7 +5,6 @@ from typer.testing import CliRunner
 
 from halyk_covenants.cli import app
 
-
 runner = CliRunner()
 
 

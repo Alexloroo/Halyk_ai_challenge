@@ -77,10 +77,13 @@ def _create_manifest(
     return DatasetManifest(
         dataset_version=definition.dataset_version,
         artifacts=artifacts,
-        document_defects={document.file_name: document.defects for document in definition.documents},
+        document_defects={
+            document.file_name: document.defects for document in definition.documents
+        },
         known_limitations=[
             "PDF extraction, OCR, borrower discovery, and covenant compilation are not scored.",
-            "TRIGGER_TRANSACTION evidence selection is outside Phase 1–3 and is expected to miss one evidence component.",
+            "TRIGGER_TRANSACTION evidence selection is outside Phase 1–3 and is expected "
+            "to miss one evidence component.",
             "The exact duplicate is intentionally retained and contributes to aggregate metrics.",
         ],
     )
@@ -107,4 +110,3 @@ def _replace_target(staging: Path, target: Path) -> None:
         raise
     else:
         shutil.rmtree(backup)
-

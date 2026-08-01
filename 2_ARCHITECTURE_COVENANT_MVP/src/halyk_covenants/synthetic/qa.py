@@ -55,4 +55,3 @@ def write_qa_artifacts(cases: list[BenchmarkCase], directory: Path) -> tuple[Pat
         )
     markdown_path.write_text("\n".join(lines), encoding="utf-8")
     return jsonl_path, markdown_path
-

@@ -55,9 +55,7 @@ def test_definition_contains_one_exact_duplicate_and_preserves_leading_zero_ids(
 
     assert duplicate_groups == [2]
     assert "000777" in {borrower.borrower_id for borrower in definition.borrowers}
-    assert "000003" in {
-        transaction.transaction_id for transaction in definition.transactions
-    }
+    assert "000003" in {transaction.transaction_id for transaction in definition.transactions}
 
 
 def test_all_document_defects_are_explicitly_declared() -> None:

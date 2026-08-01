@@ -12,8 +12,11 @@ def write_benchmark_reports(
     output_dir.mkdir(parents=True, exist_ok=True)
     json_path = output_dir / "report.json"
     markdown_path = output_dir / "report.md"
+    serialized = json.dumps(
+        report.model_dump(mode="json"), ensure_ascii=False, indent=2, sort_keys=True
+    )
     json_path.write_text(
-        f"{json.dumps(report.model_dump(mode='json'), ensure_ascii=False, indent=2, sort_keys=True)}\n",
+        f"{serialized}\n",
         encoding="utf-8",
     )
     markdown_path.write_text(_render_markdown(report), encoding="utf-8")
@@ -63,8 +66,11 @@ def _render_markdown(report: BenchmarkReport) -> str:
             "",
             "### Data Quality Review",
             "",
-            f"- **Grain:** one source row per workbook transaction row; {report.data_quality.row_count} rows and {report.data_quality.column_count} columns.",
-            f"- **Date range:** {report.data_quality.minimum_date} to {report.data_quality.maximum_date}.",
+            "- **Grain:** one source row per workbook transaction row; "
+            f"{report.data_quality.row_count} rows and "
+            f"{report.data_quality.column_count} columns.",
+            "- **Date range:** "
+            f"{report.data_quality.minimum_date} to {report.data_quality.maximum_date}.",
             f"- **Borrowers:** {', '.join(report.data_quality.borrower_ids)}.",
             f"- **Currencies:** {', '.join(report.data_quality.currencies)}.",
             f"- **Exact duplicate rows beyond first:** {report.data_quality.exact_duplicate_rows}.",
@@ -103,4 +109,3 @@ def _render_markdown(report: BenchmarkReport) -> str:
 
 def _percent(value: Decimal) -> str:
     return f"{(value * 100).quantize(Decimal('0.01'))}%"
-

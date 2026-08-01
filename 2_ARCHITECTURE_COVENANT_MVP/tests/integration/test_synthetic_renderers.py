@@ -40,8 +40,7 @@ def test_workbook_preserves_sheet_contract_text_ids_numeric_amounts_and_anomalie
     assert all(isinstance(transactions.cell(row=row, column=1).value, str) for row in range(2, 16))
     assert all(isinstance(transactions.cell(row=row, column=2).value, str) for row in range(2, 16))
     assert all(
-        isinstance(transactions.cell(row=row, column=5).value, (int, float))
-        for row in range(2, 16)
+        isinstance(transactions.cell(row=row, column=5).value, (int, float)) for row in range(2, 16)
     )
     assert transactions.cell(row=5, column=1).value == "000001"
     assert transactions.cell(row=5, column=1).number_format == "@"

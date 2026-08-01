@@ -142,7 +142,8 @@ def benchmark_command(
     required = Decimal(str(min_component_accuracy))
     if report.summary.component_accuracy < required:
         typer.echo(
-            f"Component accuracy {report.summary.component_accuracy} is below required minimum {required}",
+            f"Component accuracy {report.summary.component_accuracy} "
+            f"is below required minimum {required}",
             err=True,
         )
         raise typer.Exit(code=3)

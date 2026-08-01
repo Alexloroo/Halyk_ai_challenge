@@ -276,4 +276,3 @@ def _footer(page: canvas.Canvas, document: object, fonts: FontFamily, label: str
     page.setFillColor(colors.HexColor("#555555"))
     page.drawString(18 * mm, 9 * mm, f"{label} — synthetic benchmark artifact")
     page.restoreState()
-

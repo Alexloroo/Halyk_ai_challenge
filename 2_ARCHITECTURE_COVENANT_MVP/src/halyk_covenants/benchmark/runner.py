@@ -88,7 +88,9 @@ def _profile_workbook(path: Path) -> DataQualityProfile:
     frame = pd.read_excel(path, sheet_name="transactions", dtype=str)
     dates = pd.to_datetime(frame["transaction_date"], errors="raise")
     exact_duplicates = int(frame.duplicated().sum())
-    duplicated_ids = int(frame.loc[frame["transaction_id"].duplicated(keep=False), "transaction_id"].nunique())
+    duplicated_ids = int(
+        frame.loc[frame["transaction_id"].duplicated(keep=False), "transaction_id"].nunique()
+    )
     row_count = len(frame)
     duplicate_rate = exact_duplicates / row_count
     findings = [
@@ -112,7 +114,9 @@ def _profile_workbook(path: Path) -> DataQualityProfile:
             confidence="high",
             evidence="The workbook contains both KZT and USD transaction rows.",
             risk="Unfiltered cross-currency aggregation would produce an invalid monetary metric.",
-            remediation="Require covenant currency filters or an explicit approved FX conversion rule.",
+            remediation=(
+                "Require covenant currency filters or an explicit approved FX conversion rule."
+            ),
         ),
         DataQualityFinding(
             finding_id="DQ-003",
@@ -136,4 +140,3 @@ def _profile_workbook(path: Path) -> DataQualityProfile:
         rows_are_chronologically_sorted=bool(dates.is_monotonic_increasing),
         findings=findings,
     )
-
