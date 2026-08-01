@@ -1,14 +1,20 @@
+import json
 from datetime import datetime
+from decimal import Decimal
 from pathlib import Path
 from typing import Annotated
 
 import typer
 from pydantic import ValidationError
 
+from halyk_covenants.benchmark.reporting import write_benchmark_reports
+from halyk_covenants.benchmark.runner import run_benchmark
 from halyk_covenants.domain import CovenantSpec
 from halyk_covenants.evaluators import EvaluationService
 from halyk_covenants.logging import configure_logging
 from halyk_covenants.storage import DuckDBStore
+from halyk_covenants.synthetic.generator import generate_synthetic_dataset
+from halyk_covenants.synthetic.validation import DatasetValidationError
 
 app = typer.Typer(
     name="halyk-covenants",
@@ -77,6 +83,69 @@ def evaluate_command(
         raise typer.Exit(code=2) from exc
 
     typer.echo(result.model_dump_json(indent=2))
+
+
+@app.command("generate-synthetic")
+def generate_synthetic_command(
+    output: Annotated[
+        Path,
+        typer.Option(
+            "--output",
+            file_okay=False,
+            dir_okay=True,
+            resolve_path=True,
+        ),
+    ] = Path("data/synthetic"),
+) -> None:
+    """Generate deterministic PDF, XLSX, golden covenant, and Q&A fixtures."""
+    try:
+        manifest = generate_synthetic_dataset(output)
+    except (DatasetValidationError, OSError, ValueError) as exc:
+        typer.echo(f"Synthetic dataset generation failed: {exc}", err=True)
+        raise typer.Exit(code=2) from exc
+    typer.echo(manifest.model_dump_json(indent=2))
+
+
+@app.command("benchmark")
+def benchmark_command(
+    dataset: Annotated[
+        Path,
+        typer.Option(
+            "--dataset",
+            exists=True,
+            file_okay=False,
+            dir_okay=True,
+            readable=True,
+            resolve_path=True,
+        ),
+    ] = Path("data/synthetic"),
+    min_component_accuracy: Annotated[
+        float,
+        typer.Option("--min-component-accuracy", min=0.0, max=1.0),
+    ] = 0.0,
+) -> None:
+    """Run the current deterministic evaluator against golden synthetic cases."""
+    try:
+        report = run_benchmark(dataset)
+        json_path, markdown_path = write_benchmark_reports(report, dataset / "benchmark")
+    except (DatasetValidationError, OSError, ValueError) as exc:
+        typer.echo(f"Synthetic benchmark failed: {exc}", err=True)
+        raise typer.Exit(code=2) from exc
+
+    payload = {
+        "dataset_version": report.dataset_version,
+        "summary": report.summary.model_dump(mode="json"),
+        "report_json": str(json_path.resolve()),
+        "report_markdown": str(markdown_path.resolve()),
+    }
+    typer.echo(json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True))
+    required = Decimal(str(min_component_accuracy))
+    if report.summary.component_accuracy < required:
+        typer.echo(
+            f"Component accuracy {report.summary.component_accuracy} is below required minimum {required}",
+            err=True,
+        )
+        raise typer.Exit(code=3)
 
 
 if __name__ == "__main__":
