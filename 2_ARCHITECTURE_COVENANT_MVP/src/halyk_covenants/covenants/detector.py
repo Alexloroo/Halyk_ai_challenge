@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import re
+from collections import defaultdict
 from decimal import Decimal
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -20,6 +21,9 @@ _INDEPENDENT_SPLIT = re.compile(
     flags=re.IGNORECASE,
 )
 _COVENANT_CODE = re.compile(r"\bCOV-[A-Z0-9-]+\b", flags=re.IGNORECASE)
+_PROHIBITION = re.compile(
+    r"(?:запрещ|не\s+допуска|prohibited|not\s+allowed)", flags=re.IGNORECASE
+)
 
 
 class CovenantCandidate(BaseModel):
@@ -38,14 +42,8 @@ class CovenantDetector:
     def detect(self, blocks: list[DocumentBlock]) -> list[CovenantCandidate]:
         candidates: list[CovenantCandidate] = []
         ordinal = 0
-        for block in blocks:
-            if not _COVENANT_SIGNAL.search(block.text):
-                continue
-            if not re.search(r"\d", block.text) and not re.search(
-                r"(?:запрещ|не\s+допуска|prohibited|not\s+allowed)",
-                block.text,
-                flags=re.IGNORECASE,
-            ):
+        for block in self._logical_units(blocks):
+            if not self._qualifies(block.text):
                 continue
             clauses = [
                 part.strip() for part in _INDEPENDENT_SPLIT.split(block.text) if part.strip()
@@ -66,6 +64,72 @@ class CovenantDetector:
                     )
                 )
         return self._deduplicate_explicit_codes(candidates)
+
+    @classmethod
+    def _qualifies(cls, text: str) -> bool:
+        if not _COVENANT_SIGNAL.search(text):
+            return False
+        return bool(re.search(r"\d", text) or _PROHIBITION.search(text))
+
+    @classmethod
+    def _logical_units(cls, blocks: list[DocumentBlock]) -> list[DocumentBlock]:
+        """Assemble table rows and minimal adjacent text continuations before detection."""
+        units: list[DocumentBlock] = []
+        table_rows: dict[tuple[str, int, str, int], list[DocumentBlock]] = defaultdict(list)
+        text_blocks: list[DocumentBlock] = []
+        for block in blocks:
+            if block.block_type == "table_cell" and block.table_id is not None and block.row_index is not None:
+                table_rows[(block.document_id, block.page, block.table_id, block.row_index)].append(block)
+            else:
+                text_blocks.append(block)
+
+        for row_blocks in table_rows.values():
+            ordered = sorted(row_blocks, key=lambda item: (item.column_index or 0, item.block_id))
+            text = " | ".join(item.text.strip() for item in ordered if item.text.strip())
+            if not text:
+                continue
+            first = ordered[0]
+            borrower_ids = sorted({borrower for item in ordered for borrower in item.borrower_ids})
+            digest = hashlib.sha256(
+                f"{first.document_id}:{first.page}:{first.table_id}:{first.row_index}:{text}".encode()
+            ).hexdigest()[:20]
+            units.append(
+                first.model_copy(
+                    update={
+                        "block_id": f"table-row-{digest}",
+                        "block_type": "table",
+                        "text": text,
+                        "borrower_ids": borrower_ids,
+                        "confidence": min(item.confidence for item in ordered),
+                    }
+                )
+            )
+
+        ordered_text = sorted(text_blocks, key=lambda item: (item.document_id, item.page, item.block_id))
+        units.extend(ordered_text)
+        for previous, current in zip(ordered_text, ordered_text[1:], strict=False):
+            if previous.document_id != current.document_id or previous.page != current.page:
+                continue
+            if previous.borrower_ids != current.borrower_ids:
+                continue
+            if cls._qualifies(previous.text) or cls._qualifies(current.text):
+                continue
+            combined = f"{previous.text.strip()} {current.text.strip()}".strip()
+            if len(combined) > 1600 or not cls._qualifies(combined):
+                continue
+            digest = hashlib.sha256(
+                f"{previous.block_id}:{current.block_id}:{combined}".encode()
+            ).hexdigest()[:20]
+            units.append(
+                previous.model_copy(
+                    update={
+                        "block_id": f"joined-{digest}",
+                        "text": combined,
+                        "confidence": min(previous.confidence, current.confidence),
+                    }
+                )
+            )
+        return sorted(units, key=lambda item: (item.document_id, item.page, item.block_id))
 
     @staticmethod
     def _deduplicate_explicit_codes(
