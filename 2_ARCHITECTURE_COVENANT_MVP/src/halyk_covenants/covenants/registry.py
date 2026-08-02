@@ -31,16 +31,20 @@ class CovenantRegistry:
         if existing.covenant_group_id != family_id:
             self._write(existing.model_copy(update={"covenant_group_id": family_id}))
 
-        identity = "|".join(
+        semantic_identity = "|".join(
             [
                 spec.source.document_id or "",
                 str(spec.source.page or ""),
                 spec.effective_from.isoformat() if spec.effective_from else "",
                 spec.effective_to.isoformat() if spec.effective_to else "",
                 spec.raw_text,
+                spec.metric.model_dump_json(),
+                spec.condition.model_dump_json(),
+                repr([item.model_dump(mode="json") for item in spec.transaction_filters]),
+                repr([item.model_dump(mode="json") for item in spec.exclusions]),
             ]
         )
-        suffix = hashlib.sha256(identity.encode("utf-8")).hexdigest()[:10].upper()
+        suffix = hashlib.sha256(semantic_identity.encode("utf-8")).hexdigest()[:10].upper()
         return spec.model_copy(
             update={
                 "covenant_id": f"{family_id}@{suffix}",
@@ -56,6 +60,11 @@ class CovenantRegistry:
             and left.effective_from == right.effective_from
             and left.effective_to == right.effective_to
             and left.raw_text == right.raw_text
+            and left.metric == right.metric
+            and left.condition == right.condition
+            and left.transaction_filters == right.transaction_filters
+            and left.exclusions == right.exclusions
+            and left.group_by == right.group_by
         )
 
     def _write(self, spec: CovenantSpec) -> None:
