@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import math
 from pathlib import Path
 from typing import Any, Protocol
 
@@ -22,10 +23,14 @@ class PDFIngestor:
         router: PageQualityRouter | None = None,
         ocr: PageExtractor | Any | None = None,
         visual: PageExtractor | Any | None = None,
+        max_page_pixels: int = 12_000_000,
     ) -> None:
+        if max_page_pixels <= 0:
+            raise ValueError("max_page_pixels must be positive")
         self.router = router or PageQualityRouter()
         self.ocr = ocr
         self.visual = visual
+        self.max_page_pixels = max_page_pixels
 
     @trace_stage("pipeline.preprocess.pdf", run_type="chain", redact_inputs={"raw_pdf"})
     def ingest(self, path: Path) -> list[DocumentBlock]:
@@ -49,11 +54,24 @@ class PDFIngestor:
                 if quality.route == "native":
                     blocks.extend(native_blocks)
                     continue
+                if quality.route == "failed":
+                    continue
+
                 image = self._render_page(page)
                 if quality.route == "layout" and self.visual is not None:
-                    blocks.extend(
-                        self.visual.extract(image, document_id=document_id, page=page_index)
+                    layout_blocks = self.visual.extract(
+                        image,
+                        document_id=document_id,
+                        page=page_index,
                     )
+                    if layout_blocks:
+                        blocks.extend(layout_blocks)
+                    elif native_blocks:
+                        blocks.extend(native_blocks)
+                    elif self.ocr is not None:
+                        blocks.extend(
+                            self.ocr.extract(image, document_id=document_id, page=page_index)
+                        )
                 elif self.ocr is not None:
                     blocks.extend(self.ocr.extract(image, document_id=document_id, page=page_index))
                 elif native_blocks:
@@ -92,9 +110,12 @@ class PDFIngestor:
             )
         return output
 
-    @staticmethod
-    def _render_page(page: fitz.Page) -> bytes:
-        return page.get_pixmap(matrix=fitz.Matrix(2, 2), alpha=False).tobytes("png")
+    def _render_page(self, page: fitz.Page) -> bytes:
+        page_area = max(float(page.rect.width * page.rect.height), 1.0)
+        maximum_scale = math.sqrt(self.max_page_pixels / page_area)
+        scale = min(2.0, maximum_scale)
+        scale = max(scale, 0.5)
+        return page.get_pixmap(matrix=fitz.Matrix(scale, scale), alpha=False).tobytes("png")
 
     @staticmethod
     def _table_count(page: fitz.Page) -> int:
