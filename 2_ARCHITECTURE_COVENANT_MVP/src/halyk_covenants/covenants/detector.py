@@ -25,6 +25,11 @@ _COVENANT_CODE = re.compile(r"\bCOV-[A-Z0-9-]+\b", flags=re.IGNORECASE)
 _PROHIBITION = re.compile(
     r"(?:запрещ|не\s+допуска|prohibited|not\s+allowed)", flags=re.IGNORECASE
 )
+_CONSTRAINT_VALUE = re.compile(
+    r"(?:\d[\d\s.,]{2,}|[<>]=?|≤|≥|%|\b(?:KZT|USD|EUR|RUB)\b|"
+    r"тенге|млн|миллион|процент|\b\d+\s+(?:transactions?|payments?|операц\w*))",
+    flags=re.IGNORECASE,
+)
 
 
 class CovenantCandidate(BaseModel):
@@ -74,7 +79,7 @@ class CovenantDetector:
 
     @classmethod
     def _logical_units(cls, blocks: list[DocumentBlock]) -> list[DocumentBlock]:
-        """Assemble table rows and minimal adjacent text continuations before detection."""
+        """Assemble table rows and conservative adjacent text continuations before detection."""
         units: list[DocumentBlock] = []
         table_rows: dict[tuple[str, int, str, int], list[DocumentBlock]] = defaultdict(list)
         text_blocks: list[DocumentBlock] = []
@@ -115,15 +120,9 @@ class CovenantDetector:
         ordered_text = sorted(text_blocks, key=cls._reading_order_key)
         units.extend(ordered_text)
         for previous, current in pairwise(ordered_text):
-            if previous.document_id != current.document_id or previous.page != current.page:
-                continue
-            if previous.borrower_ids != current.borrower_ids:
-                continue
-            if cls._qualifies(previous.text) or cls._qualifies(current.text):
+            if not cls._can_join(previous, current):
                 continue
             combined = f"{previous.text.strip()} {current.text.strip()}".strip()
-            if len(combined) > 1600 or not cls._qualifies(combined):
-                continue
             digest = hashlib.sha256(
                 f"{previous.block_id}:{current.block_id}:{combined}".encode()
             ).hexdigest()[:20]
@@ -137,6 +136,40 @@ class CovenantDetector:
                 )
             )
         return sorted(units, key=cls._reading_order_key)
+
+    @classmethod
+    def _can_join(cls, previous: DocumentBlock, current: DocumentBlock) -> bool:
+        if previous.document_id != current.document_id or previous.page != current.page:
+            return False
+        if previous.borrower_ids != current.borrower_ids:
+            return False
+        if previous.block_type != "text" or current.block_type != "text":
+            return False
+        if cls._qualifies(previous.text) or cls._qualifies(current.text):
+            return False
+        if not cls._nearby(previous, current):
+            return False
+
+        previous_signal = bool(_COVENANT_SIGNAL.search(previous.text))
+        current_signal = bool(_COVENANT_SIGNAL.search(current.text))
+        previous_value = bool(_CONSTRAINT_VALUE.search(previous.text))
+        current_value = bool(_CONSTRAINT_VALUE.search(current.text))
+        complementary = (previous_signal and current_value) or (current_signal and previous_value)
+        if not complementary:
+            return False
+
+        combined = f"{previous.text.strip()} {current.text.strip()}".strip()
+        return len(combined) <= 1600 and cls._qualifies(combined)
+
+    @staticmethod
+    def _nearby(previous: DocumentBlock, current: DocumentBlock) -> bool:
+        if previous.bbox is None or current.bbox is None:
+            return False
+        previous_height = max(previous.bbox[3] - previous.bbox[1], 1.0)
+        current_height = max(current.bbox[3] - current.bbox[1], 1.0)
+        vertical_gap = current.bbox[1] - previous.bbox[3]
+        maximum_gap = max(12.0, 1.25 * max(previous_height, current_height))
+        return -2.0 <= vertical_gap <= maximum_gap
 
     @staticmethod
     def _reading_order_key(block: DocumentBlock) -> tuple[object, ...]:
