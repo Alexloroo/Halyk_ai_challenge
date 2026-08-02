@@ -2,27 +2,9 @@ from collections.abc import Iterable
 from typing import Any
 
 from halyk_covenants.domain import FilterSpec
+from halyk_covenants.domain.transaction_fields import FILTER_FIELDS, transaction_field_sql
 
-ALLOWED_FILTER_FIELDS = frozenset(
-    {
-        "transaction_id",
-        "borrower_id",
-        "account_id",
-        "transaction_date",
-        "amount",
-        "currency",
-        "direction",
-        "counterparty_id",
-        "counterparty_name",
-        "purpose",
-        "source_row_id",
-        "weekday",
-    }
-)
-
-_DERIVED_FIELD_SQL = {
-    "weekday": "EXTRACT(ISODOW FROM transaction_date)",
-}
+ALLOWED_FILTER_FIELDS = FILTER_FIELDS
 
 _BINARY_OPERATORS = {
     "eq": "=",
@@ -37,13 +19,13 @@ _BINARY_OPERATORS = {
 def compile_filter(filter_spec: FilterSpec) -> tuple[str, list[Any]]:
     """Compile one validated filter to parameterized DuckDB SQL.
 
-    Derived fields are selected from a closed mapping. User/model supplied field names are never
-    interpolated as arbitrary SQL expressions.
+    Field names come from one closed catalog shared with compiler validation. Values are always
+    bound parameters; model/user text is never interpolated as an arbitrary SQL expression.
     """
     field = filter_spec.field
     if field not in ALLOWED_FILTER_FIELDS:
         raise ValueError(f"Unsupported filter field: {field}")
-    field_sql = _DERIVED_FIELD_SQL.get(field, field)
+    field_sql = transaction_field_sql(field)
 
     operator = filter_spec.operator
     value = filter_spec.value
