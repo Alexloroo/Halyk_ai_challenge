@@ -147,7 +147,10 @@ class CovenantSpec(BaseModel):
         if self.status == "compiled":
             if self.condition.threshold is None:
                 raise ValueError("compiled covenant requires a deterministic condition threshold")
-            if self.metric.metric_type in {"sum", "max", "min", "avg"} and self.metric.field is None:
+            if (
+                self.metric.metric_type in {"sum", "max", "min", "avg"}
+                and self.metric.field is None
+            ):
                 raise ValueError(f"compiled {self.metric.metric_type} metric requires a field")
         return self
 
