@@ -30,8 +30,6 @@ class PageQualityRouter:
         )
         density = Decimal(readable_chars) / Decimal(str(page.width * page.height))
         reasons: list[str] = []
-        # A detected table needs structural extraction even when the PDF also exposes plenty of
-        # native text; otherwise cell relationships are lost before covenant detection.
         if page.table_count > 0:
             route = "layout"
             confidence = Decimal("0.95")
@@ -44,7 +42,7 @@ class PageQualityRouter:
                 else Decimal("0.85")
             )
             reasons.append("sufficient native text")
-        elif page.image_count > 0 or readable_chars < self.native_text_min_chars:
+        elif page.image_count > 0 or readable_chars > 0:
             route = "ocr"
             confidence = Decimal("0.90") if page.image_count else Decimal("0.70")
             reasons.append("insufficient native text")
