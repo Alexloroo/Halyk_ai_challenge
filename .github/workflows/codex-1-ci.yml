@@ -3,6 +3,8 @@ name: codex-1-ci
 on:
   push:
     branches: [codex-1]
+  pull_request:
+    branches: [main]
   workflow_dispatch:
 
 permissions:
