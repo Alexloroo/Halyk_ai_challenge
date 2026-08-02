@@ -48,17 +48,33 @@ def _render_markdown(report: BenchmarkReport) -> str:
         f"| Evidence accuracy | {_percent(summary.evidence_accuracy)} |",
         f"| Full exact-match accuracy | {_percent(summary.full_exact_match_accuracy)} |",
         "",
-        "### Case Results",
+        "### Failure-stage diagnostics",
         "",
-        "| Case | Number | Verdict | Evidence | Score | Status |",
-        "|---|---:|---|---|---:|---|",
     ]
+    if report.failure_stage_counts:
+        lines.extend(
+            f"- **{stage}:** {count}"
+            for stage, count in sorted(report.failure_stage_counts.items())
+        )
+    else:
+        lines.append("- No structured pipeline failures were recorded.")
+    lines.extend(
+        [
+            "",
+            "### Case Results",
+            "",
+            "| Case | Number | Verdict | Evidence | Score | Status | Failure stage |",
+            "|---|---:|---|---|---:|---|---|",
+        ]
+    )
     for case in report.cases:
         actual_number = "null" if case.actual.number is None else str(case.actual.number)
         actual_evidence = case.actual.evidence_transaction_id or "null"
+        failure_stage = case.actual.failure_stage.value if case.actual.failure_stage else "-"
         lines.append(
             f"| {case.case_id} | {actual_number} | {case.actual.verdict} | "
-            f"{actual_evidence} | {case.score.component_score}/3 | {case.actual.status} |"
+            f"{actual_evidence} | {case.score.component_score}/3 | {case.actual.status} | "
+            f"{failure_stage} |"
         )
 
     lines.extend(
