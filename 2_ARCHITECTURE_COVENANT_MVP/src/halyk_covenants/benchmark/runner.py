@@ -69,6 +69,15 @@ def run_benchmark(dataset_root: Path) -> BenchmarkReport:
 
     scores = [result.score for result in results]
     status_counts = dict(sorted(Counter(result.actual.status for result in results).items()))
+    failure_stage_counts = dict(
+        sorted(
+            Counter(
+                result.actual.failure_stage.value
+                for result in results
+                if result.actual.failure_stage is not None
+            ).items()
+        )
+    )
     return BenchmarkReport(
         dataset_version=manifest.dataset_version,
         benchmark_scope="Golden CovenantSpec execution against synthetic XLSX transactions",
@@ -78,6 +87,7 @@ def run_benchmark(dataset_root: Path) -> BenchmarkReport:
         ),
         summary=summarize_scores(scores),
         status_counts=status_counts,
+        failure_stage_counts=failure_stage_counts,
         data_quality=_profile_workbook(workbook_path),
         known_limitations=manifest.known_limitations,
         cases=results,
