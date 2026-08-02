@@ -86,8 +86,14 @@ class RatioEvaluator(AggregateEvaluator):
                 f"expected one of {sorted(_SUPPORTED_COMPONENTS)}"
             )
         if metric.metric_type != "count" and metric.field != "amount":
-            raise ValueError(f"ratio {label} {metric.metric_type} currently requires field=amount")
-        if metric.metric_type == "count" and metric.field is not None and metric.field not in TRANSACTION_FIELDS:
+            raise ValueError(
+                f"ratio {label} {metric.metric_type} currently requires field=amount"
+            )
+        if (
+            metric.metric_type == "count"
+            and metric.field is not None
+            and metric.field not in TRANSACTION_FIELDS
+        ):
             raise ValueError(f"ratio {label} count field is unsupported: {metric.field}")
 
     @classmethod
