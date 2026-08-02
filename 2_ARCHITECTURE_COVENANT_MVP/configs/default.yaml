@@ -4,3 +4,19 @@ storage:
 evaluation:
   continue_on_error: true
   store_calculation_sql: true
+
+deepseek:
+  model: deepseek-v4-pro
+  base_url: https://api.deepseek.com
+  timeout_seconds: 90
+  max_retries: 2
+
+ocr:
+  native_text_min_chars: 80
+  device: gpu:0
+  cpu_fallback: true
+  max_page_pixels: 12000000
+
+tracing:
+  payload_mode: redacted
+  store_local_stage_records: true

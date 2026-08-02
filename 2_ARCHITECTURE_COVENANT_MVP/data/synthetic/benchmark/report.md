@@ -13,12 +13,12 @@
 | Metric | Result |
 |---|---:|
 | Cases | 10 |
-| Component score | 29/30 |
-| Component accuracy | 96.67% |
+| Component score | 30/30 |
+| Component accuracy | 100.00% |
 | Number accuracy | 100.00% |
 | Verdict accuracy | 100.00% |
-| Evidence accuracy | 90.00% |
-| Full exact-match accuracy | 90.00% |
+| Evidence accuracy | 100.00% |
+| Full exact-match accuracy | 100.00% |
 
 ### Case Results
 
@@ -26,7 +26,7 @@
 |---|---:|---|---|---:|---|
 | ALPHA-SUM-APRIL | 16000000.000000 | violated | null | 3/3 | success |
 | ALPHA-MAX-APRIL | 6000000.000000 | violated | A002 | 3/3 | success |
-| ALPHA-COUNT-TRIGGER | 3 | violated | null | 2/3 | partial |
+| ALPHA-COUNT-TRIGGER | 3 | violated | A003 | 3/3 | success |
 | ALPHA-MIN-INCOMING | 2000000.000000 | complied | null | 3/3 | success |
 | BETA-AVG-APRIL | 4000000.000000 | complied | null | 3/3 | success |
 | BETA-SUM-BOUNDARY | 12000000.000000 | complied | null | 3/3 | success |
@@ -66,8 +66,8 @@
 
 ### Required Caveats
 
-- PDF extraction, OCR, borrower discovery, and covenant compilation are not scored.
-- TRIGGER_TRANSACTION evidence selection is outside Phase 1–3 and is expected to miss one evidence component.
+- The component benchmark uses golden CovenantSpec files; the separate full-pipeline test covers native PDF extraction and structured compilation.
+- GPU OCR, live DeepSeek, and remote LangSmith delivery are opt-in smoke gates.
 - The exact duplicate is intentionally retained and contributes to aggregate metrics.
 
 ### Calculation Spot-Checks

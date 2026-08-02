@@ -2,6 +2,7 @@
   "borrower_ids": [
     "B001"
   ],
+  "compiler_metadata": {},
   "condition": {
     "comparator": "<=",
     "currency": "KZT",
@@ -9,10 +10,14 @@
     "unit": "KZT"
   },
   "confidence": 1.0,
+  "covenant_group_id": null,
   "covenant_id": "COV-ALPHA-MAX",
+  "date_field": "transaction_date",
   "effective_from": "2026-03-15",
   "effective_to": null,
   "evidence_mode": "violating_transaction",
+  "exclusions": [],
+  "group_by": [],
   "metric": {
     "denominator": null,
     "field": "amount",
@@ -21,6 +26,7 @@
     "unit": "KZT"
   },
   "raw_text": "Один исходящий перевод не может превышать 5 000 000 KZT.",
+  "scope_mode": "per_borrower",
   "source": {
     "bbox": null,
     "document_id": "alpha_trade_contract.pdf",
@@ -29,6 +35,7 @@
     "table_id": null,
     "transaction_id": null
   },
+  "status": "compiled",
   "time_window": {
     "end_date": null,
     "rolling_days": null,

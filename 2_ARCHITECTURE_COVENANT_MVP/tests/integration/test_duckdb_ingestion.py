@@ -5,6 +5,7 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
+from halyk_covenants.domain import Borrower
 from halyk_covenants.storage import DuckDBStore
 
 FIXTURES = Path(__file__).parents[1] / "fixtures"
@@ -54,6 +55,44 @@ def test_ingestion_populates_borrower_registry_with_string_ids(tmp_path: Path) -
     ).fetchall()
     assert borrowers == [("000341",)]
     store.close()
+
+
+def test_excel_ingestion_loads_borrower_master_aliases_and_identifiers(tmp_path: Path) -> None:
+    source = tmp_path / "registry.xlsx"
+    transactions = pd.DataFrame(
+        [
+            {
+                "transaction_id": "T1",
+                "borrower_id": "000777",
+                "date": "2026-04-01",
+                "amount": "10",
+            }
+        ]
+    )
+    borrowers = pd.DataFrame(
+        [
+            {
+                "borrower_id": "000777",
+                "canonical_name": "Gamma Retail Synthetic",
+                "aliases": "GAMMA RET.; Гамма Ритейл",
+                "BIN": "001234567890",
+            }
+        ]
+    )
+    with pd.ExcelWriter(source) as writer:
+        transactions.to_excel(writer, sheet_name="transactions", index=False)
+        borrowers.to_excel(writer, sheet_name="borrowers", index=False)
+
+    with DuckDBStore(tmp_path / "registry.duckdb") as store:
+        assert store.load_transactions(source) == 1
+        assert store.list_borrowers() == [
+            Borrower(
+                borrower_id="000777",
+                canonical_name="Gamma Retail Synthetic",
+                aliases=["GAMMA RET.", "Гамма Ритейл"],
+                identifiers={"BIN": "001234567890"},
+            )
+        ]
 
 
 @pytest.mark.parametrize("extension", [".xlsx", ".parquet"])

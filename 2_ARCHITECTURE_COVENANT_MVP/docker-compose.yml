@@ -7,6 +7,11 @@ x-common: &common
     target: runtime
   image: halyk-covenants:synthetic
   user: appuser
+  environment:
+    DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:-}
+    LANGSMITH_API_KEY: ${LANGSMITH_API_KEY:-}
+    LANGSMITH_PROJECT: ${LANGSMITH_PROJECT:-halyk-covenants-local}
+    LANGSMITH_TRACING: ${LANGSMITH_TRACING:-true}
   healthcheck:
     test: ["CMD", "/app/scripts/docker-healthcheck.sh"]
     interval: 30s
@@ -29,3 +34,73 @@ services:
     depends_on:
       generate-synthetic:
         condition: service_completed_successfully
+
+  preprocess-ai:
+    <<: *common
+    profiles: ["ai"]
+    command:
+      [
+        "preprocess",
+        "/app/data/synthetic",
+        "--db",
+        "/app/data/duckdb/hackathon.duckdb",
+      ]
+    depends_on:
+      generate-synthetic:
+        condition: service_completed_successfully
+
+  evaluate-all:
+    <<: *common
+    profiles: ["ai"]
+    command:
+      [
+        "evaluate-all",
+        "--at-date",
+        "2026-04-30",
+        "--db",
+        "/app/data/duckdb/hackathon.duckdb",
+        "--output",
+        "/app/data/submissions/internal-results.json",
+      ]
+    depends_on:
+      preprocess-ai:
+        condition: service_completed_successfully
+
+  ocr-gpu:
+    profiles: ["gpu"]
+    build:
+      context: .
+      dockerfile: Dockerfile.ocr
+      target: runtime
+    image: halyk-covenants:ocr-gpu
+    user: appuser
+    command: ["ocr-smoke"]
+    environment:
+      DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:-}
+      LANGSMITH_API_KEY: ${LANGSMITH_API_KEY:-}
+      LANGSMITH_PROJECT: ${LANGSMITH_PROJECT:-halyk-covenants-local}
+      LANGSMITH_TRACING: ${LANGSMITH_TRACING:-true}
+    shm_size: 8gb
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    healthcheck:
+      test: ["CMD", "/app/scripts/ocr-healthcheck.sh"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    volumes:
+      - type: bind
+        source: ./data
+        target: /app/data
+      - type: volume
+        source: paddle-models
+        target: /home/appuser/.paddlex
+
+volumes:
+  paddle-models:

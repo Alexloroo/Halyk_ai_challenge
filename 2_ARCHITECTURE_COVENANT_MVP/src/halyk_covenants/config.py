@@ -18,6 +18,31 @@ class EvaluationSettings(BaseModel):
     store_calculation_sql: bool = True
 
 
+class DeepSeekSettings(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    model: str = "deepseek-v4-pro"
+    base_url: str = "https://api.deepseek.com"
+    timeout_seconds: float = 90.0
+    max_retries: int = Field(default=2, ge=0, le=5)
+
+
+class OCRSettings(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    native_text_min_chars: int = Field(default=80, ge=0)
+    device: str = "gpu:0"
+    cpu_fallback: bool = True
+    max_page_pixels: int = Field(default=12_000_000, gt=0)
+
+
+class TracingSettings(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    payload_mode: str = Field(default="redacted", pattern="^(redacted|full)$")
+    store_local_stage_records: bool = True
+
+
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
         env_prefix="HALYK_",
@@ -27,6 +52,9 @@ class Settings(BaseSettings):
 
     storage: StorageSettings = Field(default_factory=StorageSettings)
     evaluation: EvaluationSettings = Field(default_factory=EvaluationSettings)
+    deepseek: DeepSeekSettings = Field(default_factory=DeepSeekSettings)
+    ocr: OCRSettings = Field(default_factory=OCRSettings)
+    tracing: TracingSettings = Field(default_factory=TracingSettings)
 
     @classmethod
     def settings_customise_sources(

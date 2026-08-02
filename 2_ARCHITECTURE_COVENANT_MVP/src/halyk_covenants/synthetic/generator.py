@@ -81,9 +81,9 @@ def _create_manifest(
             document.file_name: document.defects for document in definition.documents
         },
         known_limitations=[
-            "PDF extraction, OCR, borrower discovery, and covenant compilation are not scored.",
-            "TRIGGER_TRANSACTION evidence selection is outside Phase 1–3 and is expected "
-            "to miss one evidence component.",
+            "The component benchmark uses golden CovenantSpec files; the separate full-pipeline "
+            "test covers native PDF extraction and structured compilation.",
+            "GPU OCR, live DeepSeek, and remote LangSmith delivery are opt-in smoke gates.",
             "The exact duplicate is intentionally retained and contributes to aggregate metrics.",
         ],
     )

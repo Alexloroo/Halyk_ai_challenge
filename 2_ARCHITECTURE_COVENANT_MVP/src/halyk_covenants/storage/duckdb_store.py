@@ -9,7 +9,8 @@ from typing import Any
 import duckdb
 import pandas as pd
 
-from halyk_covenants.domain import Transaction
+from halyk_covenants.borrowers.normalization import normalize_name
+from halyk_covenants.domain import Borrower, Transaction
 from halyk_covenants.ingestion import read_structured_file
 
 CANONICAL_COLUMNS = (
@@ -69,6 +70,80 @@ class DuckDBStore:
                 source_file VARCHAR NOT NULL,
                 source_hash VARCHAR NOT NULL
             );
+
+            CREATE TABLE IF NOT EXISTS borrower_aliases (
+                borrower_id VARCHAR NOT NULL,
+                alias VARCHAR NOT NULL,
+                alias_normalized VARCHAR NOT NULL,
+                PRIMARY KEY (borrower_id, alias_normalized)
+            );
+
+            CREATE TABLE IF NOT EXISTS borrower_identifiers (
+                borrower_id VARCHAR NOT NULL,
+                identifier_type VARCHAR NOT NULL,
+                identifier_value VARCHAR NOT NULL,
+                PRIMARY KEY (borrower_id, identifier_type)
+            );
+
+            CREATE TABLE IF NOT EXISTS documents (
+                document_id VARCHAR PRIMARY KEY,
+                source_path VARCHAR,
+                document_sha256 VARCHAR,
+                metadata_json JSON
+            );
+
+            CREATE TABLE IF NOT EXISTS document_blocks (
+                block_id VARCHAR PRIMARY KEY,
+                document_id VARCHAR NOT NULL,
+                page INTEGER NOT NULL,
+                block_type VARCHAR NOT NULL,
+                block_json JSON NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS covenants (
+                covenant_id VARCHAR PRIMARY KEY,
+                covenant_group_id VARCHAR,
+                effective_from DATE,
+                effective_to DATE,
+                status VARCHAR NOT NULL,
+                source_document_id VARCHAR,
+                source_page INTEGER,
+                spec_json JSON NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS covenant_borrowers (
+                covenant_id VARCHAR NOT NULL,
+                borrower_id VARCHAR NOT NULL,
+                PRIMARY KEY (covenant_id, borrower_id)
+            );
+
+            CREATE TABLE IF NOT EXISTS calculations (
+                calculation_id VARCHAR PRIMARY KEY,
+                covenant_id VARCHAR NOT NULL,
+                borrower_id VARCHAR NOT NULL,
+                calculation_json JSON NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS covenant_results (
+                borrower_id VARCHAR NOT NULL,
+                covenant_id VARCHAR NOT NULL,
+                result_json JSON NOT NULL,
+                PRIMARY KEY (borrower_id, covenant_id)
+            );
+
+            CREATE TABLE IF NOT EXISTS pipeline_stage_records (
+                run_id VARCHAR NOT NULL,
+                stage_name VARCHAR NOT NULL,
+                started_at TIMESTAMP NOT NULL,
+                record_json JSON NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS ingestion_artifacts (
+                source_path VARCHAR PRIMARY KEY,
+                content_sha256 VARCHAR NOT NULL,
+                artifact_type VARCHAR NOT NULL,
+                processed_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+            );
             """
         )
 
@@ -79,6 +154,7 @@ class DuckDBStore:
     ) -> int:
         source_path = Path(path)
         frame = read_structured_file(source_path)
+        self._load_embedded_borrower_master(source_path)
         mapping = self._resolve_mapping(frame, column_mapping)
         source_file = str(source_path.resolve())
 
@@ -145,6 +221,108 @@ class DuckDBStore:
                 """
             )
         return len(canonical_rows)
+
+    def _load_embedded_borrower_master(self, path: Path) -> None:
+        if path.suffix.casefold() not in {".xlsx", ".xlsm"}:
+            return
+        workbook = pd.ExcelFile(path)
+        sheet = next(
+            (name for name in workbook.sheet_names if name.casefold() == "borrowers"), None
+        )
+        if sheet is None:
+            return
+        frame = pd.read_excel(path, sheet_name=sheet, dtype=str, keep_default_na=False)
+        required = {"borrower_id", "canonical_name"}
+        if not required.issubset({str(column) for column in frame.columns}):
+            return
+        borrowers: list[Borrower] = []
+        reserved = {"borrower_id", "canonical_name", "aliases"}
+        for _, row in frame.iterrows():
+            borrower_id = self._optional_string(row.get("borrower_id"))
+            if borrower_id is None:
+                continue
+            aliases = [
+                alias.strip() for alias in str(row.get("aliases", "")).split(";") if alias.strip()
+            ]
+            identifiers = {
+                str(column): value
+                for column in frame.columns
+                if str(column) not in reserved
+                and (value := self._optional_string(row.get(column))) is not None
+            }
+            borrowers.append(
+                Borrower(
+                    borrower_id=borrower_id,
+                    canonical_name=self._optional_string(row.get("canonical_name")),
+                    aliases=aliases,
+                    identifiers=identifiers,
+                )
+            )
+        self.save_borrowers(borrowers)
+
+    def save_borrowers(self, borrowers: list[Borrower]) -> None:
+        for borrower in borrowers:
+            self.connection.execute(
+                """
+                INSERT INTO borrowers (borrower_id, canonical_name) VALUES (?, ?)
+                ON CONFLICT (borrower_id) DO UPDATE SET
+                    canonical_name = COALESCE(excluded.canonical_name, borrowers.canonical_name)
+                """,
+                [borrower.borrower_id, borrower.canonical_name],
+            )
+            for alias in borrower.aliases:
+                self.connection.execute(
+                    """
+                    INSERT INTO borrower_aliases VALUES (?, ?, ?)
+                    ON CONFLICT (borrower_id, alias_normalized) DO UPDATE SET alias = excluded.alias
+                    """,
+                    [borrower.borrower_id, alias, normalize_name(alias)],
+                )
+            for identifier_type, identifier_value in borrower.identifiers.items():
+                self.connection.execute(
+                    """
+                    INSERT INTO borrower_identifiers VALUES (?, ?, ?)
+                    ON CONFLICT (borrower_id, identifier_type) DO UPDATE SET
+                        identifier_value = excluded.identifier_value
+                    """,
+                    [borrower.borrower_id, identifier_type, identifier_value],
+                )
+
+    def list_borrowers(self) -> list[Borrower]:
+        rows = self.connection.execute(
+            "SELECT borrower_id, canonical_name FROM borrowers ORDER BY borrower_id"
+        ).fetchall()
+        borrowers: list[Borrower] = []
+        for borrower_id, canonical_name in rows:
+            aliases = [
+                str(row[0])
+                for row in self.connection.execute(
+                    """
+                    SELECT alias FROM borrower_aliases
+                    WHERE borrower_id = ? ORDER BY alias_normalized
+                    """,
+                    [borrower_id],
+                ).fetchall()
+            ]
+            identifiers = {
+                str(identifier_type): str(identifier_value)
+                for identifier_type, identifier_value in self.connection.execute(
+                    """
+                    SELECT identifier_type, identifier_value FROM borrower_identifiers
+                    WHERE borrower_id = ? ORDER BY identifier_type
+                    """,
+                    [borrower_id],
+                ).fetchall()
+            }
+            borrowers.append(
+                Borrower(
+                    borrower_id=str(borrower_id),
+                    canonical_name=canonical_name,
+                    aliases=aliases,
+                    identifiers=identifiers,
+                )
+            )
+        return borrowers
 
     def _resolve_mapping(
         self,

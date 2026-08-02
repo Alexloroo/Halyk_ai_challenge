@@ -1,0 +1,13 @@
+{
+  "run_id": "66147080-3acb-4cd9-ac34-c808603a7c1d",
+  "evaluation_date": "2026-04-30",
+  "expected_pair_count": 0,
+  "actual_pair_count": 0,
+  "results": [],
+  "verification": {
+    "valid": true,
+    "expected_pair_count": 0,
+    "actual_pair_count": 0,
+    "issues": []
+  }
+}

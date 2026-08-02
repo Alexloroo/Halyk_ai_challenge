@@ -490,7 +490,11 @@ git commit -m "feat: persist covenant versions and audit artifacts"
 ```python
 @pytest.mark.parametrize(
     ("case", "number", "verdict"),
-    [("ratio", Decimal("0.4"), "violated"), ("existence", 1, "violated"), ("frequency", 4, "violated")],
+    [
+        ("ratio", Decimal("0.4"), "violated"),
+        ("existence", 1, "violated"),
+        ("frequency", 4, "violated"),
+    ],
 )
 def test_advanced_metric_literals(case: str, number: Decimal | int, verdict: str) -> None:
     result = evaluate_fixture(case)
@@ -652,7 +656,9 @@ def test_batch_keeps_failed_pair_and_preserves_completeness() -> None:
     assert {result.status for result in report.results} == {"success", "failed"}
 
 
-def test_root_pipeline_contains_deterministic_child_stages(recording_tracer: RecordingTracer) -> None:
+def test_root_pipeline_contains_deterministic_child_stages(
+    recording_tracer: RecordingTracer,
+) -> None:
     PIPELINE.run(date(2026, 4, 30))
     assert recording_tracer.paths() >= {
         "pipeline.evaluate/sql.build",

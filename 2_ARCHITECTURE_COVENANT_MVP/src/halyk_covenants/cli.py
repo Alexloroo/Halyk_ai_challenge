@@ -5,14 +5,30 @@ from pathlib import Path
 from typing import Annotated
 
 import typer
-from pydantic import ValidationError
+from pydantic import TypeAdapter, ValidationError
 
 from halyk_covenants.benchmark.reporting import write_benchmark_reports
 from halyk_covenants.benchmark.runner import run_benchmark
-from halyk_covenants.domain import CovenantSpec
+from halyk_covenants.config import load_settings
+from halyk_covenants.covenants import (
+    CompilerGraph,
+    CovenantCompiler,
+    CovenantRegistry,
+    LangChainCompilerRepairer,
+)
+from halyk_covenants.domain import CovenantResult, CovenantSpec
 from halyk_covenants.evaluators import EvaluationService
+from halyk_covenants.ingestion import PDFIngestor
+from halyk_covenants.llm import DeepSeekChatFactory, DeepSeekConfigurationError
 from halyk_covenants.logging import configure_logging
+from halyk_covenants.ocr import PaddleOCRProvider
+from halyk_covenants.pipeline import BatchEvaluationPipeline, PreprocessPipeline
 from halyk_covenants.storage import DuckDBStore
+from halyk_covenants.submission import (
+    SubmissionSerializer,
+    SubmissionValidator,
+    load_submission_profile,
+)
 from halyk_covenants.synthetic.generator import generate_synthetic_dataset
 from halyk_covenants.synthetic.validation import DatasetValidationError
 
@@ -146,6 +162,152 @@ def benchmark_command(
             f"is below required minimum {required}",
             err=True,
         )
+        raise typer.Exit(code=3)
+
+
+@app.command("preprocess")
+def preprocess_command(
+    input_root: Annotated[
+        Path,
+        typer.Argument(exists=True, file_okay=False, dir_okay=True, readable=True),
+    ],
+    db_path: Annotated[Path, typer.Option("--db")] = Path("data/duckdb/hackathon.duckdb"),
+    config_path: Annotated[Path | None, typer.Option("--config")] = None,
+    enable_ocr: Annotated[bool, typer.Option("--ocr/--no-ocr")] = False,
+) -> None:
+    """Ingest structured files and compile PDF covenants through DeepSeek/LangGraph."""
+    try:
+        settings = load_settings(config_path)
+        compiler_graph = None
+        pdf_ingestor = PDFIngestor()
+        if any(path.suffix.casefold() == ".pdf" for path in input_root.rglob("*")):
+            if enable_ocr:
+                ocr_provider = PaddleOCRProvider(
+                    preferred_device=settings.ocr.device,
+                    cpu_fallback=settings.ocr.cpu_fallback,
+                )
+                ocr_provider.validate_runtime()
+                pdf_ingestor = PDFIngestor(ocr=ocr_provider)
+            model = DeepSeekChatFactory(settings.deepseek).create()
+            compiler_graph = CompilerGraph(
+                compiler=CovenantCompiler(model),
+                repairer=LangChainCompilerRepairer(model),
+            )
+        with DuckDBStore(db_path) as store:
+            report = PreprocessPipeline(
+                store,
+                pdf_ingestor=pdf_ingestor,
+                compiler_graph=compiler_graph,
+                progress=lambda message: typer.echo(message, err=True),
+            ).run(input_root)
+    except (OSError, RuntimeError, ValueError, ValidationError, DeepSeekConfigurationError) as exc:
+        typer.echo(f"Preprocessing failed: {exc}", err=True)
+        raise typer.Exit(code=2) from exc
+    typer.echo(report.model_dump_json(indent=2))
+
+
+@app.command("inspect-covenants")
+def inspect_covenants_command(
+    db_path: Annotated[Path, typer.Option("--db")] = Path("data/duckdb/hackathon.duckdb"),
+) -> None:
+    """Print strict compiled covenant specifications from the registry."""
+    with DuckDBStore(db_path) as store:
+        payload = [spec.model_dump(mode="json") for spec in CovenantRegistry(store).list()]
+    typer.echo(json.dumps(payload, ensure_ascii=False, indent=2))
+
+
+@app.command("evaluate-all")
+def evaluate_all_command(
+    at_date: Annotated[datetime, typer.Option("--at-date", formats=["%Y-%m-%d"])],
+    db_path: Annotated[Path, typer.Option("--db")] = Path("data/duckdb/hackathon.duckdb"),
+    output: Annotated[Path | None, typer.Option("--output")] = None,
+) -> None:
+    """Evaluate every active borrower/covenant pair independently."""
+    with DuckDBStore(db_path) as store:
+        report = BatchEvaluationPipeline(store).run(at_date.date())
+    payload = report.model_dump_json(indent=2)
+    if output is not None:
+        output.parent.mkdir(parents=True, exist_ok=True)
+        output.write_text(payload, encoding="utf-8")
+    typer.echo(payload)
+
+
+@app.command("serialize-submission")
+def serialize_submission_command(
+    results: Annotated[Path, typer.Option("--results", exists=True, dir_okay=False)],
+    profile: Annotated[Path, typer.Option("--profile", exists=True, dir_okay=False)],
+    output: Annotated[Path, typer.Option("--output")],
+) -> None:
+    """Map internal results to an isolated strict submission profile."""
+    try:
+        raw = json.loads(results.read_text(encoding="utf-8"))
+        if isinstance(raw, dict) and "results" in raw:
+            raw = raw["results"]
+        parsed = TypeAdapter(list[CovenantResult]).validate_python(raw)
+        payload = SubmissionSerializer(load_submission_profile(profile)).serialize(parsed)
+        output.parent.mkdir(parents=True, exist_ok=True)
+        output.write_text(
+            json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True), encoding="utf-8"
+        )
+    except (OSError, ValueError, ValidationError) as exc:
+        typer.echo(f"Submission serialization failed: {exc}", err=True)
+        raise typer.Exit(code=2) from exc
+    typer.echo(str(output.resolve()))
+
+
+@app.command("validate-submission")
+def validate_submission_command(
+    submission: Annotated[Path, typer.Option("--submission", exists=True, dir_okay=False)],
+    profile: Annotated[Path, typer.Option("--profile", exists=True, dir_okay=False)],
+) -> None:
+    """Validate a submission independently of evaluation."""
+    try:
+        payload = json.loads(submission.read_text(encoding="utf-8"))
+        report = SubmissionValidator(load_submission_profile(profile)).validate(payload)
+    except (OSError, ValueError, ValidationError) as exc:
+        typer.echo(f"Submission validation failed: {exc}", err=True)
+        raise typer.Exit(code=2) from exc
+    typer.echo(report.model_dump_json(indent=2))
+    if not report.valid:
+        raise typer.Exit(code=3)
+
+
+@app.command("benchmark-full")
+def benchmark_full_command(
+    output: Annotated[Path, typer.Option("--output")] = Path("data/synthetic"),
+) -> None:
+    """Regenerate synthetic inputs and run the component-level benchmark."""
+    generate_synthetic_dataset(output)
+    report = run_benchmark(output)
+    paths = write_benchmark_reports(report, output / "benchmark")
+    typer.echo(
+        json.dumps(
+            {
+                "summary": report.summary.model_dump(mode="json"),
+                "reports": [str(path.resolve()) for path in paths],
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+    )
+
+
+@app.command("ocr-smoke")
+def ocr_smoke_command() -> None:
+    """Check that the local Paddle runtime can see the CUDA device."""
+    try:
+        import paddle
+
+        payload = {
+            "cuda_compiled": bool(paddle.device.is_compiled_with_cuda()),
+            "device": paddle.device.get_device(),
+            "gpu_count": int(paddle.device.cuda.device_count()),
+        }
+    except Exception as exc:
+        typer.echo(f"OCR GPU smoke test failed: {exc}", err=True)
+        raise typer.Exit(code=2) from exc
+    typer.echo(json.dumps(payload, indent=2))
+    if not payload["cuda_compiled"] or payload["gpu_count"] < 1:
         raise typer.Exit(code=3)
 
 

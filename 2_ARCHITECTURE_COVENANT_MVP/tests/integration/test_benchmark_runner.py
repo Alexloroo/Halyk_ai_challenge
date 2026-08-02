@@ -7,7 +7,7 @@ from halyk_covenants.benchmark.runner import run_benchmark
 from halyk_covenants.synthetic.generator import generate_synthetic_dataset
 
 
-def test_benchmark_awards_independent_components_and_exposes_evidence_gap(
+def test_benchmark_awards_all_independent_components_after_trigger_selection(
     tmp_path: Path,
 ) -> None:
     dataset = tmp_path / "synthetic"
@@ -16,22 +16,22 @@ def test_benchmark_awards_independent_components_and_exposes_evidence_gap(
     report = run_benchmark(dataset)
 
     assert report.summary.total_cases == 10
-    assert report.summary.earned_components == 29
+    assert report.summary.earned_components == 30
     assert report.summary.maximum_components == 30
     assert report.summary.number_accuracy == Decimal("1")
     assert report.summary.verdict_accuracy == Decimal("1")
-    assert report.summary.evidence_accuracy == Decimal("0.9")
-    assert report.summary.component_accuracy == Decimal("0.9666666666666666666666666667")
-    assert report.summary.full_exact_match_accuracy == Decimal("0.9")
-    assert report.summary.failed_case_ids == ["ALPHA-COUNT-TRIGGER"]
+    assert report.summary.evidence_accuracy == Decimal("1")
+    assert report.summary.component_accuracy == Decimal("1")
+    assert report.summary.full_exact_match_accuracy == Decimal("1")
+    assert report.summary.failed_case_ids == []
 
     trigger = next(case for case in report.cases if case.case_id == "ALPHA-COUNT-TRIGGER")
     assert trigger.actual.number == 3
     assert trigger.actual.verdict == "violated"
-    assert trigger.actual.evidence_transaction_id is None
-    assert trigger.actual.status == "partial"
-    assert trigger.score.component_score == 2
-    assert trigger.score.status_match is False
+    assert trigger.actual.evidence_transaction_id == "A003"
+    assert trigger.actual.status == "success"
+    assert trigger.score.component_score == 3
+    assert trigger.score.status_match is True
 
 
 def test_benchmark_profiles_deliberate_data_quality_risks(tmp_path: Path) -> None:
@@ -69,7 +69,7 @@ def test_json_and_markdown_reports_are_deterministic_and_recomputable(tmp_path: 
     assert markdown_path.read_bytes() == first_markdown
     payload = json.loads(first_json)
     earned = sum(case["score"]["component_score"] for case in payload["cases"])
-    assert earned == payload["summary"]["earned_components"] == 29
+    assert earned == payload["summary"]["earned_components"] == 30
     assert "ALPHA-COUNT-TRIGGER" in markdown_path.read_text(encoding="utf-8")
     assert "PDF extraction" in markdown_path.read_text(encoding="utf-8")
-    assert "96.67%" in markdown_path.read_text(encoding="utf-8")
+    assert "100.00%" in markdown_path.read_text(encoding="utf-8")

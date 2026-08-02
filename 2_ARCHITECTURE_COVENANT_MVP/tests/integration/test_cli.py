@@ -123,3 +123,31 @@ def test_cli_returns_nonzero_exit_for_invalid_covenant(tmp_path: Path) -> None:
 
     assert invocation.exit_code == 2
     assert "Invalid covenant specification" in invocation.stderr
+
+
+def test_preprocess_with_ocr_fails_before_llm_when_runtime_is_missing(
+    tmp_path: Path, monkeypatch
+) -> None:
+    (tmp_path / "scan.pdf").write_bytes(b"%PDF-1.4\n")
+    model_created = False
+
+    def missing_runtime(self) -> None:
+        raise RuntimeError("PaddleOCR runtime is unavailable")
+
+    def create_model(self):
+        nonlocal model_created
+        model_created = True
+        raise AssertionError("LLM must not start when requested OCR is unavailable")
+
+    monkeypatch.setattr(
+        "halyk_covenants.cli.PaddleOCRProvider.validate_runtime",
+        missing_runtime,
+        raising=False,
+    )
+    monkeypatch.setattr("halyk_covenants.cli.DeepSeekChatFactory.create", create_model)
+
+    invocation = runner.invoke(app, ["preprocess", str(tmp_path), "--ocr"])
+
+    assert invocation.exit_code == 2
+    assert "PaddleOCR runtime is unavailable" in invocation.stderr
+    assert model_created is False

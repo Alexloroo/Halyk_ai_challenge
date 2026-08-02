@@ -6,26 +6,46 @@ from halyk_covenants.sql.filters import compile_filter
 
 
 def build_where_clause(
-    borrower_id: str,
+    borrower_id: str | list[str],
     filters: list[FilterSpec],
     *,
+    exclusions: list[FilterSpec] | None = None,
+    date_field: str = "transaction_date",
     time_window: TimeWindowSpec | None = None,
     evaluation_date: date | None = None,
 ) -> tuple[str, list[Any]]:
     """Build a borrower-scoped, parameterized WHERE clause."""
-    predicates = ["borrower_id = ?"]
-    parameters: list[Any] = [borrower_id]
+    single_borrower = isinstance(borrower_id, str)
+    borrower_ids = [borrower_id] if single_borrower else borrower_id
+    if not borrower_ids:
+        raise ValueError("at least one borrower_id is required")
+    placeholders = ", ".join("?" for _ in borrower_ids)
+    borrower_predicate = (
+        "borrower_id = ?" if single_borrower else f"borrower_id IN ({placeholders})"
+    )
+    predicates = [borrower_predicate]
+    parameters: list[Any] = list(borrower_ids)
 
     for filter_spec in filters:
         predicate, filter_parameters = compile_filter(filter_spec)
         predicates.append(predicate)
         parameters.extend(filter_parameters)
 
+    for exclusion in exclusions or []:
+        predicate, filter_parameters = compile_filter(exclusion)
+        predicates.append(f"COALESCE(NOT ({predicate}), TRUE)")
+        parameters.extend(filter_parameters)
+
     bounds = _window_bounds(time_window, evaluation_date)
     if bounds is not None:
         start, end = bounds
-        predicates.extend(["transaction_date >= ?", "transaction_date < ?"])
+        predicates.extend([f"{date_field} >= ?", f"{date_field} < ?"])
         parameters.extend([start, end])
+    elif evaluation_date is not None:
+        # A timeless covenant is evaluated using all history known at the
+        # point-in-time, never transactions that occur after that date.
+        predicates.append(f"{date_field} < ?")
+        parameters.append(evaluation_date + timedelta(days=1))
 
     return f"WHERE {' AND '.join(predicates)}", parameters
 

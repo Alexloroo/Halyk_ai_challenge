@@ -17,43 +17,43 @@
     },
     {
       "path": "covenants/COV-ALPHA-COUNT.json",
-      "sha256": "e59baa662273337a024442704d37c5201383155aca521e0d18cecc1ad21ecdf3",
-      "size_bytes": 1153
+      "sha256": "c463562d790e4fc9a8e7b68faf364be7927be3bb2ae103c7cb68a04ed302f3da",
+      "size_bytes": 1339
     },
     {
       "path": "covenants/COV-ALPHA-MAX.json",
-      "sha256": "68484efa78d9535946fb2f433931c7ddbc74708286f0d14478f2331530465aca",
-      "size_bytes": 1055
+      "sha256": "b5bdb3ed6255c095997242246a6310493318319d9cdd20da584d1b94fb3ed0b3",
+      "size_bytes": 1241
     },
     {
       "path": "covenants/COV-ALPHA-MIN.json",
-      "sha256": "ad445a18267de0e88fd1382c996171998998a1ae6e8f583e6327337bf05dd29b",
-      "size_bytes": 1049
+      "sha256": "6b35c94c60506928360b6df2d47cadb5ad3e3d9da691bf8f96bcee798cbedd8c",
+      "size_bytes": 1235
     },
     {
       "path": "covenants/COV-ALPHA-SUM.json",
-      "sha256": "a74008470e43eca2bdcb2f150e08d5bda38d6aaf3f20bc9bfdd76c4013eded49",
-      "size_bytes": 1084
+      "sha256": "f8a8c46e69307698126ef5dd72b5b907798a832e698711ecfe7bc46fce72da52",
+      "size_bytes": 1270
     },
     {
       "path": "covenants/COV-BETA-AVG.json",
-      "sha256": "055cdfd47c3573d880bac4ba93e2ee8186e885b1cbeb94ac35db822d6cdf95b8",
-      "size_bytes": 1055
+      "sha256": "45def00989c4075857a6acd3e035fd86ee3d7178e199bd2c72ce3abfc0b4719a",
+      "size_bytes": 1241
     },
     {
       "path": "covenants/COV-BETA-MAX.json",
-      "sha256": "5deed3840495d91604e991eab633da000dd9922e07b518c2b6d2b3ddfe2533d8",
-      "size_bytes": 1035
+      "sha256": "17e9e65f6d1977a7d1d114d3d34deb55fab8c384d7434a75b9f0248fe6fd75e2",
+      "size_bytes": 1221
     },
     {
       "path": "covenants/COV-BETA-SUM.json",
-      "sha256": "3b0b116029623e4d5216cc91cbf412c5db03186eff31e0b1a467174e2cb8f6e7",
-      "size_bytes": 1043
+      "sha256": "6af13971586326241f736cec2b7cc6d1c4b5ae36b73f4dac16ff633bf7c172aa",
+      "size_bytes": 1229
     },
     {
       "path": "covenants/COV-GAMMA-SUM.json",
-      "sha256": "668bf298d6576ee34499bb18fce1964039bdb07040fe00f4e67a703554d7e97a",
-      "size_bytes": 1053
+      "sha256": "b776af908b39c6a76dc6ca450e0d2af00993ec98f820e3cca004e34f926dc7c5",
+      "size_bytes": 1239
     },
     {
       "path": "documents/alpha_trade_contract.pdf",
@@ -91,8 +91,8 @@
     ]
   },
   "known_limitations": [
-    "PDF extraction, OCR, borrower discovery, and covenant compilation are not scored.",
-    "TRIGGER_TRANSACTION evidence selection is outside Phase 1–3 and is expected to miss one evidence component.",
+    "The component benchmark uses golden CovenantSpec files; the separate full-pipeline test covers native PDF extraction and structured compilation.",
+    "GPU OCR, live DeepSeek, and remote LangSmith delivery are opt-in smoke gates.",
     "The exact duplicate is intentionally retained and contributes to aggregate metrics."
   ]
 }

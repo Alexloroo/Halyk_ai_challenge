@@ -8,6 +8,9 @@ from halyk_covenants.evaluators.aggregate import (
     SumEvaluator,
 )
 from halyk_covenants.evaluators.base import CovenantEvaluator
+from halyk_covenants.evaluators.existence import ExistenceEvaluator
+from halyk_covenants.evaluators.frequency import FrequencyEvaluator
+from halyk_covenants.evaluators.ratio import RatioEvaluator
 
 
 class EvaluatorRegistry:
@@ -18,6 +21,9 @@ class EvaluatorRegistry:
             "max": MaxEvaluator(),
             "min": MinEvaluator(),
             "avg": AverageEvaluator(),
+            "ratio": RatioEvaluator(),
+            "existence": ExistenceEvaluator(),
+            "frequency": FrequencyEvaluator(),
         }
         self._evaluators = dict(evaluators) if evaluators is not None else defaults
 

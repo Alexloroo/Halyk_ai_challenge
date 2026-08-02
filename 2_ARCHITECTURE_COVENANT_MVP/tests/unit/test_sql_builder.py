@@ -127,6 +127,15 @@ def test_none_window_adds_no_date_predicate() -> None:
     assert parameters == ["B001"]
 
 
+def test_point_in_time_evaluation_excludes_future_rows_without_window() -> None:
+    where_sql, parameters = build_where_clause(
+        "B001", [], time_window=None, evaluation_date=date(2026, 4, 30)
+    )
+
+    assert "transaction_date < ?" in where_sql
+    assert parameters == ["B001", date(2026, 5, 1)]
+
+
 def test_calendar_window_requires_evaluation_date() -> None:
     with pytest.raises(ValueError, match="evaluation_date is required"):
         build_where_clause("B001", [], time_window=TimeWindowSpec(type="calendar_month"))

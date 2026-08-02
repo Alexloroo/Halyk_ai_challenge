@@ -9,6 +9,22 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from halyk_covenants.domain.source import SourceRef
 
+TRANSACTION_FIELDS = frozenset(
+    {
+        "transaction_id",
+        "borrower_id",
+        "account_id",
+        "transaction_date",
+        "amount",
+        "currency",
+        "direction",
+        "counterparty_id",
+        "counterparty_name",
+        "purpose",
+        "source_row_id",
+    }
+)
+
 MetricType = Literal["sum", "count", "max", "min", "avg", "ratio", "existence", "frequency"]
 Comparator = Literal["<", "<=", ">", ">=", "==", "!="]
 FilterOperator = Literal[
@@ -99,17 +115,36 @@ class CovenantSpec(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     covenant_id: str
+    covenant_group_id: str | None = None
     raw_text: str
     borrower_ids: list[str] = Field(min_length=1)
+    scope_mode: Literal["per_borrower", "group"] = "per_borrower"
     metric: MetricSpec
     condition: ConditionSpec
     transaction_filters: list[FilterSpec] = Field(default_factory=list)
+    exclusions: list[FilterSpec] = Field(default_factory=list)
+    group_by: list[str] = Field(default_factory=list)
+    date_field: str = "transaction_date"
     time_window: TimeWindowSpec | None = None
     evidence_mode: EvidenceMode = EvidenceMode.NONE
     effective_from: date | None = None
     effective_to: date | None = None
     source: SourceRef
     confidence: float = Field(ge=0, le=1)
+    status: Literal["compiled", "unsupported", "failed_compilation"] = "compiled"
+    compiler_metadata: dict[str, Any] = Field(default_factory=dict)
+
+    @model_validator(mode="after")
+    def validate_execution_scope(self) -> CovenantSpec:
+        if self.scope_mode == "group" and len(self.borrower_ids) < 2:
+            raise ValueError("group scope requires at least two borrowers")
+        unknown_group_fields = set(self.group_by) - TRANSACTION_FIELDS
+        if unknown_group_fields:
+            unknown = ", ".join(sorted(unknown_group_fields))
+            raise ValueError(f"unsupported group_by fields: {unknown}")
+        if self.date_field not in TRANSACTION_FIELDS:
+            raise ValueError(f"unsupported date_field: {self.date_field}")
+        return self
 
 
 MetricSpec.model_rebuild()

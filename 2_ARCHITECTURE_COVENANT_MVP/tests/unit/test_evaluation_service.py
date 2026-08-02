@@ -59,10 +59,12 @@ def test_evidence_failure_preserves_correct_number_and_verdict_as_partial() -> N
     store.close()
 
 
-def test_unsupported_metric_becomes_failed_result_instead_of_raising() -> None:
+def test_metric_missing_from_custom_registry_becomes_failed_result_instead_of_raising() -> None:
     store = DuckDBStore()
 
-    result = EvaluationService(store).evaluate(make_spec("ratio"), "B001", date(2026, 1, 1))
+    result = EvaluationService(store, EvaluatorRegistry({})).evaluate(
+        make_spec("ratio"), "B001", date(2026, 1, 1)
+    )
 
     assert result.number is None
     assert result.verdict == "unknown"

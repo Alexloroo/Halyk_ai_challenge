@@ -2,6 +2,7 @@ from datetime import date
 
 from halyk_covenants.domain import CovenantResult, CovenantSpec
 from halyk_covenants.evaluators.registry import EvaluatorRegistry
+from halyk_covenants.observability import trace_stage
 from halyk_covenants.storage import DuckDBStore
 
 
@@ -16,6 +17,7 @@ class EvaluationService:
         self.db = db
         self.registry = registry or EvaluatorRegistry()
 
+    @trace_stage("evaluation.pair", run_type="chain", tags=("evaluation", "deterministic"))
     def evaluate(
         self,
         covenant: CovenantSpec,

@@ -29,14 +29,14 @@ def test_benchmark_command_writes_reports_and_prints_summary(tmp_path: Path) -> 
 
     assert invocation.exit_code == 0, invocation.output
     payload = json.loads(invocation.stdout)
-    assert payload["summary"]["earned_components"] == 29
+    assert payload["summary"]["earned_components"] == 30
     assert payload["summary"]["maximum_components"] == 30
-    assert payload["summary"]["component_accuracy"] == "0.9666666666666666666666666667"
+    assert payload["summary"]["component_accuracy"] == "1"
     assert Path(payload["report_json"]).is_file()
     assert Path(payload["report_markdown"]).is_file()
 
 
-def test_benchmark_command_exits_nonzero_when_minimum_accuracy_is_not_met(
+def test_benchmark_command_accepts_full_accuracy_threshold(
     tmp_path: Path,
 ) -> None:
     output = tmp_path / "synthetic"
@@ -53,6 +53,5 @@ def test_benchmark_command_exits_nonzero_when_minimum_accuracy_is_not_met(
         ],
     )
 
-    assert invocation.exit_code == 3
-    assert "below required minimum" in invocation.stderr
+    assert invocation.exit_code == 0
     assert (output / "benchmark" / "report.json").is_file()
