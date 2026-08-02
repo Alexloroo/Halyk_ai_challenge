@@ -47,6 +47,8 @@ class AggregateEvaluator:
             date_field=covenant.date_field,
             time_window=covenant.time_window,
             evaluation_date=evaluation_date,
+            effective_from=covenant.effective_from,
+            effective_to=covenant.effective_to,
         )
         annotate_current_trace(
             metadata={
@@ -56,6 +58,10 @@ class AggregateEvaluator:
                 "parameter_count": len(parameters),
                 "date_field": covenant.date_field,
                 "time_window": covenant.time_window.type if covenant.time_window else None,
+                "effective_from": (
+                    covenant.effective_from.isoformat() if covenant.effective_from else None
+                ),
+                "effective_to": covenant.effective_to.isoformat() if covenant.effective_to else None,
             }
         )
         self._validate_currency_scope(covenant, db, where_sql, parameters)
@@ -126,7 +132,7 @@ class AggregateEvaluator:
                         result.status = "partial"
                         result.failure_stage = FailureStage.EVIDENCE
                         result.errors.extend(verification.errors)
-            except Exception as exc:  # Evidence failure must not discard correct components.
+            except Exception as exc:
                 result.status = "partial"
                 result.failure_stage = FailureStage.EVIDENCE
                 result.errors.append(f"evidence selection failed: {exc}")
