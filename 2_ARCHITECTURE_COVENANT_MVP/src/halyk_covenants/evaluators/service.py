@@ -1,5 +1,7 @@
 from datetime import date
 
+import duckdb
+
 from halyk_covenants.domain import CovenantResult, CovenantSpec, FailureStage
 from halyk_covenants.evaluators.registry import EvaluatorRegistry
 from halyk_covenants.observability import annotate_current_trace, trace_context, trace_stage
@@ -41,39 +43,38 @@ class EvaluationService:
         annotate_current_trace(metadata={key: value for key, value in metadata.items() if value})
         with trace_context(**metadata):
             if covenant.status != "compiled":
-                annotate_current_trace(
-                    metadata={
-                        "failure_stage": FailureStage.COMPILATION.value,
-                        "covenant_status": covenant.status,
-                    },
-                    tags=(FailureStage.COMPILATION.value,),
-                )
-                return CovenantResult(
-                    borrower_id=borrower_id,
-                    covenant_id=covenant.covenant_group_id or covenant.covenant_id,
-                    verdict="unknown",
-                    number=None,
-                    status="failed",
-                    failure_stage=FailureStage.COMPILATION,
-                    errors=[f"covenant status {covenant.status!r} is not executable"],
+                return self._failed(
+                    covenant,
+                    borrower_id,
+                    FailureStage.COMPILATION,
+                    f"covenant status {covenant.status!r} is not executable",
                 )
             try:
                 evaluator = self.registry.get(covenant.metric.metric_type)
                 return evaluator.evaluate(covenant, borrower_id, self.db, evaluation_date)
+            except duckdb.Error as exc:
+                return self._failed(covenant, borrower_id, FailureStage.QUERY, str(exc), exc)
             except Exception as exc:
-                annotate_current_trace(
-                    metadata={
-                        "failure_stage": FailureStage.CALCULATION.value,
-                        "error_type": type(exc).__name__,
-                    },
-                    tags=("failed", FailureStage.CALCULATION.value),
-                )
-                return CovenantResult(
-                    borrower_id=borrower_id,
-                    covenant_id=covenant.covenant_group_id or covenant.covenant_id,
-                    verdict="unknown",
-                    number=None,
-                    status="failed",
-                    failure_stage=FailureStage.CALCULATION,
-                    errors=[str(exc)],
-                )
+                return self._failed(covenant, borrower_id, FailureStage.CALCULATION, str(exc), exc)
+
+    @staticmethod
+    def _failed(
+        covenant: CovenantSpec,
+        borrower_id: str,
+        stage: FailureStage,
+        message: str,
+        exc: Exception | None = None,
+    ) -> CovenantResult:
+        metadata = {"failure_stage": stage.value}
+        if exc is not None:
+            metadata["error_type"] = type(exc).__name__
+        annotate_current_trace(metadata=metadata, tags=("failed", stage.value))
+        return CovenantResult(
+            borrower_id=borrower_id,
+            covenant_id=covenant.covenant_group_id or covenant.covenant_id,
+            verdict="unknown",
+            number=None,
+            status="failed",
+            failure_stage=stage,
+            errors=[message],
+        )
