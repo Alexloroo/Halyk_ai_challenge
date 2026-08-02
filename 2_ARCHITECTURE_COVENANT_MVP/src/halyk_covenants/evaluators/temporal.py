@@ -156,13 +156,16 @@ class TemporalEvaluationService:
                 "metric_value": str(chosen.number) if chosen.number is not None else None,
             }
         )
+        evidence_transaction_id = (
+            chosen.evidence_transaction_id if verdict == "violated" else None
+        )
         return CovenantResult(
             borrower_id=borrower_id,
             covenant_id=group_id,
             verdict=verdict,
             number=chosen.number,
             number_unit=chosen.number_unit,
-            evidence_transaction_id=chosen.evidence_transaction_id if verdict == "violated" else None,
+            evidence_transaction_id=evidence_transaction_id,
             calculation_id=chosen.calculation_id,
             status=status,
             failure_stage=failure_stage,
