@@ -51,7 +51,6 @@ class PaddleOCRProvider:
         self._engines: dict[str, PaddleEngine] = {}
 
     def validate_runtime(self) -> None:
-        """Fail before document/LLM work when the requested OCR runtime is absent."""
         missing = [
             package
             for package in ("paddle", "paddleocr")
@@ -118,7 +117,13 @@ class PaddleOCRProvider:
         if isinstance(raw, OCRLine):
             return [raw]
         if isinstance(raw, dict):
-            return cls._lines_from_mapping(raw)
+            direct = cls._lines_from_mapping(raw)
+            if direct:
+                return direct
+            lines: list[OCRLine] = []
+            for value in raw.values():
+                lines.extend(cls._normalize_lines(value))
+            return lines
         if hasattr(raw, "json"):
             payload = raw.json() if callable(raw.json) else raw.json
             return cls._normalize_lines(payload)
@@ -135,6 +140,8 @@ class PaddleOCRProvider:
     @staticmethod
     def _lines_from_mapping(payload: dict[str, Any]) -> list[OCRLine]:
         data = payload.get("res", payload)
+        if not isinstance(data, dict):
+            return []
         texts = data.get("rec_texts", [])
         scores = data.get("rec_scores", [])
         polygons = data.get("rec_polys", data.get("dt_polys", []))
