@@ -181,7 +181,10 @@ def preprocess_command(
         settings = load_settings(config_path)
         compiler_graph = None
         router = PageQualityRouter(native_text_min_chars=settings.ocr.native_text_min_chars)
-        pdf_ingestor = PDFIngestor(router=router)
+        pdf_ingestor = PDFIngestor(
+            router=router,
+            max_page_pixels=settings.ocr.max_page_pixels,
+        )
         if any(path.suffix.casefold() == ".pdf" for path in input_root.rglob("*")):
             if enable_ocr:
                 ocr_provider = PaddleOCRProvider(
@@ -194,6 +197,7 @@ def preprocess_command(
                     router=router,
                     ocr=ocr_provider,
                     visual=layout_provider,
+                    max_page_pixels=settings.ocr.max_page_pixels,
                 )
             model = DeepSeekChatFactory(settings.deepseek).create()
             compiler_graph = CompilerGraph(
