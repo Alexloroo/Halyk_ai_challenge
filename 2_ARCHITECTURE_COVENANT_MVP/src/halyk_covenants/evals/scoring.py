@@ -3,7 +3,7 @@ from __future__ import annotations
 from decimal import Decimal
 from typing import Any
 
-from halyk_covenants.domain import CovenantResult, CovenantSpec
+from halyk_covenants.domain import CovenantResult, CovenantSpec, FilterSpec
 
 
 def _number_equal(expected: Decimal | int | None, actual: Decimal | int | None) -> bool:
@@ -30,8 +30,8 @@ def score_covenant_result(
     }
 
 
-def _filters(spec: CovenantSpec) -> list[dict[str, Any]]:
-    payload = [item.model_dump(mode="json") for item in spec.transaction_filters]
+def _filters(filters: list[FilterSpec]) -> list[dict[str, Any]]:
+    payload = [item.model_dump(mode="json") for item in filters]
     return sorted(payload, key=lambda item: (item["field"], item["operator"], repr(item["value"])))
 
 
@@ -47,24 +47,40 @@ def score_compiler_output(
     expected: CovenantSpec,
     actual: CovenantSpec,
 ) -> dict[str, int]:
-    """Expose compiler correctness per field instead of hiding failures in one score."""
+    """Expose compiler correctness per executable field instead of hiding failures in one score."""
     expected_window = expected.time_window.model_dump(mode="json") if expected.time_window else None
     actual_window = actual.time_window.model_dump(mode="json") if actual.time_window else None
     return {
         "metric_type_exact": int(expected.metric.metric_type == actual.metric.metric_type),
         "field_exact": int(expected.metric.field == actual.metric.field),
-        "filters_exact": int(_filters(expected) == _filters(actual)),
+        "nested_metric_exact": int(
+            expected.metric.model_dump(mode="json") == actual.metric.model_dump(mode="json")
+        ),
+        "filters_exact": int(
+            _filters(expected.transaction_filters) == _filters(actual.transaction_filters)
+        ),
+        "exclusions_exact": int(_filters(expected.exclusions) == _filters(actual.exclusions)),
+        "group_by_exact": int(expected.group_by == actual.group_by),
         "period_exact": int(
             expected_window == actual_window and expected.date_field == actual.date_field
+        ),
+        "effective_dates_exact": int(
+            expected.effective_from == actual.effective_from
+            and expected.effective_to == actual.effective_to
         ),
         "comparator_exact": int(expected.condition.comparator == actual.condition.comparator),
         "threshold_exact": int(_threshold_equal(expected, actual)),
         "currency_exact": int(expected.condition.currency == actual.condition.currency),
+        "unit_exact": int(
+            expected.metric.unit == actual.metric.unit
+            and expected.condition.unit == actual.condition.unit
+        ),
         "borrower_scope_exact": int(
             expected.scope_mode == actual.scope_mode
             and set(expected.borrower_ids) == set(actual.borrower_ids)
         ),
         "evidence_mode_exact": int(expected.evidence_mode == actual.evidence_mode),
+        "status_exact": int(expected.status == actual.status),
     }
 
 
