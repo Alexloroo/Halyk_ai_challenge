@@ -7,15 +7,15 @@ from typing import Any
 
 import langsmith as ls
 
-_TRACE_METADATA: ContextVar[dict[str, Any]] = ContextVar(
+_TRACE_METADATA: ContextVar[dict[str, Any] | None] = ContextVar(
     "halyk_trace_metadata",
-    default={},
+    default=None,
 )
 
 
 def current_trace_metadata() -> dict[str, Any]:
     """Return a defensive copy of metadata inherited by the current pipeline scope."""
-    return dict(_TRACE_METADATA.get())
+    return dict(_TRACE_METADATA.get() or {})
 
 
 @contextmanager
