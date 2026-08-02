@@ -56,7 +56,7 @@ class HybridRetriever:
     def __init__(
         self,
         *,
-        embedder: EmbeddingProvider,
+        embedder: EmbeddingProvider | None = None,
         artifact_store: ArtifactStore | None = None,
         lexical_weight: float = 0.45,
         semantic_weight: float = 0.55,
@@ -65,9 +65,13 @@ class HybridRetriever:
             raise ValueError("retrieval weights must be non-negative and not both zero")
         self.embedder = embedder
         self.artifact_store = artifact_store
-        total = lexical_weight + semantic_weight
-        self.lexical_weight = lexical_weight / total
-        self.semantic_weight = semantic_weight / total
+        if embedder is None:
+            self.lexical_weight = 1.0
+            self.semantic_weight = 0.0
+        else:
+            total = lexical_weight + semantic_weight
+            self.lexical_weight = lexical_weight / total
+            self.semantic_weight = semantic_weight / total
         self.blocks: list[DocumentBlock] = []
         self.vectors = np.empty((0, 0), dtype=np.float64)
         self.bm25: BM25Okapi | None = None
@@ -78,6 +82,10 @@ class HybridRetriever:
         self.bm25 = (
             BM25Okapi([self._tokenize(block.text) for block in self.blocks]) if blocks else None
         )
+        if self.embedder is None:
+            self.vectors = np.empty((len(self.blocks), 0), dtype=np.float64)
+            return IndexStats(block_count=len(blocks), embedded_count=0, cache_hit_count=0)
+
         vectors: list[list[float] | None] = []
         missing_texts: list[str] = []
         missing_positions: list[int] = []
@@ -122,8 +130,11 @@ class HybridRetriever:
         assert self.bm25 is not None
         lexical = np.asarray(self.bm25.get_scores(self._tokenize(query)), dtype=np.float64)
         lexical = self._normalize_nonnegative(lexical)
-        query_vector = np.asarray(self.embedder.embed([query])[0], dtype=np.float64)
-        semantic = self._cosine_scores(self.vectors, query_vector)
+        if self.embedder is None:
+            semantic = np.zeros(len(self.blocks), dtype=np.float64)
+        else:
+            query_vector = np.asarray(self.embedder.embed([query])[0], dtype=np.float64)
+            semantic = self._cosine_scores(self.vectors, query_vector)
         results: list[RetrievedBlock] = []
         for index, block in enumerate(self.blocks):
             if document_id is not None and block.document_id != document_id:
@@ -141,6 +152,8 @@ class HybridRetriever:
         return results[:k]
 
     def _embedding_key(self, text: str) -> str:
+        if self.embedder is None:
+            raise RuntimeError("embedding key requested without an embedding provider")
         model_name = getattr(self.embedder, "model_name", type(self.embedder).__name__)
         return hashlib.sha256(f"{model_name}\0{text}".encode()).hexdigest()
 
@@ -157,7 +170,7 @@ class HybridRetriever:
     @staticmethod
     def _cosine_scores(matrix: np.ndarray, vector: np.ndarray) -> np.ndarray:
         if matrix.size == 0:
-            return np.zeros(0)
+            return np.zeros(matrix.shape[0] if matrix.ndim == 2 else 0)
         matrix_norms = np.linalg.norm(matrix, axis=1)
         vector_norm = np.linalg.norm(vector)
         denominator = matrix_norms * vector_norm
