@@ -13,6 +13,7 @@ from halyk_covenants.domain.covenant import (
     WindowType,
 )
 from halyk_covenants.domain.document import DocumentBlock, PageExtractionQuality
+from halyk_covenants.domain.failure import FailureStage
 from halyk_covenants.domain.result import CovenantResult
 from halyk_covenants.domain.source import SourceRef
 from halyk_covenants.domain.transaction import Transaction
@@ -26,6 +27,7 @@ __all__ = [
     "CovenantSpec",
     "DocumentBlock",
     "EvidenceMode",
+    "FailureStage",
     "FilterOperator",
     "FilterSpec",
     "MetricSpec",
