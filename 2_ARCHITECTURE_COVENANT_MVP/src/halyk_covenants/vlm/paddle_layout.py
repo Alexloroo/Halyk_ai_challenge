@@ -8,6 +8,7 @@ from typing import Any
 from halyk_covenants.domain import DocumentBlock
 from halyk_covenants.observability import trace_stage
 from halyk_covenants.ocr import PaddleOCRProvider
+from halyk_covenants.ocr.paddle import PaddlePredictAdapter
 
 
 class PaddleLayoutProvider:
@@ -99,4 +100,4 @@ class PaddleLayoutProvider:
             from paddleocr import PPStructureV3
         except ImportError as exc:
             raise RuntimeError("PaddleOCR layout pipeline is not installed") from exc
-        return PPStructureV3(device=device)
+        return PaddlePredictAdapter(PPStructureV3(device=device))
