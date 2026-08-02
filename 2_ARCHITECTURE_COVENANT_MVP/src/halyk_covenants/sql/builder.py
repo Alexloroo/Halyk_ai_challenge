@@ -36,7 +36,7 @@ def build_where_clause(
         predicates.append(f"COALESCE(NOT ({predicate}), TRUE)")
         parameters.extend(filter_parameters)
 
-    bounds = _window_bounds(time_window, evaluation_date)
+    bounds = window_bounds(time_window, evaluation_date)
     if bounds is not None:
         start, end = bounds
         predicates.extend([f"{date_field} >= ?", f"{date_field} < ?"])
@@ -50,10 +50,11 @@ def build_where_clause(
     return f"WHERE {' AND '.join(predicates)}", parameters
 
 
-def _window_bounds(
+def window_bounds(
     window: TimeWindowSpec | None,
     evaluation_date: date | None,
 ) -> tuple[date, date] | None:
+    """Return the half-open [start, end) interval used by deterministic SQL evaluation."""
     if window is None or window.type == "none":
         return None
     if window.type == "custom":
