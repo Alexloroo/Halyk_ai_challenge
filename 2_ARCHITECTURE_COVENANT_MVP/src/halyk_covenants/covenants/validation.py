@@ -3,7 +3,7 @@ from __future__ import annotations
 import re
 
 from halyk_covenants.domain import CovenantSpec, MetricSpec
-from halyk_covenants.domain.covenant import TRANSACTION_FIELDS
+from halyk_covenants.domain.transaction_fields import FILTER_FIELDS, PHYSICAL_TRANSACTION_FIELDS
 
 _CURRENCY = re.compile(
     r"(?:\bKZT\b|\bUSD\b|\bEUR\b|\bRUB\b|тенге|доллар|евро|рубл)",
@@ -15,7 +15,7 @@ _INCOMING = re.compile(r"\b(?:incoming|входящ\w*|пополн\w*)\b", flag
 
 def _metric_errors(metric: MetricSpec, path: str = "metric") -> list[str]:
     errors: list[str] = []
-    if metric.field is not None and metric.field not in TRANSACTION_FIELDS:
+    if metric.field is not None and metric.field not in PHYSICAL_TRANSACTION_FIELDS:
         errors.append(f"{path}.field unsupported: {metric.field}")
     if metric.numerator is not None:
         errors.extend(_metric_errors(metric.numerator, f"{path}.numerator"))
@@ -31,14 +31,8 @@ def validate_compiled_spec(
     allowed_borrower_ids: list[str],
 ) -> list[str]:
     errors = _metric_errors(spec.metric)
-    if (
-        spec.status == "compiled"
-        and spec.metric.metric_type in {"sum", "max", "min", "avg"}
-        and spec.metric.field is None
-    ):
-        errors.append(f"{spec.metric.metric_type} metric requires field=amount")
     for index, filter_spec in enumerate([*spec.transaction_filters, *spec.exclusions]):
-        if filter_spec.field not in TRANSACTION_FIELDS:
+        if filter_spec.field not in FILTER_FIELDS:
             errors.append(f"filter[{index}].field unsupported: {filter_spec.field}")
 
     monetary_output = spec.metric.field == "amount" and spec.metric.metric_type in {
@@ -63,12 +57,7 @@ def validate_compiled_spec(
         currency = currency_match.group(0).upper()
         if (
             currency in {"KZT", "USD", "EUR", "RUB"}
-            and (
-                "currency",
-                "eq",
-                currency.casefold(),
-            )
-            not in filter_pairs
+            and ("currency", "eq", currency.casefold()) not in filter_pairs
         ):
             errors.append(f"monetary clause requires transaction filter currency={currency}")
 
