@@ -2,7 +2,7 @@ from datetime import date
 from decimal import Decimal
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 from halyk_covenants.domain import CovenantResult
 from halyk_covenants.synthetic.models import ExpectedAnswer
@@ -82,6 +82,7 @@ class BenchmarkReport(BaseModel):
     methodology: str
     summary: BenchmarkSummary
     status_counts: dict[str, int]
+    failure_stage_counts: dict[str, int] = Field(default_factory=dict)
     data_quality: DataQualityProfile
     known_limitations: list[str]
     cases: list[CaseBenchmarkResult]
