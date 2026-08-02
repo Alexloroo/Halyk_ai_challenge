@@ -30,11 +30,7 @@ class PageQualityRouter:
         )
         density = Decimal(readable_chars) / Decimal(str(page.width * page.height))
         reasons: list[str] = []
-        if page.table_count > 0:
-            route = "layout"
-            confidence = Decimal("0.95")
-            reasons.append("table layout detected")
-        elif readable_chars >= self.native_text_min_chars:
+        if readable_chars >= self.native_text_min_chars:
             route = "native"
             confidence = (
                 Decimal("0.99")
@@ -42,6 +38,12 @@ class PageQualityRouter:
                 else Decimal("0.85")
             )
             reasons.append("sufficient native text")
+            if page.table_count > 0:
+                reasons.append("table layout also available as supplemental extraction")
+        elif page.table_count > 0:
+            route = "layout"
+            confidence = Decimal("0.95")
+            reasons.append("table layout with insufficient native text")
         elif page.image_count > 0 or readable_chars > 0:
             route = "ocr"
             confidence = Decimal("0.90") if page.image_count else Decimal("0.70")
