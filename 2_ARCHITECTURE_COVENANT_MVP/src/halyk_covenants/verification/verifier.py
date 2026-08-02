@@ -1,14 +1,19 @@
 from __future__ import annotations
 
-from halyk_covenants.domain import CovenantResult, CovenantSpec
+from halyk_covenants.domain import CovenantResult, CovenantSpec, FailureStage
 from halyk_covenants.evaluators import compare
-from halyk_covenants.observability import trace_stage
+from halyk_covenants.observability import annotate_current_trace, trace_stage
 
 from .models import PairVerification, VerificationIssue, VerificationReport
 
 
 class ResultVerifier:
-    @trace_stage("verification.pair", run_type="tool", tags=("verification", "deterministic"))
+    @trace_stage(
+        "verification.pair",
+        run_type="tool",
+        tags=("verification", "deterministic"),
+        failure_stage=FailureStage.VERIFICATION,
+    )
     def verify_pair(self, spec: CovenantSpec, result: CovenantResult) -> PairVerification:
         issues: list[VerificationIssue] = []
         if result.number is not None and spec.condition.threshold is not None:
@@ -40,9 +45,22 @@ class ResultVerifier:
                     covenant_id=result.covenant_id,
                 )
             )
+        if issues:
+            annotate_current_trace(
+                metadata={
+                    "failure_stage": FailureStage.VERIFICATION.value,
+                    "verification_issue_codes": [issue.code for issue in issues],
+                },
+                tags=(FailureStage.VERIFICATION.value,),
+            )
         return PairVerification(valid=not issues, issues=issues)
 
-    @trace_stage("verification.completeness", run_type="chain", tags=("verification",))
+    @trace_stage(
+        "verification.completeness",
+        run_type="chain",
+        tags=("verification",),
+        failure_stage=FailureStage.VERIFICATION,
+    )
     def verify(
         self,
         expected_pairs: list[tuple[str, str]],
@@ -82,6 +100,28 @@ class ResultVerifier:
                         covenant_id=key[1],
                     )
                 )
+            elif result.status == "partial":
+                issues.append(
+                    VerificationIssue(
+                        code="partial_result",
+                        message=(
+                            "pair contains useful scored components but at least one component "
+                            "requires repair"
+                        ),
+                        classification="repairable",
+                        borrower_id=key[0],
+                        covenant_id=key[1],
+                    )
+                )
+        if issues:
+            annotate_current_trace(
+                metadata={
+                    "failure_stage": FailureStage.VERIFICATION.value,
+                    "verification_issue_count": len(issues),
+                    "verification_issue_codes": sorted({issue.code for issue in issues}),
+                },
+                tags=(FailureStage.VERIFICATION.value,),
+            )
         return VerificationReport(
             valid=not issues,
             expected_pair_count=len(expected),
