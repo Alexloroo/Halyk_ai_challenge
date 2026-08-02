@@ -13,8 +13,15 @@ def build_where_clause(
     date_field: str = "transaction_date",
     time_window: TimeWindowSpec | None = None,
     evaluation_date: date | None = None,
+    effective_from: date | None = None,
+    effective_to: date | None = None,
 ) -> tuple[str, list[Any]]:
-    """Build a borrower-scoped, parameterized WHERE clause."""
+    """Build a borrower-scoped, parameterized WHERE clause.
+
+    Metric windows and covenant effective dates are intersected at query time. This keeps even a
+    single covenant version from consuming transactions that occurred before it became effective or
+    after it expired.
+    """
     single_borrower = isinstance(borrower_id, str)
     borrower_ids = [borrower_id] if single_borrower else borrower_id
     if not borrower_ids:
@@ -42,10 +49,15 @@ def build_where_clause(
         predicates.extend([f"{date_field} >= ?", f"{date_field} < ?"])
         parameters.extend([start, end])
     elif evaluation_date is not None:
-        # A timeless covenant is evaluated using all history known at the
-        # point-in-time, never transactions that occur after that date.
         predicates.append(f"{date_field} < ?")
         parameters.append(evaluation_date + timedelta(days=1))
+
+    if effective_from is not None:
+        predicates.append(f"{date_field} >= ?")
+        parameters.append(effective_from)
+    if effective_to is not None:
+        predicates.append(f"{date_field} < ?")
+        parameters.append(effective_to + timedelta(days=1))
 
     return f"WHERE {' AND '.join(predicates)}", parameters
 
