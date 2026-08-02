@@ -8,22 +8,11 @@ from typing import Any, Literal
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from halyk_covenants.domain.source import SourceRef
+from halyk_covenants.domain.transaction_fields import DATE_FIELDS, GROUP_BY_FIELDS, PHYSICAL_TRANSACTION_FIELDS
 
-TRANSACTION_FIELDS = frozenset(
-    {
-        "transaction_id",
-        "borrower_id",
-        "account_id",
-        "transaction_date",
-        "amount",
-        "currency",
-        "direction",
-        "counterparty_id",
-        "counterparty_name",
-        "purpose",
-        "source_row_id",
-    }
-)
+# Backwards-compatible public constant used by evaluator modules. Filters use the broader
+# FILTER_FIELDS catalog in covenant validation/SQL because derived fields are executable too.
+TRANSACTION_FIELDS = PHYSICAL_TRANSACTION_FIELDS
 
 MetricType = Literal["sum", "count", "max", "min", "avg", "ratio", "existence", "frequency"]
 Comparator = Literal["<", "<=", ">", ">=", "==", "!="]
@@ -68,9 +57,14 @@ class MetricSpec(BaseModel):
     unit: str | None = None
 
     @model_validator(mode="after")
-    def validate_ratio_parts(self) -> MetricSpec:
-        if self.metric_type == "ratio" and (self.numerator is None or self.denominator is None):
-            raise ValueError("ratio metrics require numerator and denominator")
+    def validate_metric_shape(self) -> MetricSpec:
+        if self.metric_type == "ratio":
+            if self.numerator is None or self.denominator is None:
+                raise ValueError("ratio metrics require numerator and denominator")
+            if self.field is not None:
+                raise ValueError("ratio metrics cannot define a direct field")
+        elif self.numerator is not None or self.denominator is not None:
+            raise ValueError("nested numerator/denominator are valid only for ratio metrics")
         return self
 
 
@@ -138,12 +132,19 @@ class CovenantSpec(BaseModel):
     def validate_execution_scope(self) -> CovenantSpec:
         if self.scope_mode == "group" and len(self.borrower_ids) < 2:
             raise ValueError("group scope requires at least two borrowers")
-        unknown_group_fields = set(self.group_by) - TRANSACTION_FIELDS
+        unknown_group_fields = set(self.group_by) - GROUP_BY_FIELDS
         if unknown_group_fields:
             unknown = ", ".join(sorted(unknown_group_fields))
             raise ValueError(f"unsupported group_by fields: {unknown}")
-        if self.date_field not in TRANSACTION_FIELDS:
+        if self.date_field not in DATE_FIELDS:
             raise ValueError(f"unsupported date_field: {self.date_field}")
+        if self.effective_from and self.effective_to and self.effective_from > self.effective_to:
+            raise ValueError("effective_from cannot be after effective_to")
+        if self.status == "compiled":
+            if self.condition.threshold is None:
+                raise ValueError("compiled covenant requires a deterministic condition threshold")
+            if self.metric.metric_type in {"sum", "max", "min", "avg"} and self.metric.field is None:
+                raise ValueError(f"compiled {self.metric.metric_type} metric requires a field")
         return self
 
 
