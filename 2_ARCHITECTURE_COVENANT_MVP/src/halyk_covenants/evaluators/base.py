@@ -4,9 +4,9 @@ from datetime import date
 from decimal import Decimal
 from typing import Protocol
 
-from halyk_covenants.domain import CovenantResult, CovenantSpec, EvidenceMode
+from halyk_covenants.domain import CovenantResult, CovenantSpec, EvidenceMode, FailureStage
 from halyk_covenants.evaluators.comparator import compare
-from halyk_covenants.observability import trace_stage
+from halyk_covenants.observability import annotate_current_trace, trace_stage
 from halyk_covenants.sql import build_where_clause
 from halyk_covenants.storage import DuckDBStore
 
@@ -26,7 +26,12 @@ class CovenantEvaluator(Protocol):
 class AggregateEvaluator:
     metric_type: str
 
-    @trace_stage("evaluation.metric", run_type="tool", tags=("evaluation", "deterministic"))
+    @trace_stage(
+        "evaluation.metric",
+        run_type="tool",
+        tags=("evaluation", "deterministic"),
+        failure_stage=FailureStage.CALCULATION,
+    )
     def evaluate(
         self,
         covenant: CovenantSpec,
@@ -43,6 +48,16 @@ class AggregateEvaluator:
             time_window=covenant.time_window,
             evaluation_date=evaluation_date,
         )
+        annotate_current_trace(
+            metadata={
+                "metric_type": covenant.metric.metric_type,
+                "filter_count": len(covenant.transaction_filters),
+                "exclusion_count": len(covenant.exclusions),
+                "parameter_count": len(parameters),
+                "date_field": covenant.date_field,
+                "time_window": covenant.time_window.type if covenant.time_window else None,
+            }
+        )
         self._validate_currency_scope(covenant, db, where_sql, parameters)
         value = self.calculate(covenant, db, where_sql, parameters)
         number_unit = covenant.metric.unit or covenant.condition.unit or covenant.condition.currency
@@ -54,6 +69,7 @@ class AggregateEvaluator:
                 number=None,
                 number_unit=number_unit,
                 status="partial",
+                failure_stage=FailureStage.CALCULATION,
                 errors=["metric is undefined for an empty transaction set"],
             )
         if covenant.condition.threshold is None:
@@ -72,6 +88,18 @@ class AggregateEvaluator:
             number_unit=number_unit,
             status="success",
         )
+        annotate_current_trace(
+            metadata={
+                "metric_value": str(value),
+                "comparator": covenant.condition.comparator,
+                "threshold": (
+                    str(covenant.condition.threshold)
+                    if covenant.condition.threshold is not None
+                    else None
+                ),
+                "verdict": verdict,
+            }
+        )
         if verdict == "violated" and covenant.evidence_mode != EvidenceMode.NONE:
             try:
                 result.evidence_transaction_id = self.select_evidence(
@@ -79,6 +107,7 @@ class AggregateEvaluator:
                 )
                 if result.evidence_transaction_id is None:
                     result.status = "partial"
+                    result.failure_stage = FailureStage.EVIDENCE
                     result.errors.append("required evidence transaction not found")
                 else:
                     from halyk_covenants.evidence import EvidenceContext, EvidenceValidator
@@ -95,10 +124,20 @@ class AggregateEvaluator:
                     )
                     if not verification.valid:
                         result.status = "partial"
+                        result.failure_stage = FailureStage.EVIDENCE
                         result.errors.extend(verification.errors)
             except Exception as exc:  # Evidence failure must not discard correct components.
                 result.status = "partial"
+                result.failure_stage = FailureStage.EVIDENCE
                 result.errors.append(f"evidence selection failed: {exc}")
+            if result.failure_stage == FailureStage.EVIDENCE:
+                annotate_current_trace(
+                    metadata={
+                        "failure_stage": FailureStage.EVIDENCE.value,
+                        "evidence_transaction_id": result.evidence_transaction_id,
+                    },
+                    tags=(FailureStage.EVIDENCE.value,),
+                )
         return result
 
     def _validate_currency_scope(
