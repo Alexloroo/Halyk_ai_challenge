@@ -28,6 +28,20 @@ CANONICAL_COLUMNS = (
 )
 REQUIRED_COLUMNS = ("transaction_id", "transaction_date", "amount")
 DEFAULT_ALIASES = {"transaction_date": ("transaction_date", "date")}
+_DIRECTION_ALIASES = {
+    "incoming": "incoming",
+    "in": "incoming",
+    "credit": "incoming",
+    "credit_in": "incoming",
+    "входящий": "incoming",
+    "входящая": "incoming",
+    "outgoing": "outgoing",
+    "out": "outgoing",
+    "debit": "outgoing",
+    "debit_out": "outgoing",
+    "исходящий": "outgoing",
+    "исходящая": "outgoing",
+}
 
 
 class DuckDBStore:
@@ -131,6 +145,15 @@ class DuckDBStore:
                 PRIMARY KEY (borrower_id, covenant_id)
             );
 
+            CREATE TABLE IF NOT EXISTS covenant_result_history (
+                run_id VARCHAR NOT NULL,
+                evaluation_date DATE NOT NULL,
+                borrower_id VARCHAR NOT NULL,
+                covenant_id VARCHAR NOT NULL,
+                result_json JSON NOT NULL,
+                PRIMARY KEY (run_id, borrower_id, covenant_id)
+            );
+
             CREATE TABLE IF NOT EXISTS pipeline_stage_records (
                 run_id VARCHAR NOT NULL,
                 stage_name VARCHAR NOT NULL,
@@ -152,9 +175,14 @@ class DuckDBStore:
         path: str | Path,
         column_mapping: Mapping[str, str] | None = None,
     ) -> int:
+        """Replace one structured source snapshot atomically.
+
+        Parsing and Pydantic validation happen before the transaction starts. Once mutation begins,
+        the previous rows from exactly this resolved source path are deleted and the new snapshot is
+        inserted in one DuckDB transaction. Any failure rolls back to the prior complete snapshot.
+        """
         source_path = Path(path)
         frame = read_structured_file(source_path)
-        self._load_embedded_borrower_master(source_path)
         mapping = self._resolve_mapping(frame, column_mapping)
         source_file = str(source_path.resolve())
 
@@ -177,6 +205,8 @@ class DuckDBStore:
             }
             if values["source_row_id"] is None:
                 values["source_row_id"] = f"{source_path.name}:{source_row_number}"
+            values["currency"] = self._normalize_currency(values["currency"])
+            values["direction"] = self._normalize_direction(values["direction"])
             transaction = Transaction.model_validate(values)
             canonical_rows.append(
                 (
@@ -196,30 +226,39 @@ class DuckDBStore:
                 )
             )
 
-        if raw_rows:
-            self.connection.executemany(
-                "INSERT INTO raw_transactions VALUES (?, ?, ?, ?)",
-                raw_rows,
-            )
-            self.connection.executemany(
-                """
-                INSERT INTO transactions (
-                    transaction_id, borrower_id, account_id, transaction_date, amount,
-                    currency, direction, counterparty_id, counterparty_name, purpose,
-                    source_row_id, source_file, source_hash
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                canonical_rows,
-            )
-            self.connection.execute(
-                """
-                INSERT INTO borrowers (borrower_id)
-                SELECT DISTINCT borrower_id
-                FROM transactions
-                WHERE borrower_id IS NOT NULL
-                ON CONFLICT DO NOTHING
-                """
-            )
+        self.connection.execute("BEGIN TRANSACTION")
+        try:
+            self._load_embedded_borrower_master(source_path)
+            self.connection.execute("DELETE FROM raw_transactions WHERE source_file = ?", [source_file])
+            self.connection.execute("DELETE FROM transactions WHERE source_file = ?", [source_file])
+            if raw_rows:
+                self.connection.executemany(
+                    "INSERT INTO raw_transactions VALUES (?, ?, ?, ?)",
+                    raw_rows,
+                )
+                self.connection.executemany(
+                    """
+                    INSERT INTO transactions (
+                        transaction_id, borrower_id, account_id, transaction_date, amount,
+                        currency, direction, counterparty_id, counterparty_name, purpose,
+                        source_row_id, source_file, source_hash
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    canonical_rows,
+                )
+                self.connection.execute(
+                    """
+                    INSERT INTO borrowers (borrower_id)
+                    SELECT DISTINCT borrower_id
+                    FROM transactions
+                    WHERE borrower_id IS NOT NULL
+                    ON CONFLICT DO NOTHING
+                    """
+                )
+            self.connection.execute("COMMIT")
+        except Exception:
+            self.connection.execute("ROLLBACK")
+            raise
         return len(canonical_rows)
 
     def _load_embedded_borrower_master(self, path: Path) -> None:
@@ -355,8 +394,19 @@ class DuckDBStore:
     def _optional_string(value: Any) -> str | None:
         if value is None or pd.isna(value):
             return None
-        text = str(value)
-        return text if text != "" else None
+        text = str(value).strip()
+        return text if text else None
+
+    @staticmethod
+    def _normalize_currency(value: str | None) -> str | None:
+        return value.upper() if value else None
+
+    @staticmethod
+    def _normalize_direction(value: str | None) -> str | None:
+        if value is None:
+            return None
+        normalized = normalize_name(value).replace(" ", "_")
+        return _DIRECTION_ALIASES.get(normalized, normalized)
 
     @classmethod
     def _json_value(cls, value: Any) -> object:
