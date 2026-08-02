@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import hashlib
+
 from halyk_covenants.domain import CovenantSpec
 from halyk_covenants.observability import trace_stage
 from halyk_covenants.storage.duckdb_store import DuckDBStore
@@ -11,6 +13,52 @@ class CovenantRegistry:
 
     @trace_stage("covenant.registry.save", run_type="tool", tags=("storage", "covenant"))
     def save(self, spec: CovenantSpec) -> None:
+        spec = self._resolve_version_collision(spec)
+        self._write(spec)
+
+    def _resolve_version_collision(self, spec: CovenantSpec) -> CovenantSpec:
+        row = self.store.connection.execute(
+            "SELECT spec_json FROM covenants WHERE covenant_id = ?",
+            [spec.covenant_id],
+        ).fetchone()
+        if row is None:
+            return spec
+        existing = CovenantSpec.model_validate_json(row[0])
+        if self._same_version(existing, spec):
+            return spec
+
+        family_id = spec.covenant_group_id or spec.covenant_id
+        if existing.covenant_group_id != family_id:
+            self._write(existing.model_copy(update={"covenant_group_id": family_id}))
+
+        identity = "|".join(
+            [
+                spec.source.document_id or "",
+                str(spec.source.page or ""),
+                spec.effective_from.isoformat() if spec.effective_from else "",
+                spec.effective_to.isoformat() if spec.effective_to else "",
+                spec.raw_text,
+            ]
+        )
+        suffix = hashlib.sha256(identity.encode("utf-8")).hexdigest()[:10].upper()
+        return spec.model_copy(
+            update={
+                "covenant_id": f"{family_id}@{suffix}",
+                "covenant_group_id": family_id,
+            }
+        )
+
+    @staticmethod
+    def _same_version(left: CovenantSpec, right: CovenantSpec) -> bool:
+        return (
+            left.source.document_id == right.source.document_id
+            and left.source.page == right.source.page
+            and left.effective_from == right.effective_from
+            and left.effective_to == right.effective_to
+            and left.raw_text == right.raw_text
+        )
+
+    def _write(self, spec: CovenantSpec) -> None:
         payload = spec.model_dump_json()
         with self.store.connection.cursor() as cursor:
             cursor.execute(
