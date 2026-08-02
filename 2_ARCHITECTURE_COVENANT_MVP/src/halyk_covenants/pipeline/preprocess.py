@@ -212,7 +212,12 @@ class PreprocessPipeline:
         allowed_borrowers = set(candidate.borrower_ids)
         for item in relevant:
             block = item.block
-            if allowed_borrowers and block.borrower_ids and not allowed_borrowers.intersection(block.borrower_ids):
+            incompatible_scope = (
+                allowed_borrowers
+                and block.borrower_ids
+                and not allowed_borrowers.intersection(block.borrower_ids)
+            )
+            if incompatible_scope:
                 continue
             selected[block.block_id] = block
 
@@ -234,7 +239,8 @@ class PreprocessPipeline:
             ),
         )[: self.compiler_context_k + 8]
         context_lines = [
-            f"[document={block.document_id} page={block.page} type={block.block_type}] {block.text}"
+            f"[document={block.document_id} page={block.page} type={block.block_type}] "
+            f"{block.text}"
             for block in ordered
             if block.text.strip()
         ]
@@ -276,7 +282,12 @@ class PreprocessPipeline:
     def _exact_borrower_mentions(text: str, borrowers: list[Any]) -> list[str]:
         matched: list[str] = []
         for borrower in borrowers:
-            values = [borrower.borrower_id, *borrower.identifiers.values()]
+            values = [
+                borrower.borrower_id,
+                *borrower.identifiers.values(),
+                borrower.canonical_name,
+                *borrower.aliases,
+            ]
             if any(
                 re.search(rf"(?<![\w-]){re.escape(value)}(?![\w-])", text, re.IGNORECASE)
                 for value in values
