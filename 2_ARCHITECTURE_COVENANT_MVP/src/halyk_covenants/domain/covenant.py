@@ -8,10 +8,12 @@ from typing import Any, Literal
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from halyk_covenants.domain.source import SourceRef
-from halyk_covenants.domain.transaction_fields import DATE_FIELDS, GROUP_BY_FIELDS, PHYSICAL_TRANSACTION_FIELDS
+from halyk_covenants.domain.transaction_fields import (
+    DATE_FIELDS,
+    GROUP_BY_FIELDS,
+    PHYSICAL_TRANSACTION_FIELDS,
+)
 
-# Backwards-compatible public constant used by evaluator modules. Filters use the broader
-# FILTER_FIELDS catalog in covenant validation/SQL because derived fields are executable too.
 TRANSACTION_FIELDS = PHYSICAL_TRANSACTION_FIELDS
 
 MetricType = Literal["sum", "count", "max", "min", "avg", "ratio", "existence", "frequency"]
@@ -47,6 +49,14 @@ class EvidenceMode(StrEnum):
     MAX_TRANSACTION = "max_transaction"
 
 
+class FilterSpec(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    field: str
+    operator: FilterOperator
+    value: Any
+
+
 class MetricSpec(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -54,6 +64,8 @@ class MetricSpec(BaseModel):
     field: str | None = None
     numerator: MetricSpec | None = None
     denominator: MetricSpec | None = None
+    filters: list[FilterSpec] = Field(default_factory=list)
+    exclusions: list[FilterSpec] = Field(default_factory=list)
     unit: str | None = None
 
     @model_validator(mode="after")
@@ -75,14 +87,6 @@ class ConditionSpec(BaseModel):
     threshold: Decimal | int | None
     unit: str | None = None
     currency: str | None = None
-
-
-class FilterSpec(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    field: str
-    operator: FilterOperator
-    value: Any
 
 
 class TimeWindowSpec(BaseModel):
