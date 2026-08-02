@@ -73,7 +73,9 @@ class PaddleLayoutProvider:
                     for item in rows[-1]
                 ) / len(rows[-1])
 
-        table_digest = hashlib.sha256(f"{document_id}:{page}:layout-table".encode()).hexdigest()[:16]
+        table_digest = hashlib.sha256(
+            f"{document_id}:{page}:layout-table".encode()
+        ).hexdigest()[:16]
         table_id = f"table-{table_digest}"
         output: list[DocumentBlock] = []
         for row_index, row in enumerate(rows):
