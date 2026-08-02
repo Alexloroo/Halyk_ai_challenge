@@ -10,6 +10,7 @@ from halyk_covenants.llm.prompts import compiler_messages
 from halyk_covenants.observability import trace_stage
 
 from .detector import CovenantCandidate
+from .identity import resolve_covenant_identity
 from .validation import validate_compiled_spec
 
 
@@ -31,12 +32,33 @@ class CompilationOutcome(BaseModel):
 def apply_resolved_candidate_facts(
     spec: CovenantSpec, candidate: CovenantCandidate
 ) -> CovenantSpec:
-    """Overlay facts resolved deterministically outside the LLM."""
+    """Overlay deterministic facts while preserving a valid LLM-selected borrower subset.
+
+    Candidate borrower IDs are an allowed scope, not a forced scope. The model may split a
+    multi-borrower candidate into per-borrower specs, but it may never introduce an ID that was not
+    resolved outside the model. Covenant identity is also generated/validated deterministically.
+    """
+    allowed = set(candidate.borrower_ids)
+    requested = [borrower_id for borrower_id in spec.borrower_ids if borrower_id in allowed]
+    if candidate.borrower_ids:
+        if requested:
+            borrower_ids = requested
+        elif len(candidate.borrower_ids) == 1:
+            borrower_ids = list(candidate.borrower_ids)
+        else:
+            borrower_ids = []
+    else:
+        borrower_ids = []
+
+    covenant_id, covenant_group_id = resolve_covenant_identity(candidate, spec)
     return spec.model_copy(
         update={
+            "covenant_id": covenant_id,
+            "covenant_group_id": covenant_group_id,
             "raw_text": candidate.raw_text,
-            "borrower_ids": list(candidate.borrower_ids),
+            "borrower_ids": borrower_ids,
             "source": candidate.source,
+            "confidence": min(float(spec.confidence), float(candidate.confidence)),
         }
     )
 
@@ -44,9 +66,6 @@ def apply_resolved_candidate_facts(
 class CovenantCompiler:
     def __init__(self, model: Any) -> None:
         self.model = model
-        # DeepSeek thinking mode rejects the tool_choice parameter emitted by
-        # function-calling structured output. JSON mode keeps structured parsing
-        # while avoiding tool calls and works for both chat and reasoning models.
         self.structured_model = model.with_structured_output(CompiledCovenants, method="json_mode")
         self.schema_json = json.dumps(
             CompiledCovenants.model_json_schema(), ensure_ascii=False, separators=(",", ":")
