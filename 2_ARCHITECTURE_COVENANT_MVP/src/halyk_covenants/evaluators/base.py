@@ -1,10 +1,17 @@
 from __future__ import annotations
 
-from datetime import date
+from datetime import UTC, date, datetime
 from decimal import Decimal
 from typing import Protocol
+from uuid import uuid4
 
-from halyk_covenants.domain import CovenantResult, CovenantSpec, EvidenceMode, FailureStage
+from halyk_covenants.domain import (
+    Calculation,
+    CovenantResult,
+    CovenantSpec,
+    EvidenceMode,
+    FailureStage,
+)
 from halyk_covenants.evaluators.comparator import compare
 from halyk_covenants.observability import annotate_current_trace, trace_stage
 from halyk_covenants.sql import build_where_clause
@@ -40,10 +47,12 @@ class AggregateEvaluator:
         evaluation_date: date | None = None,
     ) -> CovenantResult:
         borrower_scope = covenant.borrower_ids if covenant.scope_mode == "group" else borrower_id
+        filters = [*covenant.transaction_filters, *covenant.metric.filters]
+        exclusions = [*covenant.exclusions, *covenant.metric.exclusions]
         where_sql, parameters = build_where_clause(
             borrower_scope,
-            covenant.transaction_filters,
-            exclusions=covenant.exclusions,
+            filters,
+            exclusions=exclusions,
             date_field=covenant.date_field,
             time_window=covenant.time_window,
             evaluation_date=evaluation_date,
@@ -53,8 +62,8 @@ class AggregateEvaluator:
         annotate_current_trace(
             metadata={
                 "metric_type": covenant.metric.metric_type,
-                "filter_count": len(covenant.transaction_filters),
-                "exclusion_count": len(covenant.exclusions),
+                "filter_count": len(filters),
+                "exclusion_count": len(exclusions),
                 "parameter_count": len(parameters),
                 "date_field": covenant.date_field,
                 "time_window": covenant.time_window.type if covenant.time_window else None,
@@ -81,6 +90,15 @@ class AggregateEvaluator:
         if covenant.condition.threshold is None:
             raise ValueError("condition threshold is required for deterministic evaluation")
 
+        calculation_id = self._record_calculation(
+            covenant=covenant,
+            borrower_id=borrower_id,
+            db=db,
+            where_sql=where_sql,
+            parameters=parameters,
+            value=value,
+            unit=number_unit,
+        )
         verdict = (
             "complied"
             if compare(value, covenant.condition.comparator, covenant.condition.threshold)
@@ -92,6 +110,7 @@ class AggregateEvaluator:
             verdict=verdict,
             number=value,
             number_unit=number_unit,
+            calculation_id=calculation_id,
             status="success",
         )
         annotate_current_trace(
@@ -104,6 +123,7 @@ class AggregateEvaluator:
                     else None
                 ),
                 "verdict": verdict,
+                "calculation_id": calculation_id,
             }
         )
         if verdict == "violated" and covenant.evidence_mode != EvidenceMode.NONE:
@@ -145,6 +165,56 @@ class AggregateEvaluator:
                     tags=(FailureStage.EVIDENCE.value,),
                 )
         return result
+
+    def _record_calculation(
+        self,
+        *,
+        covenant: CovenantSpec,
+        borrower_id: str,
+        db: DuckDBStore,
+        where_sql: str,
+        parameters: list[object],
+        value: Numeric,
+        unit: str | None,
+    ) -> str:
+        calculation_id = f"calc-{uuid4()}"
+        row_count = int(
+            db.connection.execute(
+                f"SELECT COUNT(*) FROM transactions {where_sql}", parameters
+            ).fetchone()[0]
+        )
+        calculation = Calculation(
+            calculation_id=calculation_id,
+            covenant_id=covenant.covenant_id,
+            borrower_ids=(
+                list(covenant.borrower_ids)
+                if covenant.scope_mode == "group"
+                else [borrower_id]
+            ),
+            metric_type=covenant.metric.metric_type,
+            sql=self.calculation_sql(covenant, where_sql),
+            parameter_summary=[str(parameter) for parameter in parameters],
+            input_row_count=row_count,
+            value=value,
+            unit=unit,
+            created_at=datetime.now(UTC),
+        )
+        db.connection.execute(
+            "INSERT INTO calculations VALUES (?, ?, ?, CAST(? AS JSON))",
+            [calculation_id, covenant.covenant_id, borrower_id, calculation.model_dump_json()],
+        )
+        return calculation_id
+
+    def calculation_sql(self, covenant: CovenantSpec, where_sql: str) -> str | None:
+        metric_type = covenant.metric.metric_type
+        field = covenant.metric.field
+        if metric_type in {"sum", "max", "min", "avg"} and field:
+            return f"SELECT {metric_type.upper()}({field}) FROM transactions {where_sql}"
+        if metric_type == "count":
+            return f"SELECT COUNT({field or '*'}) FROM transactions {where_sql}"
+        if metric_type == "existence":
+            return f"SELECT COUNT(*) > 0 FROM transactions {where_sql}"
+        return f"-- {metric_type} evaluator over filtered transaction scope\nSELECT * FROM transactions {where_sql}"
 
     def _validate_currency_scope(
         self,
