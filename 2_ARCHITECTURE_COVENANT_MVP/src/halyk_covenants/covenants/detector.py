@@ -4,6 +4,7 @@ import hashlib
 import re
 from collections import defaultdict
 from decimal import Decimal
+from itertools import pairwise
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -113,7 +114,7 @@ class CovenantDetector:
 
         ordered_text = sorted(text_blocks, key=cls._reading_order_key)
         units.extend(ordered_text)
-        for previous, current in zip(ordered_text, ordered_text[1:], strict=False):
+        for previous, current in pairwise(ordered_text):
             if previous.document_id != current.document_id or previous.page != current.page:
                 continue
             if previous.borrower_ids != current.borrower_ids:
