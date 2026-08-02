@@ -1,9 +1,10 @@
 from __future__ import annotations
 
+import hashlib
+import json
 from datetime import UTC, date, datetime
 from decimal import Decimal
 from typing import Protocol
-from uuid import uuid4
 
 from halyk_covenants.domain import (
     Calculation,
@@ -179,7 +180,25 @@ class AggregateEvaluator:
         value: Numeric,
         unit: str | None,
     ) -> str:
-        calculation_id = f"calc-{uuid4()}"
+        calculation_sql = self.calculation_sql(covenant, where_sql)
+        parameter_summary = [str(parameter) for parameter in parameters]
+        identity = {
+            "covenant_id": covenant.covenant_id,
+            "borrower_ids": (
+                sorted(covenant.borrower_ids)
+                if covenant.scope_mode == "group"
+                else [borrower_id]
+            ),
+            "metric": covenant.metric.model_dump(mode="json"),
+            "sql": calculation_sql,
+            "parameters": parameter_summary,
+            "value": str(value),
+            "unit": unit,
+        }
+        digest = hashlib.sha256(
+            json.dumps(identity, sort_keys=True, ensure_ascii=False).encode("utf-8")
+        ).hexdigest()[:24]
+        calculation_id = f"calc-{digest}"
         row_count = int(
             db.connection.execute(
                 f"SELECT COUNT(*) FROM transactions {where_sql}", parameters
@@ -188,19 +207,23 @@ class AggregateEvaluator:
         calculation = Calculation(
             calculation_id=calculation_id,
             covenant_id=covenant.covenant_id,
-            borrower_ids=(
-                list(covenant.borrower_ids) if covenant.scope_mode == "group" else [borrower_id]
-            ),
+            borrower_ids=identity["borrower_ids"],
             metric_type=covenant.metric.metric_type,
-            sql=self.calculation_sql(covenant, where_sql),
-            parameter_summary=[str(parameter) for parameter in parameters],
+            sql=calculation_sql,
+            parameter_summary=parameter_summary,
             input_row_count=row_count,
             value=value,
             unit=unit,
             created_at=datetime.now(UTC),
         )
         db.connection.execute(
-            "INSERT INTO calculations VALUES (?, ?, ?, CAST(? AS JSON))",
+            """
+            INSERT INTO calculations VALUES (?, ?, ?, CAST(? AS JSON))
+            ON CONFLICT (calculation_id) DO UPDATE SET
+                covenant_id = excluded.covenant_id,
+                borrower_id = excluded.borrower_id,
+                calculation_json = excluded.calculation_json
+            """,
             [calculation_id, covenant.covenant_id, borrower_id, calculation.model_dump_json()],
         )
         return calculation_id
