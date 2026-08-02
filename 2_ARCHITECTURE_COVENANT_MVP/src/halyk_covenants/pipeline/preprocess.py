@@ -13,23 +13,26 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from halyk_covenants.borrowers import BorrowerClaim, BorrowerResolver
 from halyk_covenants.covenants import CovenantDetector, CovenantRegistry
+from halyk_covenants.covenants.detector import CovenantCandidate
+from halyk_covenants.documents.retrieval import HybridRetriever
 from halyk_covenants.domain import DocumentBlock
 from halyk_covenants.ingestion import PDFIngestor
 from halyk_covenants.observability import trace_stage
 from halyk_covenants.storage import DuckDBStore
 
-STRUCTURED_SUFFIXES = frozenset({".csv", ".xlsx", ".xls", ".parquet"})
+STRUCTURED_SUFFIXES = frozenset({".csv", ".xlsx", ".xlsm", ".parquet"})
 TRANSACTION_SEMANTIC_CATALOG = """SEMANTIC_CATALOG:
 transactions.transaction_id: string transaction identifier
 transactions.borrower_id: string borrower identifier
 transactions.transaction_date: DATE used for covenant periods
 transactions.amount: DECIMAL(38,6) exact transaction amount
-transactions.currency: string currency code such as KZT or USD
-transactions.direction: string, normalized values incoming or outgoing
+transactions.currency: normalized uppercase currency code such as KZT or USD
+transactions.direction: normalized values incoming or outgoing
 transactions.counterparty_id: optional string
 transactions.counterparty_name: optional string
 transactions.purpose: optional payment purpose
 transactions.source_row_id: source provenance string
+derived.weekday: ISO weekday 1=Monday ... 7=Sunday
 """
 
 
@@ -57,13 +60,17 @@ class PreprocessPipeline:
         compiler_graph: Any | None = None,
         registry: CovenantRegistry | None = None,
         progress: Callable[[str], None] | None = None,
+        compiler_context_k: int = 12,
     ) -> None:
+        if compiler_context_k <= 0:
+            raise ValueError("compiler_context_k must be positive")
         self.store = store
         self.pdf_ingestor = pdf_ingestor or PDFIngestor()
         self.detector = detector or CovenantDetector()
         self.compiler_graph = compiler_graph
         self.registry = registry or CovenantRegistry(store)
         self.progress = progress or (lambda message: None)
+        self.compiler_context_k = compiler_context_k
 
     @trace_stage("pipeline.preprocess", run_type="chain", tags=("pipeline", "preprocessing"))
     def run(self, input_root: Path) -> PreprocessReport:
@@ -104,7 +111,7 @@ class PreprocessPipeline:
                     continue
                 self._mark_processed(path, digest, suffix.lstrip("."))
                 self.progress(f"{prefix}: completed")
-            except Exception as exc:  # One bad artifact must not stop preprocessing.
+            except Exception as exc:
                 report.errors.append(f"{path}: {exc}")
                 self.progress(f"{prefix}: failed: {type(exc).__name__}: {exc}")
         self._record_run(run_id, started, report)
@@ -152,10 +159,18 @@ class PreprocessPipeline:
         ).fetchall()
         only_borrower = str(borrower_rows[0][0]) if len(borrower_rows) == 1 else None
         compiled = failed = 0
-        document_context = self._compiler_context(blocks)
+
+        retriever = HybridRetriever()
+        stored_blocks = self._stored_document_blocks()
+        retriever.index(stored_blocks)
         for candidate_index, candidate in enumerate(candidates, start=1):
             if not candidate.borrower_ids and only_borrower:
                 candidate = candidate.model_copy(update={"borrower_ids": [only_borrower]})
+            document_context = self._compiler_context(
+                blocks=stored_blocks,
+                candidate=candidate,
+                retriever=retriever,
+            )
             self.progress(
                 f"[compile {candidate_index}/{len(candidates)}] {path.name} "
                 f"{candidate.candidate_id}: waiting for DeepSeek"
@@ -179,10 +194,52 @@ class PreprocessPipeline:
                 )
         return len(candidates), compiled, failed
 
-    @staticmethod
-    def _compiler_context(blocks: list[DocumentBlock]) -> str:
-        document_text = "\n\n".join(block.text for block in blocks if block.text.strip())
-        return f"{TRANSACTION_SEMANTIC_CATALOG}\nDOCUMENT_CONTEXT:\n{document_text}"
+    def _stored_document_blocks(self) -> list[DocumentBlock]:
+        rows = self.store.connection.execute(
+            "SELECT block_json FROM document_blocks ORDER BY document_id, page, block_id"
+        ).fetchall()
+        return [DocumentBlock.model_validate_json(row[0]) for row in rows]
+
+    def _compiler_context(
+        self,
+        *,
+        blocks: list[DocumentBlock],
+        candidate: CovenantCandidate,
+        retriever: HybridRetriever,
+    ) -> str:
+        relevant = retriever.search(candidate.raw_text, k=self.compiler_context_k)
+        selected: dict[str, DocumentBlock] = {}
+        allowed_borrowers = set(candidate.borrower_ids)
+        for item in relevant:
+            block = item.block
+            if allowed_borrowers and block.borrower_ids and not allowed_borrowers.intersection(block.borrower_ids):
+                continue
+            selected[block.block_id] = block
+
+        source_document = candidate.source.document_id
+        source_page = candidate.source.page
+        if source_document is not None and source_page is not None:
+            for block in blocks:
+                if block.document_id == source_document and abs(block.page - source_page) <= 1:
+                    selected[block.block_id] = block
+
+        ordered = sorted(
+            selected.values(),
+            key=lambda block: (
+                block.document_id != source_document,
+                abs(block.page - source_page) if source_page is not None else block.page,
+                block.document_id,
+                block.page,
+                block.block_id,
+            ),
+        )[: self.compiler_context_k + 8]
+        context_lines = [
+            f"[document={block.document_id} page={block.page} type={block.block_type}] {block.text}"
+            for block in ordered
+            if block.text.strip()
+        ]
+        context = "\n".join(context_lines) or candidate.raw_text
+        return f"{TRANSACTION_SEMANTIC_CATALOG}\nRETRIEVED_DOCUMENT_CONTEXT:\n{context}"
 
     @trace_stage(
         "pipeline.preprocess.borrower_scope",
@@ -195,8 +252,12 @@ class PreprocessPipeline:
             return blocks
         resolver = BorrowerResolver(borrowers)
         current_scope: list[str] = []
+        current_page: int | None = None
         scoped: list[DocumentBlock] = []
         for block in blocks:
+            if current_page is None or block.page != current_page:
+                current_scope = []
+                current_page = block.page
             resolved_ids = list(block.borrower_ids)
             if not resolved_ids:
                 resolved_ids = self._exact_borrower_mentions(block.text, borrowers)
@@ -226,7 +287,11 @@ class PreprocessPipeline:
 
     @staticmethod
     def _borrower_name_claim(text: str) -> str | None:
-        match = re.search(r"(?:за[её]мщик|borrower)\s*:\s*([^,\n(]+)", text, flags=re.IGNORECASE)
+        match = re.search(
+            r"(?:за[её]мщик|borrower)\s*(?::|[-–—])\s*([^,\n(]+)",
+            text,
+            flags=re.IGNORECASE,
+        )
         return match.group(1).strip() if match else None
 
     def _is_unchanged(self, path: Path, digest: str) -> bool:
