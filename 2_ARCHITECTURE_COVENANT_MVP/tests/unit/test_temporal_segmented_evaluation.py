@@ -41,7 +41,7 @@ def _version(
     )
 
 
-def test_mid_month_amendment_checks_transaction_against_version_active_on_transaction_date() -> None:
+def test_mid_month_amendment_checks_transaction_against_active_version() -> None:
     store = DuckDBStore()
     store.connection.execute(
         """
@@ -71,7 +71,7 @@ def test_mid_month_amendment_checks_transaction_against_version_active_on_transa
     store.close()
 
 
-def test_version_spanning_aggregate_rule_is_explicitly_rejected_when_semantics_are_ambiguous() -> None:
+def test_version_spanning_aggregate_rule_fails_when_semantics_are_ambiguous() -> None:
     store = DuckDBStore()
     versions = [
         _version("COV-A2-v1", "5500000", date(2026, 1, 1), date(2026, 4, 14)),
