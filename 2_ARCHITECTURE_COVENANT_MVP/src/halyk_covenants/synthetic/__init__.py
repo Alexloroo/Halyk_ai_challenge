@@ -8,6 +8,8 @@ from halyk_covenants.synthetic.models import (
     SyntheticDatasetDefinition,
     ValidationReport,
 )
+from halyk_covenants.synthetic.regression_runner import run_regression_v2
+from halyk_covenants.synthetic.regression_v2 import generate_regression_dataset_v2
 
 __all__ = [
     "ArtifactEntry",
@@ -18,4 +20,6 @@ __all__ = [
     "SyntheticDatasetDefinition",
     "ValidationReport",
     "build_synthetic_definition",
+    "generate_regression_dataset_v2",
+    "run_regression_v2",
 ]
