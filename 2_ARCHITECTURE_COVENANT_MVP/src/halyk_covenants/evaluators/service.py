@@ -36,9 +36,27 @@ class EvaluationService:
             "metric_type": covenant.metric.metric_type,
             "evidence_mode": covenant.evidence_mode.value,
             "evaluation_date": evaluation_date.isoformat() if evaluation_date else None,
+            "covenant_status": covenant.status,
         }
         annotate_current_trace(metadata={key: value for key, value in metadata.items() if value})
         with trace_context(**metadata):
+            if covenant.status != "compiled":
+                annotate_current_trace(
+                    metadata={
+                        "failure_stage": FailureStage.COMPILATION.value,
+                        "covenant_status": covenant.status,
+                    },
+                    tags=(FailureStage.COMPILATION.value,),
+                )
+                return CovenantResult(
+                    borrower_id=borrower_id,
+                    covenant_id=covenant.covenant_group_id or covenant.covenant_id,
+                    verdict="unknown",
+                    number=None,
+                    status="failed",
+                    failure_stage=FailureStage.COMPILATION,
+                    errors=[f"covenant status {covenant.status!r} is not executable"],
+                )
             try:
                 evaluator = self.registry.get(covenant.metric.metric_type)
                 return evaluator.evaluate(covenant, borrower_id, self.db, evaluation_date)
@@ -52,7 +70,7 @@ class EvaluationService:
                 )
                 return CovenantResult(
                     borrower_id=borrower_id,
-                    covenant_id=covenant.covenant_id,
+                    covenant_id=covenant.covenant_group_id or covenant.covenant_id,
                     verdict="unknown",
                     number=None,
                     status="failed",
