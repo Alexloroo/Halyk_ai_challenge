@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -26,6 +24,7 @@ class VerificationReport(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     valid: bool
+    scope: Literal["registry_pairs"] = "registry_pairs"
     expected_pair_count: int = Field(ge=0)
     actual_pair_count: int = Field(ge=0)
     issues: list[VerificationIssue] = Field(default_factory=list)
