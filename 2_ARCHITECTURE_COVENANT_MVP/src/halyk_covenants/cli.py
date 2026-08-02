@@ -18,7 +18,7 @@ from halyk_covenants.covenants import (
 )
 from halyk_covenants.domain import CovenantResult, CovenantSpec
 from halyk_covenants.evaluators import EvaluationService
-from halyk_covenants.ingestion import PDFIngestor
+from halyk_covenants.ingestion import PDFIngestor, PageQualityRouter
 from halyk_covenants.llm import DeepSeekChatFactory, DeepSeekConfigurationError
 from halyk_covenants.logging import configure_logging
 from halyk_covenants.ocr import PaddleOCRProvider
@@ -31,6 +31,7 @@ from halyk_covenants.submission import (
 )
 from halyk_covenants.synthetic.generator import generate_synthetic_dataset
 from halyk_covenants.synthetic.validation import DatasetValidationError
+from halyk_covenants.vlm import PaddleLayoutProvider
 
 app = typer.Typer(
     name="halyk-covenants",
@@ -179,7 +180,8 @@ def preprocess_command(
     try:
         settings = load_settings(config_path)
         compiler_graph = None
-        pdf_ingestor = PDFIngestor()
+        router = PageQualityRouter(native_text_min_chars=settings.ocr.native_text_min_chars)
+        pdf_ingestor = PDFIngestor(router=router)
         if any(path.suffix.casefold() == ".pdf" for path in input_root.rglob("*")):
             if enable_ocr:
                 ocr_provider = PaddleOCRProvider(
@@ -187,7 +189,12 @@ def preprocess_command(
                     cpu_fallback=settings.ocr.cpu_fallback,
                 )
                 ocr_provider.validate_runtime()
-                pdf_ingestor = PDFIngestor(ocr=ocr_provider)
+                layout_provider = PaddleLayoutProvider(preferred_device=settings.ocr.device)
+                pdf_ingestor = PDFIngestor(
+                    router=router,
+                    ocr=ocr_provider,
+                    visual=layout_provider,
+                )
             model = DeepSeekChatFactory(settings.deepseek).create()
             compiler_graph = CompilerGraph(
                 compiler=CovenantCompiler(model),
