@@ -5,9 +5,9 @@ from uuid import uuid4
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from halyk_covenants.covenants import CovenantRegistry, TemporalResolver
-from halyk_covenants.domain import CovenantResult, FailureStage
-from halyk_covenants.evaluators import EvaluationService
+from halyk_covenants.covenants import CovenantRegistry
+from halyk_covenants.domain import CovenantResult
+from halyk_covenants.evaluators import EvaluationService, TemporalEvaluationService
 from halyk_covenants.observability import annotate_current_trace, trace_context, trace_stage
 from halyk_covenants.storage import DuckDBStore
 from halyk_covenants.verification import ResultVerifier, VerificationReport
@@ -36,6 +36,7 @@ class BatchEvaluationPipeline:
         self.store = store
         self.registry = registry or CovenantRegistry(store)
         self.service = service or EvaluationService(store)
+        self.temporal_service = TemporalEvaluationService(self.service)
         self.verifier = verifier or ResultVerifier()
 
     @trace_stage("pipeline.evaluate", run_type="chain", tags=("pipeline", "evaluation"))
@@ -64,30 +65,11 @@ class BatchEvaluationPipeline:
                     "version_count": len(versions),
                 }
                 with trace_context(**pair_metadata):
-                    try:
-                        covenant = TemporalResolver(versions).resolve(  # type: ignore[arg-type]
-                            group_id,
-                            borrower_id,
-                            at_date,
-                        )
-                    except Exception as exc:
-                        annotate_current_trace(
-                            metadata={
-                                "failure_stage": FailureStage.TEMPORAL.value,
-                                "error_type": type(exc).__name__,
-                            },
-                            tags=(FailureStage.TEMPORAL.value,),
-                        )
-                        result = CovenantResult(
-                            borrower_id=borrower_id,
-                            covenant_id=group_id,
-                            verdict="unknown",
-                            status="failed",
-                            failure_stage=FailureStage.TEMPORAL,
-                            errors=[str(exc)],
-                        )
-                    else:
-                        result = self.service.evaluate(covenant, borrower_id, at_date)
+                    result = self.temporal_service.evaluate_versions(  # type: ignore[arg-type]
+                        versions,
+                        borrower_id,
+                        at_date,
+                    )
                 expected_pairs.append((result.borrower_id, result.covenant_id))
                 results.append(result)
                 self._save_result(result)
