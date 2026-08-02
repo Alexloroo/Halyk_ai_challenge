@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from decimal import Decimal
+
 from pydantic import BaseModel, ConfigDict, Field
 
 from halyk_covenants.domain import EvidenceMode
@@ -94,38 +96,74 @@ class EvidenceValidator:
         if not bool(row[0]):
             return EvidenceVerification(
                 valid=False,
-                errors=["evidence transaction does not individually violate the covenant threshold"],
+                errors=[
+                    "evidence transaction does not individually violate the covenant threshold"
+                ],
             )
         return EvidenceVerification(valid=True)
 
-    @staticmethod
+    @classmethod
     def _validate_trigger(
-        transaction_id: str, context: EvidenceContext
+        cls, transaction_id: str, context: EvidenceContext
     ) -> EvidenceVerification:
         threshold = context.covenant.condition.threshold
         comparator = context.covenant.condition.comparator
         if threshold is None or comparator not in {"<", "<="}:
-            return EvidenceVerification(valid=False, errors=["trigger evidence has unsupported threshold"])
+            return EvidenceVerification(
+                valid=False,
+                errors=["trigger evidence has unsupported threshold"],
+            )
         numeric_threshold = int(threshold)
-        if str(numeric_threshold) != str(threshold) and float(threshold) != numeric_threshold:
-            return EvidenceVerification(valid=False, errors=["trigger threshold must be an integer"])
+        if Decimal(str(threshold)) != Decimal(numeric_threshold):
+            return EvidenceVerification(
+                valid=False,
+                errors=["trigger threshold must be an integer"],
+            )
         position = numeric_threshold + 1 if comparator == "<=" else numeric_threshold
-        if position <= 0:
-            position = 1
-        row = context.db.connection.execute(
-            f"""
-            SELECT transaction_id
-            FROM transactions
-            {context.where_sql}
-            ORDER BY transaction_date ASC, transaction_id ASC
-            LIMIT 1 OFFSET ?
-            """,
-            [*context.parameters, position - 1],
-        ).fetchone()
-        expected = None if row is None else str(row[0])
+        position = max(position, 1)
+        if context.covenant.metric.metric_type == "frequency":
+            expected = cls._frequency_trigger(context, position)
+        else:
+            row = context.db.connection.execute(
+                f"""
+                SELECT transaction_id
+                FROM transactions
+                {context.where_sql}
+                ORDER BY transaction_date ASC, transaction_id ASC
+                LIMIT 1 OFFSET ?
+                """,
+                [*context.parameters, position - 1],
+            ).fetchone()
+            expected = None if row is None else str(row[0])
         if expected != transaction_id:
             return EvidenceVerification(
                 valid=False,
                 errors=[f"evidence transaction is not the threshold trigger; expected {expected}"],
             )
         return EvidenceVerification(valid=True)
+
+    @staticmethod
+    def _frequency_trigger(context: EvidenceContext, position: int) -> str | None:
+        date_field = context.covenant.date_field
+        row = context.db.connection.execute(
+            f"""
+            WITH filtered AS (
+                SELECT
+                    transaction_id,
+                    CAST({date_field} AS DATE) AS bucket,
+                    ROW_NUMBER() OVER (
+                        PARTITION BY CAST({date_field} AS DATE)
+                        ORDER BY {date_field} ASC, transaction_id ASC
+                    ) AS position
+                FROM transactions
+                {context.where_sql}
+            )
+            SELECT transaction_id
+            FROM filtered
+            WHERE position = ?
+            ORDER BY bucket ASC, transaction_id ASC
+            LIMIT 1
+            """,
+            [*context.parameters, position],
+        ).fetchone()
+        return None if row is None else str(row[0])
