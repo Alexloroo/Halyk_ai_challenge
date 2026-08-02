@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from decimal import Decimal
 
+from halyk_covenants.covenants import CovenantRegistry
 from halyk_covenants.covenants.compiler import apply_resolved_candidate_facts
 from halyk_covenants.covenants.detector import CovenantCandidate, CovenantDetector
 from halyk_covenants.domain import (
@@ -94,6 +95,36 @@ def test_explicit_covenant_code_remains_stable_deterministic_identity() -> None:
     resolved = apply_resolved_candidate_facts(_spec(borrower_ids=["B001"]), candidate)
 
     assert resolved.covenant_id == "COV-LIMIT-7"
+
+
+def test_registry_keeps_two_document_versions_with_same_explicit_code() -> None:
+    store = DuckDBStore()
+    registry = CovenantRegistry(store)
+    first_candidate = CovenantCandidate(
+        candidate_id="candidate-doc-1",
+        raw_text="COV-LIMIT-7 maximum payment must not exceed 5000000 KZT",
+        ordinal=1,
+        borrower_ids=["B001"],
+        source=SourceRef(document_id="doc-1", page=1),
+        confidence=1,
+    )
+    second_candidate = first_candidate.model_copy(
+        update={
+            "candidate_id": "candidate-doc-2",
+            "source": SourceRef(document_id="doc-2", page=1),
+        }
+    )
+    first = apply_resolved_candidate_facts(_spec(borrower_ids=["B001"]), first_candidate)
+    second = apply_resolved_candidate_facts(_spec(borrower_ids=["B001"]), second_candidate)
+
+    registry.save(first)
+    registry.save(second)
+    versions = registry.list()
+
+    assert len(versions) == 2
+    assert len({spec.covenant_id for spec in versions}) == 2
+    assert {spec.covenant_group_id for spec in versions} == {"COV-LIMIT-7"}
+    store.close()
 
 
 def test_borrower_scope_does_not_leak_to_next_page_without_new_evidence() -> None:
