@@ -13,7 +13,13 @@ def test_weekday_filter_compiles_to_safe_duckdb_expression() -> None:
 
 def test_weekday_filter_does_not_accept_arbitrary_sql_field() -> None:
     try:
-        compile_filter(FilterSpec(field="amount); DROP TABLE transactions; --", operator="eq", value=1))
+        compile_filter(
+            FilterSpec(
+                field="amount); DROP TABLE transactions; --",
+                operator="eq",
+                value=1,
+            )
+        )
     except ValueError as exc:
         assert "Unsupported filter field" in str(exc)
     else:
