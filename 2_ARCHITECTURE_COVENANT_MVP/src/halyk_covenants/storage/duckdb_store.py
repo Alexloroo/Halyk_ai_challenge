@@ -229,8 +229,12 @@ class DuckDBStore:
         self.connection.execute("BEGIN TRANSACTION")
         try:
             self._load_embedded_borrower_master(source_path)
-            self.connection.execute("DELETE FROM raw_transactions WHERE source_file = ?", [source_file])
-            self.connection.execute("DELETE FROM transactions WHERE source_file = ?", [source_file])
+            self.connection.execute(
+                "DELETE FROM raw_transactions WHERE source_file = ?", [source_file]
+            )
+            self.connection.execute(
+                "DELETE FROM transactions WHERE source_file = ?", [source_file]
+            )
             if raw_rows:
                 self.connection.executemany(
                     "INSERT INTO raw_transactions VALUES (?, ?, ?, ?)",
