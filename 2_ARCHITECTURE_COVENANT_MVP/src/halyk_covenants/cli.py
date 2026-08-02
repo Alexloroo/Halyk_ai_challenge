@@ -18,7 +18,7 @@ from halyk_covenants.covenants import (
 )
 from halyk_covenants.domain import CovenantResult, CovenantSpec
 from halyk_covenants.evaluators import EvaluationService
-from halyk_covenants.ingestion import PDFIngestor, PageQualityRouter
+from halyk_covenants.ingestion import PageQualityRouter, PDFIngestor
 from halyk_covenants.llm import DeepSeekChatFactory, DeepSeekConfigurationError
 from halyk_covenants.logging import configure_logging
 from halyk_covenants.ocr import PaddleOCRProvider
