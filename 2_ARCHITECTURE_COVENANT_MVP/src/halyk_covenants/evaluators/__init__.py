@@ -12,6 +12,7 @@ from halyk_covenants.evaluators.frequency import FrequencyEvaluator
 from halyk_covenants.evaluators.ratio import RatioEvaluator
 from halyk_covenants.evaluators.registry import EvaluatorRegistry
 from halyk_covenants.evaluators.service import EvaluationService
+from halyk_covenants.evaluators.temporal import TemporalEvaluationService
 
 __all__ = [
     "AverageEvaluator",
@@ -25,5 +26,6 @@ __all__ = [
     "MinEvaluator",
     "RatioEvaluator",
     "SumEvaluator",
+    "TemporalEvaluationService",
     "compare",
 ]
