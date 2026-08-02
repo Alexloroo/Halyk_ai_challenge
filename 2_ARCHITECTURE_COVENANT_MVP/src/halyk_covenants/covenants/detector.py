@@ -78,8 +78,14 @@ class CovenantDetector:
         table_rows: dict[tuple[str, int, str, int], list[DocumentBlock]] = defaultdict(list)
         text_blocks: list[DocumentBlock] = []
         for block in blocks:
-            if block.block_type == "table_cell" and block.table_id is not None and block.row_index is not None:
-                table_rows[(block.document_id, block.page, block.table_id, block.row_index)].append(block)
+            if (
+                block.block_type == "table_cell"
+                and block.table_id is not None
+                and block.row_index is not None
+            ):
+                table_rows[(block.document_id, block.page, block.table_id, block.row_index)].append(
+                    block
+                )
             else:
                 text_blocks.append(block)
 
@@ -105,7 +111,7 @@ class CovenantDetector:
                 )
             )
 
-        ordered_text = sorted(text_blocks, key=lambda item: (item.document_id, item.page, item.block_id))
+        ordered_text = sorted(text_blocks, key=cls._reading_order_key)
         units.extend(ordered_text)
         for previous, current in zip(ordered_text, ordered_text[1:], strict=False):
             if previous.document_id != current.document_id or previous.page != current.page:
@@ -129,7 +135,13 @@ class CovenantDetector:
                     }
                 )
             )
-        return sorted(units, key=lambda item: (item.document_id, item.page, item.block_id))
+        return sorted(units, key=cls._reading_order_key)
+
+    @staticmethod
+    def _reading_order_key(block: DocumentBlock) -> tuple[object, ...]:
+        if block.bbox is None:
+            return (block.document_id, block.page, float("inf"), float("inf"), block.block_id)
+        return (block.document_id, block.page, block.bbox[1], block.bbox[0], block.block_id)
 
     @staticmethod
     def _deduplicate_explicit_codes(
