@@ -40,12 +40,13 @@ class PDFIngestor:
         with fitz.open(stream=document_bytes, filetype="pdf") as document:
             for page_index, page in enumerate(document, start=1):
                 text = page.get_text("text")
+                table_count = self._table_count(page) if self.visual is not None else 0
                 quality = self.router.classify(
                     NativePage(
                         page=page_index,
                         text=text,
                         image_count=len(page.get_images(full=True)),
-                        table_count=self._table_count(page) if self.visual is not None else 0,
+                        table_count=table_count,
                         width=page.rect.width,
                         height=page.rect.height,
                     )
@@ -53,6 +54,15 @@ class PDFIngestor:
                 native_blocks = self._extract_native(page, document_id, page_index)
                 if quality.route == "native":
                     blocks.extend(native_blocks)
+                    if table_count > 0 and self.visual is not None:
+                        image = self._render_page(page)
+                        blocks.extend(
+                            self.visual.extract(
+                                image,
+                                document_id=document_id,
+                                page=page_index,
+                            )
+                        )
                     continue
                 if quality.route == "failed":
                     continue
