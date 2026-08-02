@@ -17,6 +17,9 @@ def _metric_errors(metric: MetricSpec, path: str = "metric") -> list[str]:
     errors: list[str] = []
     if metric.field is not None and metric.field not in PHYSICAL_TRANSACTION_FIELDS:
         errors.append(f"{path}.field unsupported: {metric.field}")
+    for index, filter_spec in enumerate([*metric.filters, *metric.exclusions]):
+        if filter_spec.field not in FILTER_FIELDS:
+            errors.append(f"{path}.filter[{index}].field unsupported: {filter_spec.field}")
     if metric.numerator is not None:
         errors.extend(_metric_errors(metric.numerator, f"{path}.numerator"))
     if metric.denominator is not None:
@@ -46,7 +49,7 @@ def validate_compiled_spec(
 
     filter_pairs = {
         (filter_spec.field, filter_spec.operator, str(filter_spec.value).casefold())
-        for filter_spec in spec.transaction_filters
+        for filter_spec in [*spec.transaction_filters, *spec.metric.filters]
     }
     if _OUTGOING.search(clause) and ("direction", "eq", "outgoing") not in filter_pairs:
         errors.append("outgoing clause requires transaction filter direction=outgoing")
