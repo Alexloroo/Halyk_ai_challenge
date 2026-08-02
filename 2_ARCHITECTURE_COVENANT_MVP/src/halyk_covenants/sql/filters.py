@@ -16,8 +16,13 @@ ALLOWED_FILTER_FIELDS = frozenset(
         "counterparty_name",
         "purpose",
         "source_row_id",
+        "weekday",
     }
 )
+
+_DERIVED_FIELD_SQL = {
+    "weekday": "EXTRACT(ISODOW FROM transaction_date)",
+}
 
 _BINARY_OPERATORS = {
     "eq": "=",
@@ -30,19 +35,24 @@ _BINARY_OPERATORS = {
 
 
 def compile_filter(filter_spec: FilterSpec) -> tuple[str, list[Any]]:
-    """Compile one validated filter to parameterized DuckDB SQL."""
+    """Compile one validated filter to parameterized DuckDB SQL.
+
+    Derived fields are selected from a closed mapping. User/model supplied field names are never
+    interpolated as arbitrary SQL expressions.
+    """
     field = filter_spec.field
     if field not in ALLOWED_FILTER_FIELDS:
         raise ValueError(f"Unsupported filter field: {field}")
+    field_sql = _DERIVED_FIELD_SQL.get(field, field)
 
     operator = filter_spec.operator
     value = filter_spec.value
     if operator in {"eq", "neq"} and value is None:
         null_operator = "IS NULL" if operator == "eq" else "IS NOT NULL"
-        return f"{field} {null_operator}", []
+        return f"{field_sql} {null_operator}", []
 
     if operator in _BINARY_OPERATORS:
-        return f"{field} {_BINARY_OPERATORS[operator]} ?", [value]
+        return f"{field_sql} {_BINARY_OPERATORS[operator]} ?", [value]
 
     if operator in {"in", "not_in"}:
         values = _collection_values(value, operator)
@@ -50,14 +60,14 @@ def compile_filter(filter_spec: FilterSpec) -> tuple[str, list[Any]]:
             return ("FALSE" if operator == "in" else "TRUE"), []
         sql_operator = "IN" if operator == "in" else "NOT IN"
         placeholders = ", ".join("?" for _ in values)
-        return f"{field} {sql_operator} ({placeholders})", values
+        return f"{field_sql} {sql_operator} ({placeholders})", values
 
     if operator in {"contains", "not_contains"}:
         if not isinstance(value, str):
             raise ValueError(f"{operator} requires a string value")
         escaped = value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
         sql_operator = "LIKE" if operator == "contains" else "NOT LIKE"
-        return f"CAST({field} AS VARCHAR) {sql_operator} ? ESCAPE '\\'", [f"%{escaped}%"]
+        return f"CAST({field_sql} AS VARCHAR) {sql_operator} ? ESCAPE '\\'", [f"%{escaped}%"]
 
     raise ValueError(f"Unsupported filter operator: {operator}")
 
