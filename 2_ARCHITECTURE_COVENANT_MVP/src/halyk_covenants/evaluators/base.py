@@ -70,7 +70,9 @@ class AggregateEvaluator:
                 "effective_from": (
                     covenant.effective_from.isoformat() if covenant.effective_from else None
                 ),
-                "effective_to": covenant.effective_to.isoformat() if covenant.effective_to else None,
+                "effective_to": (
+                    covenant.effective_to.isoformat() if covenant.effective_to else None
+                ),
             }
         )
         self._validate_currency_scope(covenant, db, where_sql, parameters)
@@ -187,9 +189,7 @@ class AggregateEvaluator:
             calculation_id=calculation_id,
             covenant_id=covenant.covenant_id,
             borrower_ids=(
-                list(covenant.borrower_ids)
-                if covenant.scope_mode == "group"
-                else [borrower_id]
+                list(covenant.borrower_ids) if covenant.scope_mode == "group" else [borrower_id]
             ),
             metric_type=covenant.metric.metric_type,
             sql=self.calculation_sql(covenant, where_sql),
@@ -214,7 +214,10 @@ class AggregateEvaluator:
             return f"SELECT COUNT({field or '*'}) FROM transactions {where_sql}"
         if metric_type == "existence":
             return f"SELECT COUNT(*) > 0 FROM transactions {where_sql}"
-        return f"-- {metric_type} evaluator over filtered transaction scope\nSELECT * FROM transactions {where_sql}"
+        return (
+            f"-- {metric_type} evaluator over filtered transaction scope\n"
+            f"SELECT * FROM transactions {where_sql}"
+        )
 
     def _validate_currency_scope(
         self,
