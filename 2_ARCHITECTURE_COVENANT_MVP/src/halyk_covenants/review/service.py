@@ -4,7 +4,12 @@ from decimal import Decimal
 
 from halyk_covenants.evaluators.comparator import compare
 from halyk_covenants.observability import annotate_current_trace, trace_context, trace_stage
-from halyk_covenants.review.models import ReviewCase, ReviewDecision, ReviewedResult, SimilarityMatch
+from halyk_covenants.review.models import (
+    ReviewCase,
+    ReviewDecision,
+    ReviewedResult,
+    SimilarityMatch,
+)
 from halyk_covenants.review.reviewer import Reviewer
 from halyk_covenants.review.similarity import SimilarityRetriever
 
@@ -52,6 +57,9 @@ class ReviewService:
         with trace_context(**metadata):
             try:
                 first = self._first_pass(case)
+                first = first.model_copy(
+                    update={"used_similarity_fallback": False, "similar_case_ids": []}
+                )
                 self._validate_decision(case, first)
             except InvalidReviewerDecision as exc:
                 return self._invalid(case, str(exc))
