@@ -39,7 +39,8 @@ class SimilarityRetriever:
         missing = [case for case in self.cases if case.case_id not in self._case_vectors]
         if not missing:
             return
-        vectors = self.embedder.embed([case.embedding_text for case in missing])
+        texts = [case.embedding_text or case.question for case in missing]
+        vectors = self.embedder.embed(texts)
         if len(vectors) != len(missing):
             raise ValueError("embedding provider returned an unexpected vector count")
         for case, vector in zip(missing, vectors, strict=True):
