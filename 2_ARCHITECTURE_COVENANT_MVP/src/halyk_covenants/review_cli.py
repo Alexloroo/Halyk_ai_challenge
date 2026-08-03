@@ -47,7 +47,9 @@ def load_questions(path: Path | None) -> dict[tuple[str, str], str]:
     for record in records:
         key = (record.borrower_id, record.covenant_id)
         if key in questions:
-            raise ValueError(f"duplicate review question for {record.borrower_id}/{record.covenant_id}")
+            raise ValueError(
+                f"duplicate review question for {record.borrower_id}/{record.covenant_id}"
+            )
         questions[key] = record.question
     return questions
 
