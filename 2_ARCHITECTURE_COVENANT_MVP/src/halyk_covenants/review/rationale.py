@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+from halyk_covenants.observability import trace_stage
 from halyk_covenants.review.models import ReviewCase
 
 
+@trace_stage("review.rationale", run_type="tool", tags=("review", "deterministic"))
 def build_rationale(case: ReviewCase) -> str:
     covenant = case.covenant
     answer = case.answer
