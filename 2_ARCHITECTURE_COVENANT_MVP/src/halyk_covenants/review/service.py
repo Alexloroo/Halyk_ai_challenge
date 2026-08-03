@@ -210,11 +210,7 @@ class ReviewService:
 
     @staticmethod
     def _embedding_text(case: ReviewCase) -> str:
-        return (
-            f"QUESTION:\n{case.question}\n\n"
-            f"METRIC:\n{case.covenant.metric.metric_type}\n\n"
-            f"RULE:\n{case.covenant.raw_text}"
-        )
+        return case.question
 
     @staticmethod
     def _same_number(left: Decimal | int | None, right: Decimal | int | None) -> bool:
