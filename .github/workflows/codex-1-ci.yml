@@ -1,10 +1,10 @@
-name: codex-1-ci
+name: codex-ci
 
 on:
   push:
-    branches: [codex-1]
+    branches: [codex-1, codex-2]
   pull_request:
-    branches: [main]
+    branches: [main, codex-1]
   workflow_dispatch:
 
 permissions:
