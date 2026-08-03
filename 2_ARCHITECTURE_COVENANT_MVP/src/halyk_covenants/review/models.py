@@ -53,6 +53,8 @@ class ReviewedResult(BaseModel):
     result: CovenantResult
     review: ReviewDecision
     review_status: ReviewStatus
+    fallback_reasons: list[str] = Field(default_factory=list)
+    similarity_scores: dict[str, float] = Field(default_factory=dict)
 
 
 class SimilarReviewCase(BaseModel):
