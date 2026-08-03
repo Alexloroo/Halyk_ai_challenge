@@ -42,6 +42,7 @@ ocr = [
 
 [project.scripts]
 halyk-covenants = "halyk_covenants.cli:app"
+halyk-review = "halyk_covenants.review_cli:app"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/halyk_covenants"]
