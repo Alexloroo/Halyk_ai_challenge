@@ -11,8 +11,8 @@ from halyk_covenants.domain import (
 from halyk_covenants.review import (
     ReviewCase,
     ReviewDecision,
-    SimilarReviewCase,
     SimilarityMatch,
+    SimilarReviewCase,
 )
 from halyk_covenants.review.service import ReviewService
 
@@ -44,7 +44,13 @@ class FakeRetriever:
         self.matches = matches
         self.calls: list[tuple[str, int, float]] = []
 
-    def search(self, query_text: str, *, k: int, minimum_similarity: float) -> list[SimilarityMatch]:
+    def search(
+        self,
+        query_text: str,
+        *,
+        k: int,
+        minimum_similarity: float,
+    ) -> list[SimilarityMatch]:
         self.calls.append((query_text, k, minimum_similarity))
         if isinstance(self.matches, Exception):
             raise self.matches
@@ -228,7 +234,10 @@ def test_reviewer_verdict_cannot_contradict_comparator() -> None:
 
 def test_second_review_still_uncertain_keeps_deterministic_result() -> None:
     reviewer = FakeReviewer([decision("0.60"), decision("0.65", accepted=False)])
-    service = ReviewService(reviewer=reviewer, similarity_retriever=FakeRetriever([similar_match()]))
+    service = ReviewService(
+        reviewer=reviewer,
+        similarity_retriever=FakeRetriever([similar_match()]),
+    )
 
     reviewed = service.review(review_case())
 
