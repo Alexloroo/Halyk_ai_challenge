@@ -100,7 +100,9 @@ def test_review_pipeline_persists_review_without_mutating_result() -> None:
         assert report.reviewed_results[0].review_status == "accepted"
         assert report.reviewed_results[0].result == result
         row = store.connection.execute(
-            "SELECT status, decision_json FROM review_decisions"
+            "SELECT status, reviewer_model, prompt_version, decision_json FROM review_decisions"
         ).fetchone()
         assert row[0] == "accepted"
-        assert "16000000" in row[1]
+        assert row[1] == "fake"
+        assert row[2] == "test"
+        assert "16000000" in row[3]
