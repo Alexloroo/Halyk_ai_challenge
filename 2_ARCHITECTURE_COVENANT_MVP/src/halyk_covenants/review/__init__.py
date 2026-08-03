@@ -1,4 +1,3 @@
-from .langchain_reviewer import LangChainReviewer
 from .models import (
     ReviewCase,
     ReviewDecision,
@@ -14,7 +13,6 @@ from .similarity import ReviewEmbeddingProvider, SimilarityRetriever, cosine_sim
 
 __all__ = [
     "InvalidReviewerDecision",
-    "LangChainReviewer",
     "ReviewCase",
     "ReviewDecision",
     "ReviewedResult",
