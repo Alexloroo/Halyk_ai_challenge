@@ -1,8 +1,8 @@
 from .models import (
     ReviewCase,
     ReviewDecision,
-    ReviewStatus,
     ReviewedResult,
+    ReviewStatus,
     SimilarityMatch,
     SimilarReviewCase,
 )
