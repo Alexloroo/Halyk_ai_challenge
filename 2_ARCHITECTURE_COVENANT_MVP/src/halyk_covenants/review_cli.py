@@ -12,13 +12,13 @@ from pydantic import TypeAdapter, ValidationError
 from halyk_covenants.config import load_settings
 from halyk_covenants.documents.retrieval import SentenceTransformerEmbeddingProvider
 from halyk_covenants.llm import DeepSeekChatFactory, DeepSeekConfigurationError
-from halyk_covenants.pipeline import BatchEvaluationReport, ReviewPipeline, ReviewedBatchReport
+from halyk_covenants.pipeline import BatchEvaluationReport, ReviewedBatchReport, ReviewPipeline
 from halyk_covenants.review import (
     ReviewEmbeddingProvider,
     Reviewer,
     ReviewService,
-    SimilarReviewCase,
     SimilarityRetriever,
+    SimilarReviewCase,
 )
 from halyk_covenants.review.langchain_reviewer import LangChainReviewer
 from halyk_covenants.storage import DuckDBStore
