@@ -67,7 +67,11 @@ class ReviewService:
                 }
             )
             if not reasons:
-                return ReviewedResult(result=case.answer, review=first, review_status="accepted")
+                return ReviewedResult(
+                    result=case.answer,
+                    review=first,
+                    review_status="accepted",
+                )
 
             try:
                 matches = self.similarity_retriever.search(
@@ -86,12 +90,16 @@ class ReviewService:
                     result=case.answer,
                     review=decision,
                     review_status="review_failed",
+                    fallback_reasons=reasons,
                 )
 
+            similarity_scores = {
+                match.case.case_id: match.similarity for match in matches
+            }
             annotate_current_trace(
                 metadata={
                     "similar_case_ids": [match.case.case_id for match in matches],
-                    "similarity_scores": [round(match.similarity, 6) for match in matches],
+                    "similarity_scores": similarity_scores,
                 }
             )
             try:
@@ -104,13 +112,20 @@ class ReviewService:
                 )
                 self._validate_decision(case, second)
             except InvalidReviewerDecision as exc:
-                return self._invalid(case, str(exc), used_similarity=True, matches=matches)
+                return self._invalid(
+                    case,
+                    str(exc),
+                    used_similarity=True,
+                    matches=matches,
+                    fallback_reasons=reasons,
+                )
             except Exception as exc:
                 return self._failed(
                     case,
                     f"second review failed: {exc}",
                     used_similarity=True,
                     matches=matches,
+                    fallback_reasons=reasons,
                 )
 
             if second.accepted and second.confidence >= self.confidence_threshold:
@@ -118,11 +133,15 @@ class ReviewService:
                     result=case.answer,
                     review=second,
                     review_status="accepted_after_similarity",
+                    fallback_reasons=reasons,
+                    similarity_scores=similarity_scores,
                 )
             return ReviewedResult(
                 result=case.answer,
                 review=second,
                 review_status="low_confidence",
+                fallback_reasons=reasons,
+                similarity_scores=similarity_scores,
             )
 
     @trace_stage("review.first_pass", run_type="llm", tags=("review",))
@@ -202,6 +221,7 @@ class ReviewService:
         *,
         used_similarity: bool = False,
         matches: list[SimilarityMatch] | None = None,
+        fallback_reasons: list[str] | None = None,
     ) -> ReviewedResult:
         decision = self._fallback_decision(
             case,
@@ -213,6 +233,8 @@ class ReviewService:
             result=case.answer,
             review=decision,
             review_status="invalid_reviewer_output",
+            fallback_reasons=list(fallback_reasons or []),
+            similarity_scores=self._scores(matches),
         )
 
     def _failed(
@@ -222,6 +244,7 @@ class ReviewService:
         *,
         used_similarity: bool = False,
         matches: list[SimilarityMatch] | None = None,
+        fallback_reasons: list[str] | None = None,
     ) -> ReviewedResult:
         decision = self._fallback_decision(
             case,
@@ -233,7 +256,13 @@ class ReviewService:
             result=case.answer,
             review=decision,
             review_status="review_failed",
+            fallback_reasons=list(fallback_reasons or []),
+            similarity_scores=self._scores(matches),
         )
+
+    @staticmethod
+    def _scores(matches: list[SimilarityMatch] | None) -> dict[str, float]:
+        return {match.case.case_id: match.similarity for match in matches or []}
 
     @staticmethod
     def _fallback_decision(
