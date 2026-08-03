@@ -17,7 +17,7 @@ class FakeEmbedder:
         return [self.vectors[text] for text in texts]
 
 
-def case(case_id: str, embedding_text: str) -> SimilarReviewCase:
+def case(case_id: str, embedding_text: str | None) -> SimilarReviewCase:
     return SimilarReviewCase(
         case_id=case_id,
         question=f"question {case_id}",
@@ -75,3 +75,13 @@ def test_similarity_filters_below_threshold() -> None:
     matches = retriever.search("query", k=5, minimum_similarity=0.55)
 
     assert [item.case.case_id for item in matches] == ["A"]
+
+
+def test_similarity_embeds_question_when_custom_text_is_missing() -> None:
+    embedder = FakeEmbedder({"current question": [1.0, 0.0], "question A": [1.0, 0.0]})
+    retriever = SimilarityRetriever([case("A", None)], embedder)
+
+    matches = retriever.search("current question", k=1, minimum_similarity=0)
+
+    assert [item.case.case_id for item in matches] == ["A"]
+    assert embedder.calls[0] == ["question A"]
