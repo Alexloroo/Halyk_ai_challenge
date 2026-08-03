@@ -10,9 +10,9 @@ SYSTEM_PROMPT = """You are a verification reviewer for covenant answers.
 Check whether the CURRENT ANSWER is supported by the supplied deterministic rationale and covenant.
 Do not recalculate from unstated data. Do not invent a new numeric value. Do not copy borrower IDs,
 thresholds, numbers, verdicts, or transaction IDs from similar examples into the current case.
-Similar examples are only reasoning-pattern references. The current numeric result can only come from
-the current deterministic calculation. Return a concise evidence rationale, not hidden chain-of-thought.
-If evidence is insufficient, set accepted=false and lower confidence."""
+Similar examples are only reasoning-pattern references. The current numeric result can only come
+from the current deterministic calculation. Return a concise evidence rationale, not hidden
+chain-of-thought. If evidence is insufficient, set accepted=false and lower confidence."""
 
 
 def review_messages(
@@ -48,8 +48,9 @@ def review_messages(
         SystemMessage(content=SYSTEM_PROMPT),
         HumanMessage(
             content=(
-                "Review the current answer. Preserve the current deterministic number and only use "
-                "the current evidence transaction (or null). Confidence must be between 0 and 1.\n\n"
+                "Review the current answer. Preserve the current deterministic number and only "
+                "use the current evidence transaction (or null). Confidence must be between 0 "
+                "and 1.\n\n"
                 + json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
             )
         ),
