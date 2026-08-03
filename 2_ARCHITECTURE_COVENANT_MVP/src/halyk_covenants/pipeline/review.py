@@ -113,6 +113,12 @@ class ReviewPipeline:
                     review_run_id=review_run_id,
                     evaluation_date=batch.evaluation_date,
                     reviewed=reviewed,
+                    reviewer_model=getattr(
+                        self.service.reviewer,
+                        "model_name",
+                        type(self.service.reviewer).__name__,
+                    ),
+                    prompt_version=getattr(self.service.reviewer, "prompt_version", None),
                 )
                 reviewed_results.append(reviewed)
 
