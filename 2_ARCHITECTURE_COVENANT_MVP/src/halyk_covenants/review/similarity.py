@@ -6,7 +6,7 @@ from typing import Protocol
 import numpy as np
 
 from halyk_covenants.observability import trace_stage
-from halyk_covenants.review.models import SimilarReviewCase, SimilarityMatch
+from halyk_covenants.review.models import SimilarityMatch, SimilarReviewCase
 
 
 class ReviewEmbeddingProvider(Protocol):
