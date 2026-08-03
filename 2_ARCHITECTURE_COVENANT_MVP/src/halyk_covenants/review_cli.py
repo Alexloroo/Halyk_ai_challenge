@@ -14,13 +14,13 @@ from halyk_covenants.documents.retrieval import SentenceTransformerEmbeddingProv
 from halyk_covenants.llm import DeepSeekChatFactory, DeepSeekConfigurationError
 from halyk_covenants.pipeline import BatchEvaluationReport, ReviewPipeline, ReviewedBatchReport
 from halyk_covenants.review import (
-    LangChainReviewer,
     ReviewEmbeddingProvider,
     Reviewer,
     ReviewService,
     SimilarReviewCase,
     SimilarityRetriever,
 )
+from halyk_covenants.review.langchain_reviewer import LangChainReviewer
 from halyk_covenants.storage import DuckDBStore
 
 app = typer.Typer(
