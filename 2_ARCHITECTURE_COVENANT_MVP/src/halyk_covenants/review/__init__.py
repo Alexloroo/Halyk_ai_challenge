@@ -1,10 +1,10 @@
 from .models import (
     ReviewCase,
     ReviewDecision,
-    ReviewedResult,
     ReviewStatus,
-    SimilarReviewCase,
+    ReviewedResult,
     SimilarityMatch,
+    SimilarReviewCase,
 )
 from .rationale import build_rationale
 from .reviewer import Reviewer
@@ -15,11 +15,11 @@ __all__ = [
     "InvalidReviewerDecision",
     "ReviewCase",
     "ReviewDecision",
-    "ReviewedResult",
     "ReviewEmbeddingProvider",
-    "Reviewer",
     "ReviewService",
     "ReviewStatus",
+    "ReviewedResult",
+    "Reviewer",
     "SimilarReviewCase",
     "SimilarityMatch",
     "SimilarityRetriever",
