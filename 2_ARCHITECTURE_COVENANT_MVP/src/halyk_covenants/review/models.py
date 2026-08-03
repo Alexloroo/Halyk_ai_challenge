@@ -66,7 +66,7 @@ class SimilarReviewCase(BaseModel):
     metric_type: str | None = None
     answer: CovenantResult
     rationale: str
-    embedding_text: str
+    embedding_text: str | None = None
 
 
 class SimilarityMatch(BaseModel):
