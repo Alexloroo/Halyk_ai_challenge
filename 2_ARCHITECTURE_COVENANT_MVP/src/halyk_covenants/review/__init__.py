@@ -7,13 +7,18 @@ from .models import (
     SimilarityMatch,
 )
 from .rationale import build_rationale
+from .reviewer import Reviewer
+from .service import InvalidReviewerDecision, ReviewService
 from .similarity import ReviewEmbeddingProvider, SimilarityRetriever, cosine_similarity
 
 __all__ = [
+    "InvalidReviewerDecision",
     "ReviewCase",
     "ReviewDecision",
     "ReviewedResult",
     "ReviewEmbeddingProvider",
+    "Reviewer",
+    "ReviewService",
     "ReviewStatus",
     "SimilarReviewCase",
     "SimilarityMatch",
