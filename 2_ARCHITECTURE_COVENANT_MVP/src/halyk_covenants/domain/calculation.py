@@ -20,6 +20,8 @@ class Calculation(BaseModel):
     trace_id: str | None = None
     evaluator_version: str = "1"
     created_at: datetime | None = None
+    verification_value: Decimal | None = None
+    verification_match: bool | None = None
 
 
 class PipelineStageRecord(BaseModel):

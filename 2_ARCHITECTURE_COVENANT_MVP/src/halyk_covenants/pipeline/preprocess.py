@@ -2,12 +2,15 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
 import re
 from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 from uuid import uuid4
+
+logger = logging.getLogger(__name__)
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -18,6 +21,7 @@ from halyk_covenants.documents.retrieval import HybridRetriever
 from halyk_covenants.domain import DocumentBlock
 from halyk_covenants.ingestion import PDFIngestor
 from halyk_covenants.observability import trace_stage
+from halyk_covenants.review.spec_review_service import SpecReviewService
 from halyk_covenants.storage import DuckDBStore
 
 STRUCTURED_SUFFIXES = frozenset({".csv", ".xlsx", ".xlsm", ".parquet"})
@@ -59,6 +63,7 @@ class PreprocessPipeline:
         detector: CovenantDetector | None = None,
         compiler_graph: Any | None = None,
         registry: CovenantRegistry | None = None,
+        spec_review_service: SpecReviewService | None = None,
         progress: Callable[[str], None] | None = None,
         compiler_context_k: int = 12,
     ) -> None:
@@ -69,6 +74,7 @@ class PreprocessPipeline:
         self.detector = detector or CovenantDetector()
         self.compiler_graph = compiler_graph
         self.registry = registry or CovenantRegistry(store)
+        self.spec_review_service = spec_review_service
         self.progress = progress or (lambda message: None)
         self.compiler_context_k = compiler_context_k
 
@@ -160,7 +166,8 @@ class PreprocessPipeline:
         only_borrower = str(borrower_rows[0][0]) if len(borrower_rows) == 1 else None
         compiled = failed = 0
 
-        retriever = HybridRetriever()
+        embedder = self._try_create_embedder()
+        retriever = HybridRetriever(embedder=embedder)
         stored_blocks = self._stored_document_blocks()
         retriever.index(stored_blocks)
         for candidate_index, candidate in enumerate(candidates, start=1):
@@ -180,6 +187,15 @@ class PreprocessPipeline:
             )
             if final.get("status") == "compiled":
                 for spec in final["outcome"].specs:
+                    if self.spec_review_service is not None:
+                        review_result = self.spec_review_service.review_and_maybe_recompile(
+                            spec, candidate, document_context,
+                        )
+                        spec = review_result.spec
+                        self.progress(
+                            f"[review {candidate_index}/{len(candidates)}] {path.name} "
+                            f"{candidate.candidate_id}: spec_trust={spec.spec_trust}"
+                        )
                     self.registry.save(spec)
                     compiled += 1
                 self.progress(
@@ -304,6 +320,20 @@ class PreprocessPipeline:
             flags=re.IGNORECASE,
         )
         return match.group(1).strip() if match else None
+
+    @staticmethod
+    def _try_create_embedder():
+        try:
+            from halyk_covenants.documents.retrieval import SentenceTransformerEmbeddingProvider
+            embedder = SentenceTransformerEmbeddingProvider()
+            logger.info("Semantic embedder loaded: hybrid retrieval active")
+            return embedder
+        except Exception as exc:
+            logger.warning(
+                "Semantic embedder unavailable — falling back to BM25-only retrieval. "
+                "Install extra 'semantic' for hybrid search. Error: %s", exc,
+            )
+            return None
 
     def _is_unchanged(self, path: Path, digest: str) -> bool:
         row = self.store.connection.execute(

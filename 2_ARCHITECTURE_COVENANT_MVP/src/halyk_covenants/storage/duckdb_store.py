@@ -167,6 +167,16 @@ class DuckDBStore:
                 artifact_type VARCHAR NOT NULL,
                 processed_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
             );
+
+            CREATE TABLE IF NOT EXISTS expectation_manifest (
+                borrower_id VARCHAR NOT NULL,
+                covenant_id VARCHAR NOT NULL,
+                source VARCHAR NOT NULL,
+                document_id VARCHAR,
+                page INTEGER,
+                required BOOLEAN NOT NULL DEFAULT FALSE,
+                PRIMARY KEY (borrower_id, covenant_id, source)
+            );
             """
         )
 

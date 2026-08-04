@@ -15,6 +15,7 @@ dependencies = [
   "langgraph>=1.0,<2",
   "langsmith>=0.4,<1",
   "openpyxl>=3.1",
+  "numpy>=1.26",
   "pandas>=2.2",
   "pydantic>=2.8",
   "pydantic-settings>=2.4",

@@ -13,7 +13,9 @@ from halyk_covenants.observability import trace_stage
 
 _COVENANT_SIGNAL = re.compile(
     r"(?:must|shall|may\s+not|must\s+not|not\s+exceed|no\s+more|at\s+least|"
-    r"не\s+более|не\s+менее|не\s+долж|запрещ|не\s+допуска|лимит|превыш|≤|≥)",
+    r"не\s+более|не\s+менее|не\s+долж|запрещ|не\s+допуска|лимит|превыш|"
+    r"артық\s+емес|кем\s+емес|тиіс\s+емес|тыйым|рұқсат\s+етілмейді|шектеу|"
+    r"≤|≥)",
     flags=re.IGNORECASE,
 )
 _INDEPENDENT_SPLIT = re.compile(
@@ -23,7 +25,8 @@ _INDEPENDENT_SPLIT = re.compile(
 )
 _COVENANT_CODE = re.compile(r"\bCOV-[A-Z0-9-]+\b", flags=re.IGNORECASE)
 _PROHIBITION = re.compile(
-    r"(?:запрещ|не\s+допуска|prohibited|not\s+allowed)", flags=re.IGNORECASE
+    r"(?:запрещ|не\s+допуска|prohibited|not\s+allowed|тыйым|рұқсат\s+етілмейді)",
+    flags=re.IGNORECASE,
 )
 _CONSTRAINT_VALUE = re.compile(
     r"(?:\d[\d\s.,]{2,}|[<>]=?|≤|≥|%|\b(?:KZT|USD|EUR|RUB)\b|"

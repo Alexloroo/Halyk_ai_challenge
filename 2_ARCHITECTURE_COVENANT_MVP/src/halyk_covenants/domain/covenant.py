@@ -130,6 +130,9 @@ class CovenantSpec(BaseModel):
     source: SourceRef
     confidence: float = Field(ge=0, le=1)
     status: Literal["compiled", "unsupported", "failed_compilation"] = "compiled"
+    spec_trust: Literal["accepted", "revised", "low"] = "accepted"
+    review_objection: str | None = None
+    review_confidence: float | None = Field(default=None, ge=0, le=1)
     compiler_metadata: dict[str, Any] = Field(default_factory=dict)
 
     @model_validator(mode="after")

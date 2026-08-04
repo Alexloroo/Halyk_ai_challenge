@@ -11,6 +11,7 @@ from halyk_covenants.evaluators import EvaluationService, TemporalEvaluationServ
 from halyk_covenants.observability import annotate_current_trace, trace_context, trace_stage
 from halyk_covenants.storage import DuckDBStore
 from halyk_covenants.verification import ResultVerifier, VerificationReport
+from halyk_covenants.verification.manifest import ExpectationManifest, ManifestBuilder
 
 
 class BatchEvaluationReport(BaseModel):
@@ -32,12 +33,14 @@ class BatchEvaluationPipeline:
         *,
         service: EvaluationService | None = None,
         verifier: ResultVerifier | None = None,
+        manifest: ExpectationManifest | None = None,
     ) -> None:
         self.store = store
         self.registry = registry or CovenantRegistry(store)
         self.service = service or EvaluationService(store)
         self.temporal_service = TemporalEvaluationService(self.service)
         self.verifier = verifier or ResultVerifier()
+        self.manifest = manifest
 
     @trace_stage("pipeline.evaluate", run_type="chain", tags=("pipeline", "evaluation"))
     def run(self, at_date: date) -> BatchEvaluationReport:
@@ -57,7 +60,6 @@ class BatchEvaluationPipeline:
                     grouped.setdefault((borrower_id, group_id), []).append(covenant)
 
             results: list[CovenantResult] = []
-            expected_pairs: list[tuple[str, str]] = []
             pair_issues = []
             for (borrower_id, group_id), versions in sorted(grouped.items()):
                 pair_metadata = {
@@ -71,16 +73,16 @@ class BatchEvaluationPipeline:
                         borrower_id,
                         at_date,
                     )
-                expected_pairs.append((result.borrower_id, result.covenant_id))
                 results.append(result)
-                # For a single semantic version the ordinary comparator verifier is independent
-                # and safe. Multi-version results can combine different thresholds, so their
-                # correctness is verified inside TemporalEvaluationService instead.
                 if len(versions) == 1 and versions[0].status == "compiled":
                     pair_issues.extend(self.verifier.verify_pair(versions[0], result).issues)
                 self._save_result(result, run_id=run_id, evaluation_date=at_date)
 
-            completeness = self.verifier.verify(expected_pairs, results)
+            if self.manifest is not None:
+                manifest_pairs = list(self.manifest.expected_pairs)
+            else:
+                manifest_pairs = [(r.borrower_id, r.covenant_id) for r in results]
+            completeness = self.verifier.verify(manifest_pairs, results)
             verification = VerificationReport(
                 valid=completeness.valid and not pair_issues,
                 expected_pair_count=completeness.expected_pair_count,
@@ -89,7 +91,7 @@ class BatchEvaluationPipeline:
             )
             annotate_current_trace(
                 metadata={
-                    "expected_pair_count": len(expected_pairs),
+                    "expected_pair_count": len(manifest_pairs),
                     "actual_pair_count": len(results),
                     "success_count": sum(result.status == "success" for result in results),
                     "partial_count": sum(result.status == "partial" for result in results),
@@ -101,7 +103,7 @@ class BatchEvaluationPipeline:
             return BatchEvaluationReport(
                 run_id=run_id,
                 evaluation_date=at_date,
-                expected_pair_count=len(expected_pairs),
+                expected_pair_count=len(manifest_pairs),
                 actual_pair_count=len(results),
                 results=results,
                 verification=verification,

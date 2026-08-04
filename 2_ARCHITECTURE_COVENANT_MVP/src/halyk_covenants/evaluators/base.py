@@ -184,11 +184,8 @@ class AggregateEvaluator:
         parameter_summary = [str(parameter) for parameter in parameters]
         identity = {
             "covenant_id": covenant.covenant_id,
-            "borrower_ids": (
-                sorted(covenant.borrower_ids)
-                if covenant.scope_mode == "group"
-                else [borrower_id]
-            ),
+            "borrower_id": borrower_id,
+            "borrower_ids": sorted(covenant.borrower_ids),
             "metric": covenant.metric.model_dump(mode="json"),
             "sql": calculation_sql,
             "parameters": parameter_summary,
