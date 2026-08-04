@@ -1,142 +1,147 @@
-# 01 — Task Model (implementation-independent)
+# 01 — Модель задачи (независимо от реализации)
 
-> What the problem actually is, described without reference to any current implementation.
-> If you rewrote this repository from zero, this document is what you would have to satisfy.
+> В чём состоит задача, описанная без ссылок на текущую реализацию.
+> Если бы вы переписывали репозиторий с нуля, этому документу пришлось бы удовлетворить.
 
-Related: [00_CONTEXT.md](00_CONTEXT.md) · [09_ARCHITECTURE_V3.md](09_ARCHITECTURE_V3.md)
+Связанные документы: [00_CONTEXT.md](00_CONTEXT.md) · [09_ARCHITECTURE_V3.md](09_ARCHITECTURE_V3.md)
 
 ---
 
-## 1. The pipeline in four questions
+## 1. Пайплайн в четырёх вопросах
+
+*Пайплайн* (pipeline) — конвейер: данные проходят цепочку этапов, каждый что-то с ними делает.
 
 ```text
-what arrives
+что приходит
       ↓
-what must be understood
+что нужно понять
       ↓
-what must be computed
+что нужно вычислить
       ↓
-what must be returned
+что вернуть
 ```
 
-### What arrives
+### Что приходит
 
-| # | Artifact | Reality |
+| № | Артефакт | Как это выглядит в реальности |
 | --- | --- | --- |
-| 1 | Loan/credit documents | PDF; mixed native-text and scanned; tables; multiple borrowers per file; amendments that supersede clauses |
-| 2 | Transaction ledger | Tabular; one row per transaction; borrower key, date, amount, currency, direction, counterparty, purpose |
-| 3 | Borrower registry | Canonical IDs plus aliases and identifiers (BIN/IIN-like) |
-| 4 | An evaluation date | The as-of date the covenants are judged against |
+| 1 | Кредитные документы | PDF; смесь нативного текста и сканов; таблицы; несколько заёмщиков в одном файле; дополнительные соглашения, отменяющие прежние пункты |
+| 2 | Реестр транзакций | Таблица; одна строка на транзакцию; ключ заёмщика, дата, сумма, валюта, направление, контрагент, назначение |
+| 3 | Реестр заёмщиков | Канонические идентификаторы плюс псевдонимы и коды (типа БИН/ИИН) |
+| 4 | Дата оценки | Дата, «на момент» которой судят о ковенантах |
 
-### What must be understood
+### Что нужно понять
 
-1. **Which text fragments are covenants.** A covenant is an obligation with a testable constraint.
-   Not every "shall" is a covenant; not every number is a threshold.
-2. **Who each covenant binds.** One document can bind several borrowers; a portfolio table can bind a
-   different borrower per row; an amendment inherits the scope of the clause it replaces.
-3. **What each covenant means, mechanically.** The clause must reduce to:
-   *metric* over *a filtered transaction set* within *a time window*, compared against *a threshold*.
-4. **When each covenant is in force.** Amendments create versions with effective dates. The version
-   that governs a given evaluation date must be selected — and a version change *inside* an
-   aggregation window is a genuine semantic problem, not a bug.
-5. **What counts as evidence.** For some covenants the violating transaction is well-defined (the
-   single payment over the cap); for others it is the transaction that *crossed* the threshold; for
-   aggregate covenants there may be no single responsible transaction at all.
+1. **Какие фрагменты текста являются ковенантами.** Ковенант — это обязательство с проверяемым
+   ограничением. Не всякое «обязан» — ковенант; не всякое число — порог.
+2. **Кого связывает каждый ковенант.** Один документ может связывать несколько заёмщиков; в
+   портфельной таблице каждая строка может относиться к своему заёмщику; дополнительное соглашение
+   наследует область действия пункта, который оно заменяет.
+3. **Что каждый ковенант означает механически.** Пункт должен свестись к формуле:
+   *метрика* по *отфильтрованному набору транзакций* внутри *временного окна*, сравнённая с *порогом*.
+4. **Когда каждый ковенант действует.** Дополнительные соглашения создают версии с датами вступления
+   в силу. Нужно выбрать версию, действующую на дату оценки, — а смена версии *внутри* окна агрегации
+   является настоящей смысловой проблемой, а не багом.
+5. **Что считается доказательством.** Для одних ковенантов нарушающая транзакция определена
+   однозначно (единственный платёж свыше лимита); для других это транзакция, которая *пересекла*
+   порог; для агрегатных ковенантов единственной «виноватой» транзакции может не быть вовсе.
 
-### What must be computed
+### Что нужно вычислить
 
-For each `(borrower, covenant)`:
+Для каждой пары `(заёмщик, ковенант)`:
 
 ```text
-filtered transaction set  =  transactions
-                             ∩ borrower scope
-                             ∩ covenant filters (direction, currency, counterparty, purpose, …)
-                             ∩ time window
-                             ∩ covenant effective period
-                             − exclusions
+отфильтрованный набор  =  транзакции
+                          ∩ область действия по заёмщику
+                          ∩ фильтры ковенанта (направление, валюта, контрагент, назначение, …)
+                          ∩ временное окно
+                          ∩ период действия ковенанта
+                          − исключения
 
-number                    =  metric(filtered set)
-verdict                   =  compare(number, comparator, threshold)
-evidence                  =  selector(filtered set, evidence mode)   [when applicable]
+число                  =  метрика(отфильтрованный набор)
+вердикт                =  сравнить(число, оператор, порог)
+доказательство         =  селектор(отфильтрованный набор, режим доказательства)   [где применимо]
 ```
 
-The metric vocabulary that actually occurs in covenant language:
+Словарь метрик, реально встречающийся в языке ковенантов:
 
-| Metric | Typical clause shape |
+| Метрика | Типичная форма пункта |
 | --- | --- |
-| `sum` | "aggregate outgoing payments shall not exceed X per month" |
-| `count` | "no more than N transfers per quarter" |
-| `max` | "no single payment shall exceed X" |
-| `min` | "each settlement shall be at least X" |
-| `avg` | "average monthly turnover shall be at least X" |
-| `ratio` | "outgoing payments shall not exceed 30% of incoming" |
-| `existence` | "no payments to sanctioned counterparties" |
-| `frequency` | "no more than N transactions per day" |
+| `sum` | «совокупные исходящие платежи не должны превышать X за месяц» |
+| `count` | «не более N переводов за квартал» |
+| `max` | «ни один отдельный платёж не должен превышать X» |
+| `min` | «каждый расчёт должен быть не менее X» |
+| `avg` | «средний месячный оборот должен быть не менее X» |
+| `ratio` | «исходящие платежи не должны превышать 30% от входящих» |
+| `existence` | «отсутствие платежей в адрес подсанкционных контрагентов» |
+| `frequency` | «не более N транзакций в день» |
 
-### What must be returned
+### Что вернуть
 
-One record per `(borrower, covenant)` pair, containing:
+Одна запись на пару `(заёмщик, ковенант)`, содержащая:
 
 ```text
-borrower_id
-covenant_id
-verdict            complied | violated   (unknown must still be emitted, not dropped)
-number             the metric value supporting the verdict
-evidence_tx_id     when the covenant type implies a specific responsible transaction
+borrower_id        идентификатор заёмщика
+covenant_id        идентификатор ковенанта
+verdict            соблюдён | нарушен   («неизвестно» тоже надо выдать, а не пропустить)
+number             значение метрики, подтверждающее вердикт
+evidence_tx_id     если тип ковенанта подразумевает конкретную ответственную транзакцию
 ```
 
-Formatted exactly to the organizer's template. Completeness matters: a missing pair scores zero on
-all three components, so **emitting a low-confidence answer strictly dominates emitting nothing.**
+Отформатировано ровно по шаблону организатора. Полнота критична: пропущенная пара даёт ноль по всем
+трём компонентам, поэтому **выдать ответ с низкой уверенностью строго лучше, чем не выдать ничего.**
 
 ---
 
-## 2. Responsibility split
+## 2. Разделение ответственности
 
-The central design question is which parts an LLM may touch. The answer follows from a single
-property: **arithmetic over a known table is verifiable and cheap; language interpretation is not.**
+Центральный вопрос проектирования — к чему вообще можно допускать LLM. Ответ следует из одного
+свойства: **арифметика по известной таблице проверяема и дешева; интерпретация языка — нет.**
 
-### LLM responsibilities
+### Ответственность LLM
 
-| Responsibility | Why it must be the LLM |
+| Ответственность | Почему это должна быть LLM |
 | --- | --- |
-| Interpreting clause semantics into a `CovenantSpec` | Irreducibly a natural-language task |
-| Choosing metric type from prose | "no more than 5 per day" → `frequency`, not `count`, is a reading decision |
-| Mapping vague qualifiers to filters | "third-party transfers", "non-operational payments" |
-| Recognising units, currencies and percentage semantics in prose | Ambiguous phrasing, implicit units |
-| Deciding which borrowers a clause binds *within an already-resolved set* | Requires reading the clause |
-| Repairing its own structurally invalid output | Cheaper than escalation |
+| Перевод смысла пункта в `CovenantSpec` | Неустранимо задача на естественном языке |
+| Выбор типа метрики из прозы | «не более 5 в день» → `frequency`, а не `count` — это решение о прочтении |
+| Отображение расплывчатых определений в фильтры | «переводы третьим лицам», «неоперационные платежи» |
+| Распознавание единиц, валют и процентной семантики в тексте | Неоднозначные формулировки, неявные единицы |
+| Выбор заёмщиков, которых связывает пункт, *внутри уже разрешённого набора* | Требует чтения пункта |
+| Починка собственного структурно невалидного вывода | Дешевле, чем эскалация |
 
-### Deterministic responsibilities
+### Детерминированная ответственность
 
-| Responsibility | Why it must NOT be the LLM |
+*Детерминированный* — всегда даёт один и тот же результат на одних и тех же входных данных.
+
+| Ответственность | Почему это НЕ должна быть LLM |
 | --- | --- |
-| Every arithmetic operation | Reproducible, auditable, free |
-| Filter → SQL compilation | Must be injection-safe and closed-vocabulary |
-| Time window boundary math | Off-by-one errors are systematic, not stochastic |
-| Comparator application | A one-line function should never be delegated |
-| Evidence selection | Deterministic ranking over a filtered set |
-| Borrower identity resolution | Must be stable and auditable; fuzzy-match with explicit thresholds |
-| Covenant version resolution by effective date | Interval arithmetic |
-| Currency consistency enforcement | A policy decision, not a judgement call |
-| Provenance and completeness accounting | Bookkeeping |
-| Submission serialization | Schema conformance |
+| Любая арифметическая операция | Воспроизводимо, проверяемо, бесплатно |
+| Компиляция фильтров в SQL | Должна быть защищена от инъекций и работать по закрытому словарю |
+| Арифметика границ временных окон | Ошибки на единицу систематические, а не случайные |
+| Применение оператора сравнения | Однострочную функцию нельзя делегировать модели |
+| Выбор доказательства | Детерминированное ранжирование по отфильтрованному набору |
+| Разрешение личности заёмщика | Должно быть стабильным и проверяемым; нечёткое сопоставление с явными порогами |
+| Разрешение версии ковенанта по дате | Арифметика интервалов |
+| Контроль единства валюты | Решение о политике, а не суждение |
+| Учёт происхождения и полноты | Бухгалтерия |
+| Сериализация ответа | Соответствие схеме |
 
-### The boundary, drawn explicitly
+### Граница, проведённая явно
 
 ```mermaid
 flowchart LR
-    subgraph LLM["LLM zone — interpretation only"]
-        A[clause text + context] --> B[CovenantSpec draft]
-        B --> C{schema + semantic<br/>validation}
-        C -- invalid --> B
+    subgraph LLM["Зона LLM — только интерпретация"]
+        A[текст пункта + контекст] --> B[черновик CovenantSpec]
+        B --> C{проверка схемы<br/>и смысла}
+        C -- невалидно --> B
     end
-    subgraph DET["Deterministic zone — no LLM"]
-        C -- valid --> D[Covenant registry]
-        D --> E[SQL compilation]
-        E --> F[metric]
-        F --> G[verdict]
-        F --> H[evidence]
-        G --> I[verification]
+    subgraph DET["Детерминированная зона — без LLM"]
+        C -- валидно --> D[Реестр ковенантов]
+        D --> E[компиляция SQL]
+        E --> F[метрика]
+        F --> G[вердикт]
+        F --> H[доказательство]
+        G --> I[верификация]
         H --> I
         I --> J[submission]
     end
@@ -144,53 +149,56 @@ flowchart LR
     style DET fill:#e8f4ff,stroke:#3d7fe8
 ```
 
-The one-way arrow from `C` to `D` is the whole architecture. Nothing downstream of the registry may
-consult a model, and nothing upstream may compute a number.
+Односторонняя стрелка из `C` в `D` — это и есть вся архитектура. Ничто после реестра не имеет права
+обращаться к модели, и ничто до него не имеет права вычислять число.
 
 ---
 
-## 3. What makes this problem hard
+## 3. Что делает задачу сложной
 
-Ordered by expected score impact, not by engineering interest:
+Упорядочено по ожидаемому влиянию на балл, а не по инженерной интересности:
 
-1. **Detection recall.** A clause that is never detected is unrecoverable. There is no downstream
-   stage that can notice its absence, because nothing knows it should exist. This is the only
-   *silent, total* failure in the system.
-2. **Compilation fidelity.** A spec that is structurally valid but semantically wrong produces a
-   confident, well-formatted, wrong answer that passes every internal check. This is the second
-   silent failure.
-3. **Filter completeness.** Missing `direction=outgoing` silently doubles a sum. Missing a currency
-   filter mixes KZT and USD into one meaningless total.
-4. **Window boundaries.** Half-open vs. closed intervals, "per month" as calendar vs. rolling.
-5. **Borrower scoping.** A portfolio table where the borrower is implied by row position, or a
-   heading two blocks above.
-6. **Version resolution.** Amendments, and the window-straddling case.
-7. **Evidence semantics.** Which transaction is "the" violating one when the covenant is aggregate.
+1. **Полнота обнаружения.** Пункт, который не обнаружен, невосстановим. Ни один следующий этап не
+   заметит его отсутствия, потому что никто не знает, что он должен быть. Это единственный
+   *молчаливый и полный* отказ в системе.
+2. **Точность компиляции.** Спецификация, структурно валидная, но смыслово неверная, даёт уверенный,
+   аккуратно оформленный, неправильный ответ, который проходит все внутренние проверки. Это второй
+   молчаливый отказ.
+3. **Полнота фильтров.** Пропущенный `direction=outgoing` молча удваивает сумму. Пропущенный фильтр
+   по валюте смешивает тенге и доллары в один бессмысленный итог.
+4. **Границы окон.** Полуоткрытый интервал против закрытого, «за месяц» как календарный против
+   скользящего.
+5. **Привязка к заёмщику.** Портфельная таблица, где заёмщик подразумевается позицией строки, или
+   заголовком двумя блоками выше.
+6. **Разрешение версий.** Дополнительные соглашения и случай пересечения границы окна.
+7. **Семантика доказательства.** Какая транзакция «та самая» нарушающая, если ковенант агрегатный.
 
-Note that items 1 and 2 are both *interpretation* failures and both *silent*. Everything the system
-does downstream — the verifier, the review layer, the provenance records — operates on the assumption
-that a spec exists and is correct. **The architecture's verification effort is concentrated where
-errors are loud, and thin where errors are silent.** That observation drives
+Обратите внимание: пункты 1 и 2 — оба отказы *интерпретации* и оба *молчаливые*. Всё, что система
+делает дальше — верификатор, слой ревью, записи о происхождении, — исходит из допущения, что
+спецификация существует и верна. **Усилия по верификации сосредоточены там, где ошибки громкие, и
+редки там, где ошибки молчаливые.** Именно это наблюдение движет
 [09_ARCHITECTURE_V3.md](09_ARCHITECTURE_V3.md).
 
 ---
 
-## 4. Success criteria for any implementation
+## 4. Критерии успеха для любой реализации
 
-An implementation of this task model is adequate if and only if:
+Реализация этой модели задачи адекватна тогда и только тогда, когда:
 
-- **C1.** Every `(borrower, covenant)` pair that the input implies produces exactly one output record.
-- **C2.** No single covenant failure can remove another covenant's answer.
-- **C3.** Every number is reproducible from stored SQL + parameters without re-running any model.
-- **C4.** Every verdict is `compare(number, comparator, threshold)` — never a model's opinion.
-- **C5.** Every emitted evidence transaction is inside the covenant's own filtered scope.
-- **C6.** The system reports what it does not know, separately from what it got wrong.
-- **C7.** A full run completes within the operational window without manual intervention.
+- **C1.** Каждая пара `(заёмщик, ковенант)`, подразумеваемая входными данными, даёт ровно одну
+  выходную запись.
+- **C2.** Сбой одного ковенанта не может удалить ответ другого.
+- **C3.** Каждое число воспроизводимо из сохранённых SQL и параметров без повторного запуска модели.
+- **C4.** Каждый вердикт есть `сравнить(число, оператор, порог)` — никогда не мнение модели.
+- **C5.** Каждая выданная транзакция-доказательство лежит внутри отфильтрованной области самого
+  ковенанта.
+- **C6.** Система сообщает, чего она не знает, отдельно от того, в чём она ошиблась.
+- **C7.** Полный прогон завершается в отведённое время без ручного вмешательства.
 
-`codex-1` satisfies C2–C5 well, C3 with a caveat, and C1/C6 only nominally.
-`codex-2` adds observability toward C6 but does not change C1–C5.
-See [06_CODEX_1_VS_CODEX_2.md](06_CODEX_1_VS_CODEX_2.md) and [07_FINDINGS.md](07_FINDINGS.md).
+`codex-1` хорошо удовлетворяет C2–C5, C3 — с оговоркой, а C1 и C6 — лишь номинально.
+`codex-2` добавляет наблюдаемость в сторону C6, но не меняет C1–C5.
+См. [06_CODEX_1_VS_CODEX_2.md](06_CODEX_1_VS_CODEX_2.md) и [07_FINDINGS.md](07_FINDINGS.md).
 
 ---
 
-Next: [02_REPOSITORY_MAP.md](02_REPOSITORY_MAP.md)
+Далее: [02_REPOSITORY_MAP.md](02_REPOSITORY_MAP.md)

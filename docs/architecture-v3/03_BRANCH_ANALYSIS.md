@@ -1,58 +1,71 @@
-# 03 — Branch Analysis
+# 03 — Анализ веток
 
-> The single most consequential finding of this research track, and the one that determines how
-> every other document should be read.
+> Самый значимый вывод этого исследования и тот, который определяет, как читать все остальные документы.
 
-Related: [04_CODEX_1_ARCHITECTURE.md](04_CODEX_1_ARCHITECTURE.md) · [05_CODEX_2_ARCHITECTURE.md](05_CODEX_2_ARCHITECTURE.md) · [06_CODEX_1_VS_CODEX_2.md](06_CODEX_1_VS_CODEX_2.md)
-
----
-
-## Headline
-
-**`codex-1` and `codex-2` are not two competing architectures. They are one architecture and its
-continuation.** `codex-2` contains every line of `codex-1` and adds a review layer on top.
-
-Any framing that treats them as alternatives to choose between is factually wrong. The real question
-is not *"which branch?"* but *"is the codex-2 delta worth keeping?"*
+Связанные документы: [04_CODEX_1_ARCHITECTURE.md](04_CODEX_1_ARCHITECTURE.md) · [05_CODEX_2_ARCHITECTURE.md](05_CODEX_2_ARCHITECTURE.md) · [06_CODEX_1_VS_CODEX_2.md](06_CODEX_1_VS_CODEX_2.md)
 
 ---
 
-## Branch heads
+## Главное
 
-| Branch | HEAD | Date | Subject |
+**`codex-1` и `codex-2` — не две конкурирующие архитектуры. Это одна архитектура и её продолжение.**
+`codex-2` содержит каждую строку `codex-1` и добавляет сверху слой ревью.
+
+Любая постановка вопроса, где они рассматриваются как альтернативы для выбора, фактически неверна.
+Настоящий вопрос не «какая ветка?», а «стоит ли оставлять добавку codex-2?».
+
+---
+
+## Термины этого документа
+
+| Термин | Простыми словами |
+| --- | --- |
+| **Ветка (branch)** | Параллельная линия разработки; позволяет менять код, не трогая основную версию |
+| **Коммит (commit)** | Одно сохранённое изменение в истории, у него есть уникальный номер-хеш вида `a0ebe8a` |
+| **HEAD** | Последний коммит ветки, её «текущее состояние» |
+| **merge-base** | Последний общий коммит двух веток — точка, где они разошлись |
+| **Предок (ancestor)** | Коммит, который лежит в истории раньше другого |
+| **Надмножество (superset)** | Содержит всё то же самое плюс ещё |
+| **ahead / behind** | На сколько коммитов одна ветка впереди / позади другой |
+
+---
+
+## Вершины веток
+
+| Ветка | HEAD | Дата | Сообщение коммита |
 | --- | --- | --- | --- |
 | `main` | `b085ad38ce38a6fcd2d1d94876b26e0df295a4d5` | 2026-08-02 23:53 +0500 | `add few files` |
 | `codex-1` | `a0ebe8accb47a419ba096839a340a39cca15c9d8` | 2026-08-03 02:37 +0500 | `fix: join only nearby complementary covenant fragments` |
 | `codex-2` | `5dbd43efa5c2fe185174ac5b8719692265e2aa8d` | 2026-08-03 16:15 +0500 | `test: verify question-default embeddings` |
 
-## Merge bases
+## Точки расхождения (merge-base)
 
 ```text
-merge-base(main, codex-1)    = b085ad38…   ← main HEAD
-merge-base(main, codex-2)    = b085ad38…   ← main HEAD
-merge-base(codex-1, codex-2) = a0ebe8ac…   ← codex-1 HEAD
+merge-base(main, codex-1)    = b085ad38…   ← это HEAD ветки main
+merge-base(main, codex-2)    = b085ad38…   ← это HEAD ветки main
+merge-base(codex-1, codex-2) = a0ebe8ac…   ← это HEAD ветки codex-1
 ```
 
-`git merge-base --is-ancestor` confirms both relations:
+Команда `git merge-base --is-ancestor` подтверждает оба отношения:
 
 ```text
-main    is an ancestor of codex-1   → YES
-codex-1 is an ancestor of codex-2   → YES
+main    является предком codex-1   → ДА
+codex-1 является предком codex-2   → ДА
 ```
 
-## Divergence counts
+## Счётчики расхождения
 
 `git rev-list --left-right --count`:
 
-| Comparison | Behind | Ahead |
+| Сравнение | Позади (behind) | Впереди (ahead) |
 | --- | --- | --- |
 | `main` … `codex-1` | 0 | **94** |
 | `main` … `codex-2` | 0 | **143** |
 | `codex-1` … `codex-2` | 0 | **49** |
 
-`94 + 49 = 143`. There is **zero divergence in either direction** at any point in the chain.
+`94 + 49 = 143`. **Расхождения нет ни в одну сторону** ни на одном шаге цепочки.
 
-## Shared history
+## Общая история
 
 ```mermaid
 gitGraph
@@ -60,58 +73,62 @@ gitGraph
     commit id: "cc8107d MVP 1-3"
     commit id: "b085ad3 main HEAD"
     branch codex-1
-    commit id: "…94 commits…"
+    commit id: "…94 коммита…"
     commit id: "a0ebe8a codex-1 HEAD"
     branch codex-2
-    commit id: "…49 commits…"
+    commit id: "…49 коммитов…"
     commit id: "5dbd43e codex-2 HEAD"
 ```
 
-This is a **strictly linear chain**, not a fork:
+Это **строго линейная цепочка**, а не развилка:
 
 ```text
 main (b085ad3)
-  └── +94 commits ──> codex-1 (a0ebe8a)
-                        └── +49 commits ──> codex-2 (5dbd43e)
+  └── +94 коммита ──> codex-1 (a0ebe8a)
+                        └── +49 коммитов ──> codex-2 (5dbd43e)
 ```
 
-Work windows are also sequential, not parallel:
+Периоды работы тоже последовательные, а не параллельные:
 
-| Branch | First unique commit | Last unique commit |
+| Ветка | Первый собственный коммит | Последний собственный коммит |
 | --- | --- | --- |
 | `codex-1` | 2026-08-03 00:29 | 2026-08-03 02:37 |
 | `codex-2` | 2026-08-03 15:24 | 2026-08-03 16:15 |
 
-A ~13-hour gap separates them. `codex-2` began after `codex-1` was finished.
+Их разделяет разрыв около 13 часов. `codex-2` начался после того, как `codex-1` был закончен.
 
 ---
 
-## Changed files: `main` → `codex-1`
+## Изменённые файлы: `main` → `codex-1`
 
-57 files, **+3,732 / −247**. This is where the system was actually built out from the MVP.
+57 файлов, **+3 732 / −247**. Именно здесь систему довели от MVP до рабочего состояния.
 
-| Area | Files | Nature of change |
+*MVP* (minimum viable product) — минимально работающая версия.
+
+| Область | Файлы | Характер изменений |
 | --- | --- | --- |
-| Evaluators | `base.py` +155, `ratio.py` +117, `temporal.py` **+233 (new)**, `service.py` +72 | Temporal segmentation, ratio components, provenance |
-| Covenants | `detector.py` +126, `registry.py` +57, `identity.py` **+54 (new)**, `compiler.py` +29, `validation.py` +24 | Deterministic identity, version collisions, detection hardening |
-| Evidence | `evidence/validation.py` **+135 (new)** | Independent re-derivation of expected evidence |
-| Ingestion | `pdf.py` +43, `quality.py` +6, `vlm/paddle_layout.py` +77, `ocr/paddle.py` +11 | Render bounds, layout fallbacks |
-| Storage / SQL | `duckdb_store.py` +102, `sql/builder.py` +23, `sql/filters.py` +32 | Derived fields, window intersection |
-| Observability | `observability/context.py` **+60 (new)**, `tracing.py` +51 | Contextvar trace metadata |
-| Evals | `evals/scoring.py` **+115 (new)**, `evals/langsmith.py` **+54 (new)** | Component-level scoring |
-| Synthetic | `synthetic/regression_v2.py` **+426 (new)**, `regression_runner.py` **+87 (new)** | Full-pipeline regression corpus |
-| Tests | 8 new test modules, +829 | Review-hardening tasks 1/3, temporal, component evals |
-| CI | `.github/workflows/codex-1-ci.yml` **+42 (new)** | ruff + pytest on Python 3.12 |
+| Вычислители | `base.py` +155, `ratio.py` +117, `temporal.py` **+233 (новый)**, `service.py` +72 | Сегментация версий, компоненты отношений, происхождение расчётов |
+| Ковенанты | `detector.py` +126, `registry.py` +57, `identity.py` **+54 (новый)**, `compiler.py` +29, `validation.py` +24 | Детерминированные идентификаторы, коллизии версий, усиление обнаружения |
+| Доказательства | `evidence/validation.py` **+135 (новый)** | Независимый перевывод ожидаемого доказательства |
+| Загрузка | `pdf.py` +43, `quality.py` +6, `vlm/paddle_layout.py` +77, `ocr/paddle.py` +11 | Ограничения рендеринга, запасные пути вёрстки |
+| Хранилище / SQL | `duckdb_store.py` +102, `sql/builder.py` +23, `sql/filters.py` +32 | Производные поля, пересечение окон |
+| Наблюдаемость | `observability/context.py` **+60 (новый)**, `tracing.py` +51 | Метаданные трейса через contextvar |
+| Оценщики | `evals/scoring.py` **+115 (новый)**, `evals/langsmith.py` **+54 (новый)** | Покомпонентный подсчёт баллов |
+| Синтетика | `synthetic/regression_v2.py` **+426 (новый)**, `regression_runner.py` **+87 (новый)** | Регрессионный корпус для полного пайплайна |
+| Тесты | 8 новых модулей, +829 | Задачи 1/3 усиления по ревью, темпоральность, покомпонентные оценки |
+| CI | `.github/workflows/codex-1-ci.yml` **+42 (новый)** | ruff + pytest на Python 3.12 |
 
-Commit history shape: a burst of `feat:` commits building the executable DSL, then a long tail of
-`fix:` and `style:` commits — a hardening pass driven by code review
-(`docs/superpowers/plans/2026-08-03-code-review-hardening.md`).
+Форма истории коммитов: сначала всплеск коммитов `feat:` (новая функциональность), которые строят
+исполняемый DSL, затем длинный хвост `fix:` и `style:` — проход по укреплению кода, вызванный
+код-ревью (`docs/superpowers/plans/2026-08-03-code-review-hardening.md`).
 
-## Changed files: `codex-1` → `codex-2`
+*DSL* (domain-specific language) — узкоспециализированный язык описания; здесь — формат `CovenantSpec`.
 
-25 files, **+3,119 / −4**. The `−4` is the entire story.
+## Изменённые файлы: `codex-1` → `codex-2`
 
-**Purely new files (2,876 lines of the 3,119):**
+25 файлов, **+3 119 / −4**. И вот эта цифра `−4` — вся суть.
+
+**Полностью новые файлы (2 876 строк из 3 119):**
 
 ```text
 src/halyk_covenants/review/__init__.py            28
@@ -128,58 +145,59 @@ src/halyk_covenants/llm/prompts/review.py         57
 docs/CODEX_2_REVIEW_WORKFLOW.md                  235
 docs/superpowers/plans/…llm-review-similarity…   439
 docs/superpowers/specs/…llm-review-similarity…   517
-tests/… (7 new review test modules)              814
+tests/… (7 новых тестовых модулей)               814
 ```
 
-**Modified existing files — 4 files, 19 lines, all additive wiring:**
+**Изменённые существующие файлы — 4 файла, 19 строк, всё это добавочная обвязка:**
 
-| File | Change |
+| Файл | Изменение |
 | --- | --- |
-| `pyproject.toml` | +1 — registers the `halyk-review` script |
-| `llm/prompts/__init__.py` | +9/−1 — exports `review_messages` |
-| `pipeline/__init__.py` | +3 — exports `ReviewPipeline`, `ReviewedBatchReport` |
-| `.github/workflows/codex-1-ci.yml` | +6/−2 — adds `codex-2` to trigger branches |
+| `pyproject.toml` | +1 — регистрирует команду `halyk-review` |
+| `llm/prompts/__init__.py` | +9/−1 — экспортирует `review_messages` |
+| `pipeline/__init__.py` | +3 — экспортирует `ReviewPipeline`, `ReviewedBatchReport` |
+| `.github/workflows/codex-1-ci.yml` | +6/−2 — добавляет `codex-2` в ветки-триггеры |
 
-**Not one line of the deterministic pipeline was modified.** No evaluator, no SQL builder, no
-compiler, no verifier, no serializer, no domain model changed between `codex-1` and `codex-2`.
+**Ни одна строка детерминированного пайплайна не была изменена.** Между `codex-1` и `codex-2` не
+поменялись ни вычислители, ни сборщик SQL, ни компилятор, ни верификатор, ни сериализатор, ни модели
+предметной области.
 
 ---
 
-## Conclusion
+## Вывод
 
-> **Is this two independent architectures?**
-> **No.**
+> **Это две независимые архитектуры?**
+> **Нет.**
 >
-> **Is `codex-2` an extension of `codex-1`?**
-> **Yes — a strict, purely additive superset.**
+> **`codex-2` — это расширение `codex-1`?**
+> **Да — строгое, чисто добавочное надмножество.**
 
-Formally: `codex-1 ⊂ codex-2`, with the delta confined to a new `review/` package, a new pipeline
-stage that consumes `BatchEvaluationReport`, a second CLI, and their tests.
+Формально: `codex-1 ⊂ codex-2`, причём разница ограничена новым пакетом `review/`, новым этапом
+пайплайна, который потребляет `BatchEvaluationReport`, вторым CLI и их тестами.
 
-### What follows from this
+### Что из этого следует
 
-1. **There is no merge to perform and no conflict to resolve.** Checking out `codex-2` gives you all
-   of `codex-1`.
-2. **The comparison in [06_CODEX_1_VS_CODEX_2.md](06_CODEX_1_VS_CODEX_2.md) is not "A vs B".** It is
-   "baseline vs baseline + optional layer". The only meaningful axis is whether the layer earns its
-   cost.
-3. **Every defect found in `codex-1` is also present in `codex-2`,** because the code is identical.
-   [07_FINDINGS.md](07_FINDINGS.md) therefore labels findings by *component*, and marks a finding
-   `codex-2 only` when — and only when — it lives in the review delta.
-4. **`codex-2` is the correct base branch** for any further work. It is the only branch containing
-   the full current pipeline, and basing off `codex-1` would silently discard the review layer.
+1. **Никакого слияния делать не нужно и никаких конфликтов разрешать не нужно.** Переключившись на
+   `codex-2`, вы получаете весь `codex-1`.
+2. **Сравнение в [06_CODEX_1_VS_CODEX_2.md](06_CODEX_1_VS_CODEX_2.md) — это не «А против Б».** Это
+   «база» против «база + опциональный слой». Единственная осмысленная ось — окупает ли слой свою
+   стоимость.
+3. **Каждый дефект, найденный в `codex-1`, присутствует и в `codex-2`,** потому что код идентичен.
+   Поэтому [07_FINDINGS.md](07_FINDINGS.md) помечает находки по *компонентам*, а метку
+   `только codex-2` ставит тогда и только тогда, когда находка живёт в добавке ревью.
+4. **`codex-2` — правильная базовая ветка** для любой дальнейшей работы. Это единственная ветка,
+   содержащая полный текущий пайплайн; выбор `codex-1` в качестве базы молча отбросил бы слой ревью.
 
-### Base branch decision for this research track
+### Решение о базовой ветке для этого исследования
 
 ```text
-Working branch:  covenant-architecture-v3
-Base branch:     codex-2
-Reason:          codex-2 is a strict superset of codex-1 (merge-base(codex-1, codex-2) == codex-1
-                 HEAD, 0 commits behind). It is the only branch that contains the complete current
-                 pipeline. Basing off main would discard 143 commits; basing off codex-1 would
-                 discard the 49-commit review layer that is part of the system under audit.
+Рабочая ветка:   covenant-architecture-v3
+Базовая ветка:   codex-2
+Обоснование:     codex-2 — строгое надмножество codex-1 (merge-base(codex-1, codex-2) равен HEAD
+                 ветки codex-1, отставание 0 коммитов). Это единственная ветка с полным текущим
+                 пайплайном. База main отбросила бы 143 коммита; база codex-1 отбросила бы слой
+                 ревью из 49 коммитов, который входит в предмет аудита.
 ```
 
 ---
 
-Next: [04_CODEX_1_ARCHITECTURE.md](04_CODEX_1_ARCHITECTURE.md)
+Далее: [04_CODEX_1_ARCHITECTURE.md](04_CODEX_1_ARCHITECTURE.md)

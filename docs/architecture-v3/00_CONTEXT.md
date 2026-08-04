@@ -1,132 +1,148 @@
-# 00 — Project Context
+# 00 — Контекст проекта
 
-> Baseline context for the architecture-v3 research track.
-> Everything here is derived from the repository itself (`main`, `codex-1`, `codex-2`), not from external assumptions.
+> Базовый контекст для исследовательского трека architecture-v3.
+> Всё здесь выведено из самого репозитория (`main`, `codex-1`, `codex-2`), а не из внешних предположений.
 
-Related: [01_TASK_MODEL.md](01_TASK_MODEL.md) · [02_REPOSITORY_MAP.md](02_REPOSITORY_MAP.md) · [README.md](README.md)
+Связанные документы: [01_TASK_MODEL.md](01_TASK_MODEL.md) · [02_REPOSITORY_MAP.md](02_REPOSITORY_MAP.md) · [README.md](README.md)
 
 ---
 
-## Project purpose
+## Назначение проекта
 
-The repository implements a **covenant evaluation system** for the Halyk Agentic Challenge.
+Репозиторий реализует **систему оценки ковенантов** (covenant evaluation) для Halyk Agentic Challenge.
 
-Given a set of loan/credit documents (PDF) and a set of borrower transactions (CSV/XLSX/Parquet), the
-system must decide, for every `(borrower, covenant)` pair, whether the borrower **complied with** or
-**violated** the covenant, and support that verdict with a number and — where applicable — a specific
-transaction.
+*Ковенант* — условие в кредитном договоре, которое заёмщик обязан соблюдать (например, «сумма
+исходящих платежей за месяц не должна превышать 15 млн тенге»). Задача системы — проверить, соблюдены
+ли эти условия.
 
-The controlling design statement lives in [`docs/2_ARCHITECTURE_COVENANT_MVP.md`](../2_ARCHITECTURE_COVENANT_MVP.md) §0:
+На входе — кредитные документы (PDF) и транзакции заёмщиков (CSV/XLSX/Parquet). Для каждой пары
+`(заёмщик, ковенант)` система должна решить, **соблюдён** ковенант или **нарушен**, и подкрепить
+вывод числом и — где это применимо — конкретной транзакцией.
+
+Ключевая формулировка из [`docs/2_ARCHITECTURE_COVENANT_MVP.md`](../2_ARCHITECTURE_COVENANT_MVP.md) §0:
 
 ```text
-LLM interprets the covenant text.
-DuckDB/Python executes the covenant.
-Verifier checks the result.
-Serializer produces exactly the required JSON.
+LLM интерпретирует текст ковенанта.
+DuckDB/Python исполняет ковенант.
+Верификатор проверяет результат.
+Сериализатор формирует ровно тот JSON, который требуется.
 ```
 
-The LLM is explicitly **not** the calculator. This is the single most important architectural
-commitment in the codebase, and both `codex-1` and `codex-2` honour it.
+*LLM* (large language model, большая языковая модель) — здесь DeepSeek. *DuckDB* — встраиваемая
+аналитическая база данных, работает как файл на диске, без отдельного сервера.
+
+LLM здесь явно **не является калькулятором**. Это самое важное архитектурное обязательство во всём
+коде, и обе ветки, `codex-1` и `codex-2`, его соблюдают.
 
 ---
 
-## Competition / task understanding
+## Понимание задачи соревнования
 
-From `docs/2_ARCHITECTURE_COVENANT_MVP.md` §0 and §1:
+Из `docs/2_ARCHITECTURE_COVENANT_MVP.md` §0 и §1:
 
-- every borrower has one or more covenants;
-- every covenant is evaluated **independently**;
-- output per `(borrower, covenant)` pair contains three scored components:
-  1. **verdict** — complied / violated;
-  2. **number** — the numeric value supporting the verdict;
-  3. **evidence transaction** — when the violation is tied to a specific transaction;
-- **partial credit is possible per answer component**;
-- the final score is the **sum across all covenants**.
+- у каждого заёмщика один или несколько ковенантов;
+- каждый ковенант оценивается **независимо**;
+- ответ по каждой паре `(заёмщик, ковенант)` содержит три оцениваемых компонента:
+  1. **вердикт** — соблюдён / нарушен;
+  2. **число** — числовое значение, подтверждающее вердикт;
+  3. **транзакция-доказательство** — когда нарушение привязано к конкретной транзакции;
+- **возможен частичный балл за каждый компонент по отдельности**;
+- итоговый балл — **сумма по всем ковенантам**.
 
-The scoring shape drives the architecture. Because credit is per-component and additive:
+Форма подсчёта баллов определяет архитектуру. Поскольку балл начисляется покомпонентно и суммируется:
 
-| Consequence | Implication for design |
+| Следствие | Что это значит для проектирования |
 | --- | --- |
-| A wrong number can still earn verdict credit | Never abandon a pair; always emit something |
-| A crash on one covenant must not lose the others | Fault isolation is worth more than global elegance |
-| Number accuracy dominates | Correct filters/windows matter more than clever agents |
-| Evidence is a separate component | Evidence selection deserves its own logic and its own tests |
+| Неверное число всё равно может дать балл за вердикт | Никогда не бросать пару без ответа — выдавать хоть что-то |
+| Падение на одном ковенанте не должно терять остальные | Изоляция сбоев важнее общей элегантности |
+| Точность числа доминирует | Правильные фильтры и окна важнее умных агентов |
+| Доказательство — отдельный компонент | Выбор транзакции заслуживает своей логики и своих тестов |
 
-The declared optimization order is `NUMBER → VERDICT → EVIDENCE`, with the stated bottleneck being
-**covenant text → correct machine-readable rule → correct filtered transaction set → correct number**.
+Заявленный порядок оптимизации — `ЧИСЛО → ВЕРДИКТ → ДОКАЗАТЕЛЬСТВО`, а узким местом назван путь
+**текст ковенанта → корректное машиночитаемое правило → корректный отфильтрованный набор транзакций
+→ корректное число**.
 
 ---
 
-## Inputs
+## Входные данные
 
-| Input | Format | Location in repo | Notes |
+| Вход | Формат | Расположение в репозитории | Примечания |
 | --- | --- | --- | --- |
-| Loan/covenant documents | PDF (native text + scanned) | `data/raw/documents/` | 4 fixtures incl. a scan and a portfolio table |
-| Transactions | CSV / XLSX / Parquet | `data/raw/transactions/transactions.csv` | Loaded into DuckDB |
-| Borrower registry | CSV | `data/raw/transactions/borrowers.csv` | Feeds entity resolution |
-| Organizer questions (optional) | JSON | user-supplied | `codex-2` only; maps `(borrower, covenant) → question` |
-| Golden review corpus (optional) | JSON | user-supplied | `codex-2` only; similarity fallback examples |
+| Кредитные документы | PDF (нативный текст + сканы) | `data/raw/documents/` | 4 фикстуры, включая скан и портфельную таблицу |
+| Транзакции | CSV / XLSX / Parquet | `data/raw/transactions/transactions.csv` | Загружаются в DuckDB |
+| Реестр заёмщиков | CSV | `data/raw/transactions/borrowers.csv` | Питает разрешение сущностей |
+| Вопросы организаторов (опционально) | JSON | предоставляется пользователем | Только `codex-2`; отображение `(заёмщик, ковенант) → вопрос` |
+| Золотой корпус для ревью (опционально) | JSON | предоставляется пользователем | Только `codex-2`; примеры для fallback по схожести |
 
-Supported structured suffixes are a closed set: `.csv`, `.xlsx`, `.xlsm`, `.parquet`
-(`pipeline/preprocess.py:23`).
+*Фикстура* (fixture) — заранее подготовленный тестовый файл с известным содержимым.
 
-## Outputs
+Поддерживаемые расширения структурированных файлов — закрытый список: `.csv`, `.xlsx`, `.xlsm`,
+`.parquet` (`pipeline/preprocess.py:23`).
 
-| Output | Producer | Purpose |
+## Выходные данные
+
+| Выход | Кто производит | Назначение |
 | --- | --- | --- |
-| `submission.json` | `submission/serializer.py` | **The scored artifact** |
-| `internal-results.json` | `pipeline/evaluate.py` | Full `BatchEvaluationReport` incl. verification |
-| `reviewed-results.json` | `pipeline/review.py` (`codex-2`) | Quality/debug artifact — **not** scored |
-| DuckDB database | `storage/duckdb_store.py` | Durable state: transactions, covenants, results, provenance |
-| LangSmith traces | `observability/` | Stage-level spans and metadata |
+| `submission.json` | `submission/serializer.py` | **Оцениваемый артефакт** |
+| `internal-results.json` | `pipeline/evaluate.py` | Полный `BatchEvaluationReport` вместе с верификацией |
+| `reviewed-results.json` | `pipeline/review.py` (`codex-2`) | Артефакт качества/отладки — **не оценивается** |
+| База DuckDB | `storage/duckdb_store.py` | Долговременное состояние: транзакции, ковенанты, результаты, происхождение данных |
+| Трейсы LangSmith | `observability/` | Спаны и метаданные по этапам |
 
-The submission shape is configurable through a `SubmissionProfile` (`submission/models.py`) so the
-official template can be adapted without touching the pipeline — key names, verdict labels,
-ratio-as-percentage, and evidence inclusion are all profile fields.
+*Трейс* (trace) — запись хода выполнения программы по этапам; *спан* (span) — один этап внутри трейса.
+LangSmith — сервис для их просмотра.
+
+Форма итогового файла настраивается через `SubmissionProfile` (`submission/models.py`), поэтому
+официальный шаблон можно подогнать, не трогая пайплайн: имена ключей, подписи вердиктов,
+представление доли как процента и включение доказательства — всё это поля профиля.
 
 ---
 
-## Core entities
+## Ключевые сущности
 
-Defined in `src/halyk_covenants/domain/`:
+Определены в `src/halyk_covenants/domain/`:
 
-| Entity | File | Role |
+| Сущность | Файл | Роль |
 | --- | --- | --- |
-| `SourceRef` | `domain/source.py` | Document/page/bbox provenance carried end-to-end |
-| `DocumentBlock` | `domain/document.py` | One extracted text/table unit with bbox + confidence |
-| `CovenantCandidate` | `covenants/detector.py` | Pre-LLM detected clause |
-| **`CovenantSpec`** | `domain/covenant.py` | **The central object** — the executable rule |
-| `MetricSpec` | `domain/covenant.py` | What to compute (sum/count/max/min/avg/ratio/existence/frequency) |
-| `ConditionSpec` | `domain/covenant.py` | Comparator + threshold + unit/currency |
-| `FilterSpec` | `domain/covenant.py` | One closed-catalog predicate |
-| `TimeWindowSpec` | `domain/covenant.py` | Calendar/rolling/custom window |
-| `EvidenceMode` | `domain/covenant.py` | none / violating / trigger / max transaction |
-| `Calculation` | `domain/calculation.py` | Deterministic provenance record (SQL + params + row count) |
-| `CovenantResult` | `domain/result.py` | verdict + number + evidence + status + failure stage |
-| `ReviewDecision` / `ReviewedResult` | `review/models.py` | `codex-2` only |
+| `SourceRef` | `domain/source.py` | Происхождение: документ/страница/рамка, передаётся сквозь весь пайплайн |
+| `DocumentBlock` | `domain/document.py` | Одна извлечённая единица текста/таблицы с координатами и уверенностью |
+| `CovenantCandidate` | `covenants/detector.py` | Обнаруженный пункт договора, ещё до LLM |
+| **`CovenantSpec`** | `domain/covenant.py` | **Центральный объект** — исполняемое правило |
+| `MetricSpec` | `domain/covenant.py` | Что вычислять (sum/count/max/min/avg/ratio/existence/frequency) |
+| `ConditionSpec` | `domain/covenant.py` | Оператор сравнения + порог + единица/валюта |
+| `FilterSpec` | `domain/covenant.py` | Один предикат из закрытого каталога |
+| `TimeWindowSpec` | `domain/covenant.py` | Календарное / скользящее / произвольное окно |
+| `EvidenceMode` | `domain/covenant.py` | none / нарушающая / триггерная / максимальная транзакция |
+| `Calculation` | `domain/calculation.py` | Запись происхождения расчёта (SQL + параметры + число строк) |
+| `CovenantResult` | `domain/result.py` | вердикт + число + доказательство + статус + стадия сбоя |
+| `ReviewDecision` / `ReviewedResult` | `review/models.py` | Только `codex-2` |
 
-`CovenantSpec` is the contract between the LLM half and the deterministic half of the system. Every
-architectural question in this repository ultimately reduces to *"is this spec right, and can we tell?"*
+`CovenantSpec` — это контракт между LLM-половиной и детерминированной половиной системы. Любой
+архитектурный вопрос в этом репозитории в конечном счёте сводится к одному:
+*«правильна ли эта спецификация, и можем ли мы это определить?»*
 
 ---
 
-## External models and services
+## Внешние модели и сервисы
 
-| Service | Used for | Configured via | Required? |
+| Сервис | Для чего | Настройка | Обязателен? |
 | --- | --- | --- | --- |
-| **DeepSeek** (via `langchain-deepseek`) | Covenant compilation, compiler repair, `codex-2` review | `DEEPSEEK_API_KEY` | Yes for compilation |
-| **LangSmith** | Tracing / evaluation | `LANGSMITH_API_KEY`, `LANGSMITH_PROJECT` | No (degrades to no-op) |
-| **PaddleOCR / PP-Structure** | Scanned pages, table layout | `ocr` extra | No (optional extra) |
-| **SentenceTransformers** (`intfloat/multilingual-e5-small`) | `codex-2` review similarity | `semantic` extra | No (optional extra) |
-| **LangGraph** | Compiler repair loop state machine | dependency | Yes |
+| **DeepSeek** (через `langchain-deepseek`) | Компиляция ковенантов, починка компиляции, ревью в `codex-2` | `DEEPSEEK_API_KEY` | Да, для компиляции |
+| **LangSmith** | Трассировка / оценка | `LANGSMITH_API_KEY`, `LANGSMITH_PROJECT` | Нет (деградирует в заглушку) |
+| **PaddleOCR / PP-Structure** | Сканы, разметка таблиц | extra `ocr` | Нет (опциональный extra) |
+| **SentenceTransformers** (`intfloat/multilingual-e5-small`) | Схожесть при ревью в `codex-2` | extra `semantic` | Нет (опциональный extra) |
+| **LangGraph** | Конечный автомат цикла починки компилятора | зависимость | Да |
 
-Note that **only DeepSeek is genuinely required**. OCR and embeddings are optional extras and are
-*not installed in CI* — see [07_FINDINGS.md](07_FINDINGS.md).
+*Extra* — необязательный набор зависимостей, который ставится отдельной командой.
+*OCR* (optical character recognition) — распознавание текста на картинках и сканах.
 
-## Storage
+Обратите внимание: **по-настоящему обязателен только DeepSeek**. OCR и эмбеддинги — опциональные
+extra, и они *не устанавливаются в CI* — см. [07_FINDINGS.md](07_FINDINGS.md).
 
-Single-file **DuckDB** database (default `data/duckdb/hackathon.duckdb`). Schema in
-`storage/duckdb_store.py`:
+## Хранилище
+
+Одна файловая база **DuckDB** (по умолчанию `data/duckdb/hackathon.duckdb`). Схема —
+в `storage/duckdb_store.py`:
 
 ```text
 raw_transactions          documents              covenants
@@ -136,43 +152,44 @@ borrower_aliases          pipeline_stage_records covenant_result_history
 borrower_identifiers      ingestion_artifacts    review_decisions (codex-2)
 ```
 
-There is **no vector database**. The `1_ARCHITECTURE` document proposes Qdrant; the implemented
-system uses an in-process BM25 + optional numpy cosine hybrid instead. This is a deliberate and, in
-our assessment, correct simplification for the data volume involved.
+**Векторной базы данных нет.** Документ `1_ARCHITECTURE` предлагает Qdrant; реализованная система
+вместо этого использует внутрипроцессный гибрид BM25 + опциональный косинус на numpy. На наш взгляд,
+для такого объёма данных это осознанное и правильное упрощение.
 
 ---
 
-## Unknowns
+## Неизвестные
 
-These are genuinely not determinable from the repository and are carried as open questions:
+Это то, что действительно нельзя определить из репозитория; несём как открытые вопросы:
 
-1. **The official submission schema.** `configs/submission/synthetic.yaml` is a synthetic profile.
-   The real key names, verdict vocabulary, and number formatting are unknown.
-2. **The real document corpus.** All four PDFs under `data/raw/documents/` are synthetic fixtures.
-   Real-world layout complexity, language mix, and scan quality are unmeasured.
-3. **Whether covenants are given or must be discovered.** The pipeline discovers covenants from PDFs;
-   if the organizers supply a covenant list, the entire detection + compilation stage becomes
-   optional and the risk profile changes completely.
-4. **Language distribution.** The code handles Russian and English. Kazakh is not handled anywhere.
-5. **Evaluation date semantics.** `--at-date` is operator-supplied; whether the organizers define a
-   single as-of date or per-covenant periods is unknown.
-6. **Scoring tolerance for numbers.** Exact match vs. relative tolerance materially changes whether
-   currency/rounding work is worth doing.
+1. **Официальная схема submission.** `configs/submission/synthetic.yaml` — синтетический профиль.
+   Настоящие имена ключей, словарь вердиктов и формат числа неизвестны.
+2. **Реальный корпус документов.** Все четыре PDF в `data/raw/documents/` — синтетические фикстуры.
+   Реальная сложность вёрстки, смесь языков и качество сканов не измерены.
+3. **Даны ли ковенанты или их надо находить.** Пайплайн обнаруживает ковенанты в PDF; если
+   организаторы выдают готовый список, весь этап обнаружения и компиляции становится необязательным,
+   и профиль рисков полностью меняется.
+4. **Распределение языков.** Код обрабатывает русский и английский. Казахский не обрабатывается нигде.
+5. **Семантика даты оценки.** `--at-date` задаёт оператор; определяют ли организаторы одну дату «на
+   момент» или периоды по каждому ковенанту — неизвестно.
+6. **Допуск по числу при оценке.** Точное совпадение или относительная погрешность — от этого
+   существенно зависит, стоит ли вообще заниматься валютами и округлением.
 
-## Important assumptions
+## Важные допущения
 
-Assumptions this research track makes explicit, so they can be challenged:
+Допущения, которые этот трек делает явными, чтобы их можно было оспорить:
 
-- **A1.** The submission is scored per component (verdict / number / evidence) and summed. Everything
-  in [09_ARCHITECTURE_V3.md](09_ARCHITECTURE_V3.md) is optimized against this.
-- **A2.** Compilation (text → `CovenantSpec`) is the dominant error source, not SQL execution. The
-  deterministic half is small, closed, and testable; the LLM half is open-ended.
-- **A3.** Latency is not directly scored, but a pipeline that cannot finish is worth zero. Wall-clock
-  budget is treated as a hard constraint, not an optimization target.
-- **A4.** Recall at detection is unrecoverable downstream. A clause never detected can never be
-  compiled, evaluated, or scored — no later stage can repair it.
-- **A5.** The graders will not run the OCR or semantic extras unless we ship them working by default.
+- **A1.** Ответ оценивается покомпонентно (вердикт / число / доказательство) и суммируется. Всё в
+  [09_ARCHITECTURE_V3.md](09_ARCHITECTURE_V3.md) оптимизировано под это.
+- **A2.** Компиляция (текст → `CovenantSpec`) — доминирующий источник ошибок, а не исполнение SQL.
+  Детерминированная половина мала, замкнута и тестируема; LLM-половина открыта.
+- **A3.** Задержка напрямую не оценивается, но пайплайн, который не завершился, стоит ноль. Бюджет
+  времени рассматривается как жёсткое ограничение, а не как цель оптимизации.
+- **A4.** Полнота обнаружения невосстановима дальше по конвейеру. Пункт, который не обнаружен, никогда
+  не будет скомпилирован, оценён и засчитан — ни один следующий этап это не починит.
+- **A5.** Проверяющие не будут ставить extra `ocr` и `semantic`, если мы не поставим их работающими
+  по умолчанию.
 
 ---
 
-Next: [01_TASK_MODEL.md](01_TASK_MODEL.md)
+Далее: [01_TASK_MODEL.md](01_TASK_MODEL.md)

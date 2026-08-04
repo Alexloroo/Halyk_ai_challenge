@@ -1,56 +1,56 @@
-# 04 — codex-1 Architecture
+# 04 — Архитектура codex-1
 
-> The complete deterministic covenant evaluation pipeline.
-> `codex-1` is the system; `codex-2` adds a layer on top of it without changing any of it.
+> Полный детерминированный пайплайн оценки ковенантов.
+> `codex-1` — это и есть система; `codex-2` добавляет слой поверх, ничего в ней не меняя.
 
-Related: [03_BRANCH_ANALYSIS.md](03_BRANCH_ANALYSIS.md) · [05_CODEX_2_ARCHITECTURE.md](05_CODEX_2_ARCHITECTURE.md) · [07_FINDINGS.md](07_FINDINGS.md)
+Связанные документы: [03_BRANCH_ANALYSIS.md](03_BRANCH_ANALYSIS.md) · [05_CODEX_2_ARCHITECTURE.md](05_CODEX_2_ARCHITECTURE.md) · [07_FINDINGS.md](07_FINDINGS.md)
 
 ---
 
-## 1. Architecture diagram
+## 1. Схема архитектуры
 
 ```mermaid
 flowchart TD
-    subgraph P["PREPROCESSING — LLM allowed"]
+    subgraph P["ПРЕДОБРАБОТКА — LLM разрешена"]
         direction TB
-        F[input files] --> SORT["sort: structured first, PDFs second"]
-        SORT --> SD[structured loader]
-        SD --> TX[(transactions + borrowers)]
+        F[входные файлы] --> SORT["сортировка: сначала структурированные, потом PDF"]
+        SORT --> SD[загрузчик структурированных]
+        SD --> TX[(транзакции + заёмщики)]
         SORT --> PDFI[PDFIngestor · PyMuPDF]
         PDFI --> Q{PageQualityRouter}
-        Q -->|native ≥80 chars| NB[native blocks]
+        Q -->|native ≥80 символов| NB[нативные блоки]
         Q -->|layout| VL[PP-Structure]
         Q -->|ocr| OC[PaddleOCR]
-        Q -->|failed| X[dropped]
+        Q -->|failed| X[выброшено]
         NB --> BS
         VL --> BS
         OC --> BS
-        BS[borrower scope annotation<br/>exact match → fuzzy resolver → page-local carry-forward]
-        BS --> DET[CovenantDetector<br/>regex signal + logical units]
-        DET --> CTX[HybridRetriever<br/>top-k context assembly]
+        BS[привязка к заёмщику<br/>точное совпадение → нечёткий резолвер → перенос в пределах страницы]
+        BS --> DET[CovenantDetector<br/>сигнал-регулярка + логические единицы]
+        DET --> CTX[HybridRetriever<br/>сборка контекста top-k]
         CTX --> CGR
         subgraph CGR["CompilerGraph · LangGraph"]
             direction LR
-            C1[compile] --> V1{validate}
-            V1 -->|errors| R1[repair] --> V1
-            V1 -->|ok| OUT[CovenantSpec]
+            C1[компиляция] --> V1{валидация}
+            V1 -->|ошибки| R1[починка] --> V1
+            V1 -->|ок| OUT[CovenantSpec]
         end
-        OUT --> IDR[deterministic identity<br/>covenant_id / group_id]
-        IDR --> REG[(covenants registry)]
+        OUT --> IDR[детерминированный идентификатор<br/>covenant_id / group_id]
+        IDR --> REG[(реестр ковенантов)]
     end
 
-    subgraph E["EVALUATION — no LLM, ever"]
+    subgraph E["ОЦЕНКА — LLM не используется никогда"]
         direction TB
-        REG --> GRP["group by (borrower, covenant_group)"]
+        REG --> GRP["группировка по (заёмщик, группа ковенантов)"]
         TX --> GRP
-        GRP --> TEMP[TemporalEvaluationService<br/>version resolution + segmentation]
-        TEMP --> SVC[EvaluationService<br/>fault isolation]
-        SVC --> WHERE[build_where_clause<br/>closed catalog + bound params]
-        WHERE --> CUR{currency scope check}
-        CUR --> MET[metric evaluator]
+        GRP --> TEMP[TemporalEvaluationService<br/>разрешение версий + сегментация]
+        TEMP --> SVC[EvaluationService<br/>изоляция сбоев]
+        SVC --> WHERE[build_where_clause<br/>закрытый каталог + связанные параметры]
+        WHERE --> CUR{проверка единства валюты}
+        CUR --> MET[вычислитель метрики]
         MET --> PROV[(calculations)]
-        MET --> CMP[compare → verdict]
-        CMP -->|violated| EV[evidence selector]
+        MET --> CMP[сравнение → вердикт]
+        CMP -->|нарушен| EV[селектор доказательства]
         EV --> EVV{EvidenceValidator}
         CMP --> RES[CovenantResult]
         EVV --> RES
@@ -67,157 +67,162 @@ flowchart TD
 
 ---
 
-## 2. Runtime flow
+## 2. Ход выполнения
 
-### Stage 1 — Preprocessing (`preprocess.py:76`)
+### Этап 1 — Предобработка (`preprocess.py:76`)
 
 ```text
-for each file, sorted (structured, then PDF, then other):
-    digest = sha256(bytes)
-    if digest unchanged in ingestion_artifacts:  skip          ← idempotency
-    if structured:  DuckDBStore.load_transactions(path)
-    elif pdf:       _load_pdf(path, digest)
-    mark processed
-record PreprocessReport
+для каждого файла, отсортированного (структурированные, затем PDF, затем прочее):
+    отпечаток = sha256(содержимое)
+    если отпечаток не изменился в ingestion_artifacts:  пропустить    ← идемпотентность
+    если структурированный:  DuckDBStore.load_transactions(путь)
+    иначе если pdf:          _load_pdf(путь, отпечаток)
+    отметить обработанным
+записать PreprocessReport
 ```
 
-Structured files are deliberately processed first (`preprocess.py:79-89`) so that the `borrowers`
-table is populated before any PDF needs borrower scoping. This ordering is load-bearing.
+Структурированные файлы намеренно обрабатываются первыми (`preprocess.py:79-89`), чтобы таблица
+`borrowers` была заполнена до того, как какому-либо PDF понадобится привязка к заёмщику. Этот порядок
+несущий.
 
-Every file is wrapped in `try/except` that appends to `report.errors` and continues — one corrupt PDF
-cannot abort ingestion.
+Каждый файл обёрнут в `try/except`, который добавляет запись в `report.errors` и продолжает работу —
+один битый PDF не может оборвать загрузку.
 
-### Stage 2 — Document → blocks (`ingestion/pdf.py:36`)
+### Этап 2 — Документ → блоки (`ingestion/pdf.py:36`)
 
-Per page, `PageQualityRouter.classify` returns one of four routes based on printable non-space
-character count (default threshold 80), image count, and table count:
+По каждой странице `PageQualityRouter.classify` возвращает один из четырёх маршрутов, исходя из
+количества печатаемых непробельных символов (порог по умолчанию 80), количества изображений и таблиц:
 
-| Route | Condition | Action |
+| Маршрут | Условие | Действие |
 | --- | --- | --- |
-| `native` | ≥80 readable chars | PyMuPDF blocks; **plus** PP-Structure if tables detected |
-| `layout` | <80 chars but tables present | PP-Structure; falls back to native, then OCR |
-| `ocr` | <80 chars, images or some text | PaddleOCR; falls back to native |
-| `failed` | nothing usable | **page dropped silently** |
+| `native` | ≥80 читаемых символов | Блоки PyMuPDF; **плюс** PP-Structure, если найдены таблицы |
+| `layout` | <80 символов, но есть таблицы | PP-Structure; запасной путь — нативный, затем OCR |
+| `ocr` | <80 символов, есть изображения или немного текста | PaddleOCR; запасной путь — нативный |
+| `failed` | ничего пригодного нет | **страница молча выбрасывается** |
 
-Page rendering is bounded at 12 MP with scale clamped to `[0.5, 2.0]` — an explicit defence against
-memory blowup on large-format pages.
+Рендеринг страницы ограничен 12 мегапикселями, масштаб зажат в `[0.5, 2.0]` — явная защита от
+переполнения памяти на страницах большого формата.
 
-### Stage 3 — Borrower scoping (`preprocess.py:255`)
+### Этап 3 — Привязка к заёмщику (`preprocess.py:255`)
 
-Three-tier resolution, per block, in order:
-1. Block already carries `borrower_ids` (from the extractor).
-2. **Exact** regex match of borrower ID / identifiers / canonical name / aliases, with word-boundary
-   guards `(?<![\w-])…(?![\w-])`.
-3. A `Заёмщик:` / `Borrower:` heading pattern, passed to the fuzzy `BorrowerResolver`, accepted only
-   if `status.startswith("resolved_")`.
+Трёхуровневое разрешение, по каждому блоку, по порядку:
 
-Resolved scope **carries forward within a page** and resets at each page boundary. This models the
-common layout "heading names the borrower, following paragraphs inherit it".
+1. Блок уже несёт `borrower_ids` (от извлекателя).
+2. **Точное** совпадение по регулярке с идентификатором / кодами / каноническим именем / псевдонимами
+   заёмщика, с защитой границ слова `(?<![\w-])…(?![\w-])`.
+3. Шаблон заголовка `Заёмщик:` / `Borrower:`, переданный в нечёткий `BorrowerResolver`; принимается
+   только если `status.startswith("resolved_")`.
 
-### Stage 4 — Detection (`covenants/detector.py:48`)
+Найденная привязка **переносится вперёд в пределах страницы** и сбрасывается на границе страницы. Это
+моделирует типичную вёрстку «заголовок называет заёмщика, следующие абзацы его наследуют».
 
-Two-part design:
+### Этап 4 — Обнаружение (`covenants/detector.py:48`)
 
-**`_logical_units`** assembles detectable units before matching:
-- table cells are grouped into rows by `(document, page, table_id, row_index)` and joined with `|`;
-- text blocks are sorted into reading order by bbox;
-- adjacent text blocks are conservatively joined when **neither alone qualifies** but the pair does,
-  they are vertically nearby, share a borrower scope, and are complementary (one has the modal signal,
-  the other has the constraint value).
+Конструкция из двух частей:
 
-The "neither alone qualifies" guard is what prevents duplicate candidates from the join pass.
+**`_logical_units`** собирает обнаружимые единицы до сопоставления:
+- ячейки таблиц группируются в строки по `(документ, страница, table_id, row_index)` и склеиваются `|`;
+- текстовые блоки сортируются в порядке чтения по координатам;
+- соседние текстовые блоки консервативно склеиваются, когда **ни один из них по отдельности не
+  проходит**, а пара проходит; они вертикально близки, разделяют одну привязку к заёмщику и
+  дополняют друг друга (в одном модальный сигнал, в другом — числовое ограничение).
 
-**`_qualifies`** requires a covenant signal regex **and** (a digit **or** a prohibition keyword).
+Условие «ни один по отдельности не проходит» — это то, что предотвращает дублирование кандидатов при
+склейке.
 
-Finally `_deduplicate_explicit_codes` keeps the longest text per explicit `COV-…` code.
+**`_qualifies`** требует наличия сигнальной регулярки ковенанта **и** (цифры **или** слова-запрета).
 
-### Stage 5 — Compilation (`compiler_graph.py`, `compiler.py`)
+Наконец `_deduplicate_explicit_codes` оставляет самый длинный текст на каждый явный код `COV-…`.
+
+### Этап 5 — Компиляция (`compiler_graph.py`, `compiler.py`)
 
 ```text
-context = TRANSACTION_SEMANTIC_CATALOG + top-k retrieved blocks (borrower-scope filtered,
-                                          plus source page ±1, ordered by proximity)
+контекст = TRANSACTION_SEMANTIC_CATALOG + top-k найденных блоков (отфильтрованных по заёмщику,
+                                          плюс исходная страница ±1, упорядоченных по близости)
         ↓
 DeepSeek with_structured_output(CompiledCovenants, method="json_mode")
         ↓
-apply_resolved_candidate_facts   ← overlays deterministic facts, intersects borrower scope
+apply_resolved_candidate_facts   ← накладывает детерминированные факты, пересекает область заёмщиков
         ↓
-validate_compiled_spec           ← semantic cross-checks against clause text
+validate_compiled_spec           ← смысловые перекрёстные проверки по тексту пункта
         ↓
-route == "straightforward"?  → registry
-route == "ambiguous"?        → repair (schema-only, max 3 attempts) → failed_compilation
+route == "straightforward"?  → реестр
+route == "ambiguous"?        → починка (только схема, максимум 3 попытки) → failed_compilation
 ```
 
-Two properties are worth naming explicitly:
+Два свойства стоит назвать явно:
 
-- **The model cannot invent a borrower.** `apply_resolved_candidate_facts` intersects the model's
-  `borrower_ids` with the deterministically resolved candidate scope. IDs outside the scope are
-  discarded, and `validate_compiled_spec` rejects any that survive.
-- **The repairer is blind to results.** `LangChainCompilerRepairer` receives only the clause, the
-  context, the validation errors and the previous draft — never a transaction value or a verdict.
-  It structurally cannot tune a spec toward a desired answer.
+- **Модель не может выдумать заёмщика.** `apply_resolved_candidate_facts` пересекает `borrower_ids`
+  от модели с детерминированно разрешённой областью кандидата. Идентификаторы вне области
+  отбрасываются, а `validate_compiled_spec` отвергает те, что уцелели.
+- **Починщик слеп к результатам.** `LangChainCompilerRepairer` получает только текст пункта,
+  контекст, ошибки валидации и предыдущий черновик — но никогда значение транзакции или вердикт. Он
+  структурно не способен подогнать спецификацию под желаемый ответ.
 
-### Stage 6 — Evaluation (`pipeline/evaluate.py:43`)
+### Этап 6 — Оценка (`pipeline/evaluate.py:43`)
 
 ```text
-group specs by (borrower_id, covenant_group_id or covenant_id)
-for each group:
-    TemporalEvaluationService.evaluate_versions(versions, borrower, at_date)
-    if exactly one compiled version:  ResultVerifier.verify_pair(spec, result)
-    persist to covenant_results + covenant_result_history
-ResultVerifier.verify(expected_pairs, results)
+сгруппировать спецификации по (borrower_id, covenant_group_id или covenant_id)
+для каждой группы:
+    TemporalEvaluationService.evaluate_versions(версии, заёмщик, дата)
+    если ровно одна скомпилированная версия:  ResultVerifier.verify_pair(спека, результат)
+    сохранить в covenant_results + covenant_result_history
+ResultVerifier.verify(ожидаемые_пары, результаты)
 ```
 
-### Stage 7 — Metric execution (`evaluators/base.py:43`)
+### Этап 7 — Исполнение метрики (`evaluators/base.py:43`)
 
 ```text
-borrower_scope  = all group borrowers if scope_mode=="group" else the single borrower
-filters         = covenant.transaction_filters + covenant.metric.filters
-exclusions      = covenant.exclusions       + covenant.metric.exclusions
-where_sql, params = build_where_clause(...)          ← window ∩ effective period
-_validate_currency_scope(...)                        ← raises on mixed currencies
-value = self.calculate(...)                          ← subclass-specific SQL
-if value is None: return partial/unknown
-calculation_id = _record_calculation(...)            ← sha256 of identity payload
-verdict = "complied" if compare(value, comparator, threshold) else "violated"
-if violated and evidence_mode != none:
-    evidence = select_evidence(...)
-    EvidenceValidator.validate(evidence, context)    ← independent re-derivation
+область_заёмщиков = все заёмщики группы, если scope_mode=="group", иначе один заёмщик
+фильтры           = covenant.transaction_filters + covenant.metric.filters
+исключения        = covenant.exclusions       + covenant.metric.exclusions
+where_sql, параметры = build_where_clause(...)       ← окно ∩ период действия
+_validate_currency_scope(...)                        ← бросает исключение при смеси валют
+значение = self.calculate(...)                       ← SQL, специфичный для подкласса
+если значение None: вернуть partial/unknown
+calculation_id = _record_calculation(...)            ← sha256 от структуры расчёта
+вердикт = "complied" если compare(значение, оператор, порог) иначе "violated"
+если нарушен и evidence_mode != none:
+    доказательство = select_evidence(...)
+    EvidenceValidator.validate(доказательство, контекст)  ← независимый перевывод
 ```
 
 ---
 
-## 3. Important modules
+## 3. Важные модули
 
-| Module | Responsibility | Why it matters |
+| Модуль | Ответственность | Почему важен |
 | --- | --- | --- |
-| `sql/filters.py` | Closed-catalog filter → parameterized SQL | The injection boundary |
-| `sql/builder.py` | WHERE assembly, window bounds | All boundary arithmetic lives here |
-| `evaluators/base.py` | Orchestration, provenance, evidence | Single place where verdicts are made |
-| `evaluators/temporal.py` | Amendment/version handling | The subtlest logic in the repo |
-| `evidence/validation.py` | Independent evidence re-derivation | Genuine second opinion, no LLM |
-| `covenants/identity.py` | Deterministic covenant IDs | Model never names an entity |
-| `covenants/registry.py` | Persistence + version collision | Cross-document version families |
-| `observability/context.py` | Contextvar trace metadata | Makes traces queryable per pair |
+| `sql/filters.py` | Фильтр из закрытого каталога → параметризованный SQL | Граница защиты от инъекций |
+| `sql/builder.py` | Сборка WHERE, границы окон | Вся арифметика границ живёт здесь |
+| `evaluators/base.py` | Оркестрация, происхождение, доказательство | Единственное место, где выносится вердикт |
+| `evaluators/temporal.py` | Работа с версиями и доп. соглашениями | Самая тонкая логика в репозитории |
+| `evidence/validation.py` | Независимый перевывод доказательства | Настоящее второе мнение, без LLM |
+| `covenants/identity.py` | Детерминированные идентификаторы ковенантов | Модель никогда не именует сущность |
+| `covenants/registry.py` | Сохранение + коллизии версий | Семейства версий между документами |
+| `observability/context.py` | Метаданные трейса через contextvar | Делает трейсы фильтруемыми по паре |
 
 ---
 
-## 4. Data models
+## 4. Модели данных
 
-`CovenantSpec` (`domain/covenant.py:112`) is the contract. Its invariants (`validate_execution_scope`):
+`CovenantSpec` (`domain/covenant.py:112`) — это контракт. Его инварианты (`validate_execution_scope`):
+
+*Инвариант* — условие, которое обязано выполняться всегда; при нарушении объект не создаётся.
 
 ```text
 scope_mode == "group"  ⟹  len(borrower_ids) ≥ 2
 group_by               ⊆  GROUP_BY_FIELDS
-date_field             ∈  DATE_FIELDS  (currently only transaction_date)
+date_field             ∈  DATE_FIELDS  (сейчас только transaction_date)
 effective_from ≤ effective_to
-status == "compiled"   ⟹  condition.threshold is not None
-status == "compiled"   ∧ metric ∈ {sum,max,min,avg} ⟹ metric.field is not None
+status == "compiled"   ⟹  condition.threshold не None
+status == "compiled"   ∧ metric ∈ {sum,max,min,avg} ⟹ metric.field не None
 ```
 
-`MetricSpec` is recursive (`numerator`/`denominator` for ratios) with a validator forbidding nested
-metrics outside ratios and forbidding a direct `field` on a ratio.
+`MetricSpec` рекурсивна (`numerator`/`denominator` для отношений), с валидатором, который запрещает
+вложенные метрики вне отношений и запрещает прямое поле `field` у отношения.
 
-The **closed field catalog** (`domain/transaction_fields.py`) is the root of the safety story:
+**Закрытый каталог полей** (`domain/transaction_fields.py`) — корень всей истории с безопасностью:
 
 ```python
 PHYSICAL_TRANSACTION_FIELDS = {transaction_id, borrower_id, account_id, transaction_date,
@@ -227,119 +232,120 @@ DERIVED_TRANSACTION_FIELD_SQL = {"weekday": "EXTRACT(ISODOW FROM transaction_dat
 FILTER_FIELDS = PHYSICAL ∪ DERIVED
 ```
 
-`CovenantResult` carries `status ∈ {success, partial, failed}` and an optional `FailureStage`
-(`COMPILATION`, `QUERY`, `CALCULATION`, `EVIDENCE`, `TEMPORAL`, `VERIFICATION`) — the mechanism that
-makes partial credit possible.
+`CovenantResult` несёт `status ∈ {success, partial, failed}` и опциональную `FailureStage`
+(`COMPILATION`, `QUERY`, `CALCULATION`, `EVIDENCE`, `TEMPORAL`, `VERIFICATION`) — механизм, который
+делает возможным частичный балл.
 
 ---
 
-## 5. LLM boundary
+## 5. Граница LLM
 
-| Call site | Model | Input | Can it see numbers? |
+| Место вызова | Модель | Вход | Видит ли числа? |
 | --- | --- | --- | --- |
-| `CovenantCompiler.compile` | DeepSeek | clause + retrieved doc context + JSON schema | No — only the semantic catalog |
-| `LangChainCompilerRepairer.repair` | DeepSeek | clause + context + validation errors + prior draft | No |
+| `CovenantCompiler.compile` | DeepSeek | пункт + найденный контекст документа + JSON-схема | Нет — только семантический каталог |
+| `LangChainCompilerRepairer.repair` | DeepSeek | пункт + контекст + ошибки валидации + прежний черновик | Нет |
 
-That is the complete list for `codex-1`. **Two call sites, both in preprocessing, neither with access
-to transaction data.** The evaluation path contains no model invocation of any kind.
+Это полный список для `codex-1`. **Два места вызова, оба в предобработке, ни одно не имеет доступа к
+данным транзакций.** Путь оценки не содержит вызова модели вообще.
 
-Injected facts always override model output:
+Внедрённые факты всегда перекрывают вывод модели:
 
 ```text
-covenant_id, covenant_group_id  ← resolve_covenant_identity (deterministic)
-raw_text                        ← the detected clause, not the model's paraphrase
-borrower_ids                    ← intersected with the resolved candidate scope
-source                          ← the candidate's SourceRef
-confidence                      ← min(model confidence, candidate confidence)
+covenant_id, covenant_group_id  ← resolve_covenant_identity (детерминированно)
+raw_text                        ← обнаруженный пункт, а не пересказ модели
+borrower_ids                    ← пересечено с разрешённой областью кандидата
+source                          ← SourceRef кандидата
+confidence                      ← min(уверенность модели, уверенность кандидата)
 ```
 
 ---
 
-## 6. Deterministic calculation
+## 6. Детерминированный расчёт
 
-Every metric is one SQL statement against `transactions` with a shared WHERE clause:
+Каждая метрика — один SQL-запрос к `transactions` с общим условием WHERE:
 
-| Metric | SQL |
+| Метрика | SQL |
 | --- | --- |
-| `sum` | `SELECT SUM(amount) …` → `0.000000` when NULL |
-| `count` | `SELECT COUNT(field or *) …` |
-| `max` / `min` | `SELECT MAX(field) …` → `None` on empty set |
-| `avg` | `SELECT SUM(f), COUNT(f) …` then `total / Decimal(count)` |
-| `ratio` | denominator aggregate, then numerator aggregate (or worst group), `Decimal / Decimal` |
-| `existence` | inherits `CountEvaluator` |
-| `frequency` | `MAX(bucket_count)` over `GROUP BY CAST(date AS DATE)` — the worst daily bucket |
+| `sum` | `SELECT SUM(amount) …` → `0.000000` при NULL |
+| `count` | `SELECT COUNT(поле или *) …` |
+| `max` / `min` | `SELECT MAX(поле) …` → `None` на пустом наборе |
+| `avg` | `SELECT SUM(f), COUNT(f) …`, затем `total / Decimal(count)` |
+| `ratio` | агрегат знаменателя, затем агрегат числителя (или худшая группа), `Decimal / Decimal` |
+| `existence` | наследует `CountEvaluator` |
+| `frequency` | `MAX(bucket_count)` по `GROUP BY CAST(date AS DATE)` — худшая суточная корзина |
 
-`avg` is computed as `SUM/COUNT` in `Decimal` rather than SQL `AVG` to avoid float drift. This is a
-small, deliberate, correct decision.
+`avg` считается как `SUM/COUNT` в типе `Decimal`, а не через SQL `AVG`, чтобы избежать погрешности
+чисел с плавающей точкой. Небольшое, осознанное и правильное решение.
 
-The window intersection in `build_where_clause` is half-open `[start, end)` throughout, with the
-covenant's own effective period intersected on top — so a single version cannot consume transactions
-from outside its own validity.
+Пересечение окон в `build_where_clause` везде полуоткрытое `[начало, конец)`, поверх него
+пересекается собственный период действия ковенанта — так что одна версия не может захватить
+транзакции за пределами своего срока действия.
 
----
-
-## 7. Validation
-
-Four independent layers:
-
-1. **Schema** — Pydantic with `extra="forbid"` on every model.
-2. **Structural invariants** — `CovenantSpec.validate_execution_scope`, `MetricSpec.validate_metric_shape`.
-3. **Semantic cross-checks** — `validate_compiled_spec` re-reads the clause text and requires:
-   - a currency in the clause ⟹ `condition.currency` set **and** a matching `currency=` filter;
-   - "outgoing"/"исходящ" in the clause ⟹ `direction=outgoing` filter;
-   - "incoming"/"входящ"/"пополн" ⟹ `direction=incoming` filter;
-   - borrower IDs ⊆ resolved scope, and scope non-empty.
-4. **Post-execution** — `ResultVerifier.verify_pair` and `EvidenceValidator`.
-
-Layer 3 is the most interesting idea in the repository: a **deterministic reader that checks the
-model's output against the source text using rules the model cannot see**. It is narrow — three
-regex families — but it is the right shape.
+*Полуоткрытый интервал* — начало включается, конец нет. Это устраняет классическую ошибку двойного
+счёта на границе периодов.
 
 ---
 
-## 8. Strong parts
+## 7. Валидация
 
-- **The LLM boundary is real and enforced by construction,** not by convention. The repairer's
-  input set makes result-tuning structurally impossible.
-- **Closed field catalog + bound parameters.** No path exists from model text to SQL identifiers or
-  literals. LIKE patterns escape `\`, `%`, `_`.
-- **Fault isolation is genuine.** `EvaluationService` catches `duckdb.Error` separately from generic
-  exceptions and maps each to the right `FailureStage`; every pair still produces a record.
-- **Evidence validation is a real second opinion.** `EvidenceValidator` re-derives the expected
-  transaction independently and rejects mismatches, rather than trusting the selector.
-- **Deterministic identity.** Covenant IDs are either the explicit contract code or a hash of the
-  executable semantics — never model-generated.
-- **Provenance is designed in.** `Calculation` stores the SQL, the parameter summary, and the input
-  row count, so a number can be re-derived without any model.
-- **Idempotent ingestion** via content SHA-256.
-- **Temporal segmentation refuses rather than guesses.** Splitting a SUM across a version change is
-  explicitly rejected as semantically meaningless; only `max`/`min` are segmented. Choosing to
-  *refuse* is the right call and is rare in hackathon code.
-- **Half-open intervals used consistently.** `[start, end)` everywhere avoids the classic
-  double-counting boundary bug.
+Четыре независимых слоя:
 
-## 9. Known weaknesses
+1. **Схема** — Pydantic с `extra="forbid"` на каждой модели (запрещает неизвестные поля).
+2. **Структурные инварианты** — `CovenantSpec.validate_execution_scope`,
+   `MetricSpec.validate_metric_shape`.
+3. **Смысловые перекрёстные проверки** — `validate_compiled_spec` перечитывает текст пункта и требует:
+   - валюта есть в тексте ⟹ задано `condition.currency` **и** есть фильтр `currency=`;
+   - «outgoing»/«исходящ» в тексте ⟹ есть фильтр `direction=outgoing`;
+   - «incoming»/«входящ»/«пополн» ⟹ есть фильтр `direction=incoming`;
+   - идентификаторы заёмщиков ⊆ разрешённой области, и область не пуста.
+4. **После исполнения** — `ResultVerifier.verify_pair` и `EvidenceValidator`.
 
-Detailed in [07_FINDINGS.md](07_FINDINGS.md); summarised here.
+Слой 3 — самая интересная идея в репозитории: **детерминированный читатель, который проверяет вывод
+модели по исходному тексту правилами, которых модель не видит**. Он узок — три семейства регулярок,
+— но форма правильная.
 
-| Weakness | Impact |
+## 8. Сильные стороны
+
+- **Граница LLM реальна и обеспечена конструкцией**, а не договорённостью. Набор входов починщика
+  делает подгонку под результат структурно невозможной.
+- **Закрытый каталог полей + связанные параметры.** Нет пути от текста модели к идентификаторам или
+  литералам SQL. Шаблоны LIKE экранируют `\`, `%`, `_`.
+- **Изоляция сбоев настоящая.** `EvaluationService` ловит `duckdb.Error` отдельно от прочих исключений
+  и сопоставляет каждое со своей `FailureStage`; каждая пара всё равно даёт запись.
+- **Валидация доказательства — это настоящее второе мнение.** `EvidenceValidator` независимо
+  перевыводит ожидаемую транзакцию и отвергает несовпадение, вместо того чтобы доверять селектору.
+- **Детерминированная идентичность.** Идентификаторы ковенантов — это либо явный код договора, либо
+  хеш исполняемой семантики, но никогда не генерация модели.
+- **Происхождение спроектировано изначально.** `Calculation` хранит SQL, сводку параметров и число
+  входных строк, поэтому число можно перевывести без всякой модели.
+- **Идемпотентная загрузка** через SHA-256 содержимого.
+- **Темпоральная сегментация отказывается, а не гадает.** Разбиение SUM через смену версии явно
+  отвергается как бессмысленное; сегментируются только `max`/`min`. Выбор *отказаться* — правильный и
+  редкий для хакатонного кода.
+- **Полуоткрытые интервалы применяются последовательно.**
+
+## 9. Известные слабости
+
+Подробно — в [07_FINDINGS.md](07_FINDINGS.md); здесь сводка.
+
+| Слабость | Последствие |
 | --- | --- |
-| **Completeness verification is tautological** — `expected_pairs` is built from the results themselves (`evaluate.py:74`), so `missing_result` can never fire | The one check protecting C1 is inert |
-| **Pair verification is circular** — recomputes `compare()` from the same number and threshold that produced the verdict | Catches evaluator bugs only; zero signal on compilation errors |
-| **Detection is regex-only, EN/RU only** | Qualitative English prohibitions without a digit are dropped; Kazakh is unhandled |
-| **Explicit-code dedup is lossy** — keeps only the longest clause per `COV-…` code | Two distinct rules under one code silently become one |
-| **`calculation_id` collides for group-scope covenants** | Provenance rows overwrite each other |
-| **`existence` provenance SQL ≠ executed SQL** | Recorded `COUNT(*) > 0`, executed `COUNT(*)` |
-| **Hybrid retrieval is BM25-only in practice** — `HybridRetriever()` is constructed with no embedder at `preprocess.py:163` | Compiler context quality below design intent |
-| **`MaxEvaluator.select_evidence` bypasses evidence mode** | Selector/validator can disagree |
-| **Pages routed `failed` vanish without a record** | Silent recall loss |
-| **`_has_overlap` early-breaks on an open-ended version** | Overlapping versions can pass undetected |
-| **Optional extras are not in CI** | OCR and semantic paths are never exercised |
+| **Проверка полноты тавтологична** — `expected_pairs` строится из самих результатов (`evaluate.py:74`), поэтому `missing_result` не может сработать никогда | Единственная проверка, защищающая критерий C1, недействующая |
+| **Проверка пары замкнута на себя** — заново вычисляет `compare()` из того же числа и порога, которые породили вердикт | Ловит только баги вычислителей; ноль сигнала об ошибках компиляции |
+| **Обнаружение только на регулярках, только EN/RU** | Качественные запреты по-английски без цифры теряются; казахский не обрабатывается |
+| **Дедупликация по явному коду теряет данные** — оставляет только самый длинный пункт на код `COV-…` | Два разных правила под одним кодом молча становятся одним |
+| **`calculation_id` конфликтует у групповых ковенантов** | Записи о происхождении перезаписывают друг друга |
+| **SQL происхождения `existence` ≠ исполненный SQL** | Записано `COUNT(*) > 0`, исполнено `COUNT(*)` |
+| **Гибридный поиск на практике только BM25** — `HybridRetriever()` создаётся без эмбеддера в `preprocess.py:163` | Качество контекста для компилятора ниже задуманного |
+| **`MaxEvaluator.select_evidence` обходит режим доказательства** | Селектор и валидатор могут разойтись |
+| **Страницы с маршрутом `failed` исчезают без записи** | Молчаливая потеря полноты |
+| **`_has_overlap` рано выходит из цикла на бессрочной версии** | Пересекающиеся версии могут пройти незамеченными |
+| **Опциональные extra не входят в CI** | Пути OCR и семантики никогда не проверяются |
 
-The pattern across these: **`codex-1`'s verification is strong where errors are loud (execution) and
-weak-to-absent where errors are silent (detection and compilation).** That inversion is the central
-architectural problem this research track addresses.
+Общий узор этих находок: **верификация в `codex-1` сильна там, где ошибки громкие (исполнение), и
+слаба или отсутствует там, где ошибки молчаливые (обнаружение и компиляция).** Эта инверсия — и есть
+центральная архитектурная проблема, которой занимается данный трек.
 
 ---
 
-Next: [05_CODEX_2_ARCHITECTURE.md](05_CODEX_2_ARCHITECTURE.md)
+Далее: [05_CODEX_2_ARCHITECTURE.md](05_CODEX_2_ARCHITECTURE.md)

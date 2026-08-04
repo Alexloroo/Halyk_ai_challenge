@@ -1,115 +1,117 @@
-# 06 — codex-1 vs codex-2
+# 06 — codex-1 против codex-2
 
-> Read [03_BRANCH_ANALYSIS.md](03_BRANCH_ANALYSIS.md) first.
-> These are not competing designs. `codex-2 = codex-1 + review layer`, with zero modification to the
-> deterministic pipeline. This comparison is therefore **"baseline"** vs **"baseline + layer"**.
+> Сначала прочитайте [03_BRANCH_ANALYSIS.md](03_BRANCH_ANALYSIS.md).
+> Это не конкурирующие проекты. `codex-2 = codex-1 + слой ревью`, при нулевых изменениях
+> детерминированного пайплайна. Поэтому сравнение здесь — это **«база»** против **«база + слой»**.
 
 ---
 
-## 1. Scope of the difference
+## 1. Объём различий
 
 | | codex-1 | codex-2 |
 | --- | --- | --- |
-| Ingestion → blocks | identical | identical |
-| Borrower resolution | identical | identical |
-| Detection | identical | identical |
-| Compilation + repair | identical | identical |
-| Registry / identity | identical | identical |
-| SQL building | identical | identical |
-| Evaluators | identical | identical |
-| Temporal resolution | identical | identical |
-| Evidence + validation | identical | identical |
-| Verifier | identical | identical |
-| Serializer | identical | identical |
-| **Review layer** | absent | **present** |
-| CLI entrypoints | `halyk-covenants` | `halyk-covenants` + `halyk-review` |
+| Загрузка → блоки | идентично | идентично |
+| Разрешение заёмщиков | идентично | идентично |
+| Обнаружение | идентично | идентично |
+| Компиляция + починка | идентично | идентично |
+| Реестр / идентичность | идентично | идентично |
+| Сборка SQL | идентично | идентично |
+| Вычислители | идентично | идентично |
+| Разрешение версий | идентично | идентично |
+| Доказательства + валидация | идентично | идентично |
+| Верификатор | идентично | идентично |
+| Сериализатор | идентично | идентично |
+| **Слой ревью** | отсутствует | **присутствует** |
+| Точки входа CLI | `halyk-covenants` | `halyk-covenants` + `halyk-review` |
 
-Lines changed in the deterministic pipeline between the two branches: **0**.
+Строк, изменённых в детерминированном пайплайне между ветками: **0**.
 
 ---
 
-## 2. Head-to-head
+## 2. Сравнение по осям
 
-| Dimension | codex-1 | codex-2 | Assessment |
+| Ось | codex-1 | codex-2 | Оценка |
 | --- | --- | --- | --- |
-| **Correctness** | Deterministic; verified only against itself | **Identical** | Tie by construction — the delta cannot change an answer |
-| **Complexity** | ~7,900 LOC, 13 packages | ~9,600 LOC, 15 packages (+22%) | codex-1 |
-| **LLM dependency** | 2 call sites (compile, repair), preprocessing only | 4 call sites (+2 review passes), now also **post-evaluation** | codex-1 |
-| **Latency** | 1–3 LLM calls per *covenant clause*, once | + 1–2 calls per *result*, every run | codex-1 |
-| **Cost** | Compilation is cacheable via SHA-256 idempotency | Review re-runs every time; cost scales with pairs × runs | codex-1 |
-| **Verification** | Comparator re-check + evidence re-derivation + (tautological) completeness | Same, plus an LLM second opinion on a full spec+rationale payload | codex-2 |
-| **Fallback** | Partial results, `FailureStage`, bounded compiler repair | Same, plus similarity-assisted second review pass | codex-2 (marginally) |
-| **Testability** | Fully deterministic; every path unit-testable offline | Review path needs stubs for both LLM and embedder; both are injected, so it is testable — but the *live* path needs an unlisted extra | codex-1 |
-| **Debugging** | LangSmith spans, `Calculation` provenance, `FailureStage` | Same, plus `review_status`, `fallback_reasons`, `similarity_scores`, persisted reviewer metadata | **codex-2** |
-| **Hackathon usefulness** | Ships and scores | Adds no score; adds runtime risk (extra dependency, extra API calls) and one genuinely useful triage artifact | **codex-1 for the run, codex-2 for the write-up** |
+| **Корректность** | Детерминирована; проверяется только сама против себя | **Идентична** | Ничья по построению — добавка не может изменить ответ |
+| **Сложность** | ~7 900 строк, 13 пакетов | ~9 600 строк, 15 пакетов (+22%) | codex-1 |
+| **Зависимость от LLM** | 2 места вызова (компиляция, починка), только предобработка | 4 места вызова (+2 прохода ревью), теперь ещё и **после оценки** | codex-1 |
+| **Задержка** | 1–3 вызова LLM на *пункт договора*, однократно | + 1–2 вызова на *результат*, при каждом прогоне | codex-1 |
+| **Стоимость** | Компиляция кешируется благодаря идемпотентности по SHA-256 | Ревью прогоняется заново каждый раз; стоимость растёт как пары × прогоны | codex-1 |
+| **Верификация** | Перепроверка оператора + перевывод доказательства + (тавтологичная) полнота | То же плюс второе мнение LLM по полному пакету «спецификация + обоснование» | codex-2 |
+| **Запасные пути** | Частичные результаты, `FailureStage`, ограниченная починка компиляции | То же плюс второй проход ревью с подсказками по схожести | codex-2 (незначительно) |
+| **Тестируемость** | Полностью детерминирована; каждый путь тестируется офлайн | Путь ревью требует заглушек для LLM и эмбеддера; оба внедряются, так что тестируется — но *живому* пути нужен неустановленный extra | codex-1 |
+| **Отладка** | Спаны LangSmith, происхождение через `Calculation`, `FailureStage` | То же плюс `review_status`, `fallback_reasons`, `similarity_scores`, сохранённые метаданные ревьюера | **codex-2** |
+| **Польза для хакатона** | Работает и приносит баллы | Баллов не добавляет; добавляет риск при запуске (лишняя зависимость, лишние вызовы API) и один по-настоящему полезный артефакт для разбора | **codex-1 для прогона, codex-2 для отчёта** |
 
-## 3. The decisive table
+## 3. Решающая таблица
 
-Because the review layer is cage-constrained and its report is a fork, not a chain:
+Поскольку слой ревью ограничен клеткой, а его отчёт — развилка, а не звено цепи:
 
-| Question | Answer |
+| Вопрос | Ответ |
 | --- | --- |
-| Can codex-2 produce a different `verdict` than codex-1? | **No** |
-| Can codex-2 produce a different `number`? | **No** |
-| Can codex-2 produce a different `evidence_transaction_id`? | **No** |
-| Can codex-2 produce a different `submission.json`? | **No** |
-| Can codex-2 tell you *which answers to distrust*? | **Yes** — this is its entire value |
-| Does anything consume that signal automatically? | **No** |
+| Может ли codex-2 выдать другой `verdict`, чем codex-1? | **Нет** |
+| Может ли выдать другой `number`? | **Нет** |
+| Может ли выдать другой `evidence_transaction_id`? | **Нет** |
+| Может ли выдать другой `submission.json`? | **Нет** |
+| Может ли codex-2 подсказать, *каким ответам не доверять*? | **Да** — в этом вся его ценность |
+| Потребляет ли этот сигнал что-либо автоматически? | **Нет** |
 
-Proof sketch: `SubmissionSerializer.serialize` takes `list[CovenantResult]`;
-`ReviewedBatchReport.authoritative_results` returns `[item.result for item in self.reviewed_results]`
-where each `item.result` is the input `CovenantResult` object, never reassigned; and
-`ReviewService._validate_decision` rejects any decision whose number, evidence or verdict differs from
-the deterministic answer. The three scored fields are pinned on every path, including the failure
-paths (`_fallback_decision` copies them verbatim from `case.answer`).
+Набросок доказательства: `SubmissionSerializer.serialize` принимает `list[CovenantResult]`;
+`ReviewedBatchReport.authoritative_results` возвращает `[item.result for item in self.reviewed_results]`,
+где каждый `item.result` — это входной объект `CovenantResult`, которому нигде не присваивается новое
+значение; а `ReviewService._validate_decision` отвергает любое решение, у которого число,
+доказательство или вердикт отличаются от детерминированного ответа. Все три оцениваемых поля
+зафиксированы на каждом пути, включая пути сбоя (`_fallback_decision` копирует их дословно из
+`case.answer`).
 
-## 4. Cost model
+## 4. Модель затрат
 
-Let `C` = compiled covenants, `P` = (borrower, covenant) pairs, `R` = number of evaluation runs.
+Пусть `C` — число скомпилированных ковенантов, `P` — число пар (заёмщик, ковенант), `R` — число
+прогонов оценки.
 
 | | codex-1 | codex-2 |
 | --- | --- | --- |
-| LLM calls, preprocessing | `C … 3C` (compile + ≤2 repairs), **once** (SHA-256 idempotent) | same |
-| LLM calls, evaluation | `0` | `P … 2P` **per run** |
-| Extra model downloads | none | `intfloat/multilingual-e5-small` (~120 MB) on first fallback |
-| Extra install surface | none | `semantic` extra (sentence-transformers + faiss-cpu) |
-| Failure blast radius | a bad compile costs one covenant | a missing extra costs the whole review run (not the submission) |
+| Вызовы LLM, предобработка | `C … 3C` (компиляция + до 2 починок), **однократно** (идемпотентно по SHA-256) | так же |
+| Вызовы LLM, оценка | `0` | `P … 2P` **за каждый прогон** |
+| Дополнительные загрузки моделей | нет | `intfloat/multilingual-e5-small` (~120 МБ) при первом запасном пути |
+| Дополнительная поверхность установки | нет | extra `semantic` (sentence-transformers + faiss-cpu) |
+| Радиус поражения при сбое | плохая компиляция стоит одного ковенанта | отсутствующий extra стоит всего прогона ревью (но не итогового ответа) |
 
-For a run with 40 pairs and 3 iterations, the review layer costs ~120–240 additional LLM calls that
-cannot change the submitted answer by even one digit.
+Для прогона с 40 парами и 3 итерациями слой ревью обходится в дополнительные ~120–240 вызовов LLM,
+которые не могут изменить выдаваемый ответ ни на одну цифру.
 
-## 5. What each branch is actually good at
+## 5. В чём каждая ветка на самом деле хороша
 
-**codex-1 is the product.** It is a coherent, defensible, deterministic system with a real LLM
-boundary and real fault isolation. Its weaknesses are all in *verification of the interpretation
-stage* — the checks it has are strong but pointed at execution, where errors are already loud.
+**`codex-1` — это продукт.** Цельная, обоснованная, детерминированная система с настоящей границей
+LLM и настоящей изоляцией сбоев. Все её слабости лежат в *верификации этапа интерпретации* — имеющиеся
+проверки сильны, но направлены на исполнение, где ошибки и так громкие.
 
-**codex-2 is the diagnostic.** It correctly identifies that the interpretation stage is where trust
-is missing, assembles exactly the right payload to interrogate it (raw clause + compiled spec +
-deterministic rationale + verification issues + compiler confidence), and then writes the answer to a
-side file.
+**`codex-2` — это диагностика.** Он верно определяет, что доверия не хватает именно этапу
+интерпретации, собирает ровно правильный пакет данных для его допроса (исходный пункт +
+скомпилированная спецификация + детерминированное обоснование + замечания верификации + уверенность
+компилятора) — и записывает ответ в отдельный файл.
 
-The two are complementary in intent and disconnected in implementation. That gap is the opportunity.
+Они дополняют друг друга по замыслу и разъединены в реализации. Этот разрыв и есть возможность.
 
-## 6. Recommendation
+## 6. Рекомендация
 
 ```text
-Base for all further work:   codex-2   (strict superset; nothing is lost)
+База для дальнейшей работы:   codex-2   (строгое надмножество; ничего не теряется)
 
-For a submission run today:  run codex-1's pipeline path only
-                             (halyk-covenants preprocess → evaluate-all → serialize-submission)
-                             and skip halyk-review — it costs calls and changes nothing
+Для прогона ответа сегодня:   использовать только путь codex-1
+                              (halyk-covenants preprocess → evaluate-all → serialize-submission)
+                              и пропустить halyk-review — он стоит вызовов и ничего не меняет
 
-For architecture-v3:         keep the reviewer's inputs and its cage
-                             move it from "review the answer" to "review the spec"
-                             wire rejection into bounded re-compilation
-                             drop the similarity corpus until it is shown to pay for itself
+Для architecture-v3:          сохранить входные данные ревьюера и его клетку
+                              перевести его с «проверки ответа» на «проверку спецификации»
+                              завести отклонение в ограниченную перекомпиляцию
+                              убрать корпус схожести, пока он не докажет свою окупаемость
 ```
 
-The single highest-leverage change available is not adding anything new — it is **connecting the
-signal codex-2 already computes to the pipeline codex-1 already has.** See
+Самое действенное из доступных изменений — не добавить что-то новое, а **соединить сигнал, который
+`codex-2` уже вычисляет, с пайплайном, который `codex-1` уже имеет.** См.
 [09_ARCHITECTURE_V3.md](09_ARCHITECTURE_V3.md).
 
 ---
 
-Next: [07_FINDINGS.md](07_FINDINGS.md)
+Далее: [07_FINDINGS.md](07_FINDINGS.md)

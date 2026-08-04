@@ -1,43 +1,43 @@
-# 05 — codex-2 Architecture (delta over codex-1)
+# 05 — Архитектура codex-2 (добавка поверх codex-1)
 
-> `codex-2` = `codex-1` + a review layer.
-> This document covers **only the delta**. For the shared baseline see
+> `codex-2` = `codex-1` + слой ревью.
+> Этот документ описывает **только добавку**. Общую основу см. в
 > [04_CODEX_1_ARCHITECTURE.md](04_CODEX_1_ARCHITECTURE.md).
 
-Related: [03_BRANCH_ANALYSIS.md](03_BRANCH_ANALYSIS.md) · [06_CODEX_1_VS_CODEX_2.md](06_CODEX_1_VS_CODEX_2.md) · [07_FINDINGS.md](07_FINDINGS.md)
+Связанные документы: [03_BRANCH_ANALYSIS.md](03_BRANCH_ANALYSIS.md) · [06_CODEX_1_VS_CODEX_2.md](06_CODEX_1_VS_CODEX_2.md) · [07_FINDINGS.md](07_FINDINGS.md)
 
 ---
 
-## 1. What was added
+## 1. Что добавлено
 
 ```text
-codex-1  (the whole deterministic pipeline, unchanged)
+codex-1  (весь детерминированный пайплайн, без изменений)
    +
-codex-2  review/  ── 8 modules, 641 lines
-         pipeline/review.py ── 238 lines
-         review_cli.py      ── 163 lines
-         llm/prompts/review.py ── 57 lines
-         7 test modules     ── 814 lines
-         3 docs             ── 1,191 lines
+codex-2  review/  ── 8 модулей, 641 строка
+         pipeline/review.py ── 238 строк
+         review_cli.py      ── 163 строки
+         llm/prompts/review.py ── 57 строк
+         7 тестовых модулей ── 814 строк
+         3 документа        ── 1 191 строка
 ```
 
-Modifications to pre-existing files total **19 lines across 4 files**, all of it export wiring
-(`pyproject.toml` script entry, two `__init__.py` re-exports, CI trigger branches). The deterministic
-pipeline was not touched.
+Изменения в уже существующих файлах — **19 строк в 4 файлах**, и всё это обвязка экспорта (команда в
+`pyproject.toml`, два реэкспорта в `__init__.py`, ветки-триггеры CI). Детерминированный пайплайн не
+тронут.
 
-## 2. Why it was added
+## 2. Зачем это добавлено
 
-From `docs/CODEX_2_REVIEW_WORKFLOW.md` and the design spec
-`docs/superpowers/specs/2026-08-03-llm-review-similarity-fallback-design.md`: the goal is a
-**quality gate** — a second opinion that flags answers a human or a repair loop should look at,
-without letting the model touch the arithmetic.
+Из `docs/CODEX_2_REVIEW_WORKFLOW.md` и спецификации
+`docs/superpowers/specs/2026-08-03-llm-review-similarity-fallback-design.md`: цель — **контроль
+качества**, второе мнение, которое помечает ответы, требующие внимания человека или цикла починки, не
+позволяя при этом модели трогать арифметику.
 
-The stated non-goal is equally explicit:
+Заявленная не-цель сформулирована столь же явно:
 
-> `reviewed-results.json` is a quality/debug artifact. The official submission serializer still
-> consumes authoritative deterministic result fields.
+> `reviewed-results.json` — артефакт качества и отладки. Официальный сериализатор по-прежнему
+> потребляет авторитетные детерминированные поля результата.
 
-## 3. Where it sits in the pipeline
+## 3. Где это стоит в пайплайне
 
 ```mermaid
 flowchart LR
@@ -46,22 +46,22 @@ flowchart LR
     BR --> SER[SubmissionSerializer]
     SER --> SUB[submission.json]
 
-    subgraph RP2["ReviewPipeline · per result"]
+    subgraph RP2["ReviewPipeline · по каждому результату"]
         direction TB
-        L1[load Calculation by<br/>calculation_id + borrower_id] --> L2[resolve CovenantSpec]
-        L2 --> L3[build deterministic rationale]
-        L3 --> L4[question: organizer file or generated]
+        L1[загрузить Calculation по<br/>calculation_id + borrower_id] --> L2[разрешить CovenantSpec]
+        L2 --> L3[собрать детерминированное обоснование]
+        L3 --> L4[вопрос: файл организатора или сгенерированный]
         L4 --> RS
     end
     RP --> RP2
     subgraph RS["ReviewService"]
         direction TB
-        P1[first LLM pass] --> VD1{validate against<br/>deterministic answer}
-        VD1 -->|illegal| INV[invalid_reviewer_output]
-        VD1 -->|ok| FB{fallback triggers?}
-        FB -->|no| ACC[accepted]
-        FB -->|yes| SIM[cosine top-k over corpus]
-        SIM --> P2[second LLM pass] --> VD2{validate}
+        P1[первый проход LLM] --> VD1{валидация против<br/>детерминированного ответа}
+        VD1 -->|недопустимо| INV[invalid_reviewer_output]
+        VD1 -->|ок| FB{сработали триггеры?}
+        FB -->|нет| ACC[accepted]
+        FB -->|да| SIM[косинус top-k по корпусу]
+        SIM --> P2[второй проход LLM] --> VD2{валидация}
         VD2 --> ACC2[accepted_after_similarity / low_confidence]
     end
     RS --> RR[ReviewedBatchReport]
@@ -73,160 +73,171 @@ flowchart LR
     style RD fill:#f0f0f0,stroke:#999,stroke-dasharray: 4 4
 ```
 
-The branch from `BatchEvaluationReport` is a **fork, not a chain**. The serializer path and the review
-path both read the same report; the review path never rejoins.
+Ответвление от `BatchEvaluationReport` — это **развилка, а не звено цепи**. Путь сериализатора и путь
+ревью читают один и тот же отчёт; путь ревью никогда не возвращается обратно.
 
-## 4. How it actually works
+## 4. Как это работает на самом деле
 
-### 4.1 Case construction (`pipeline/review.py:68`)
+### 4.1 Сборка случая (`pipeline/review.py:68`)
 
-Per `CovenantResult`:
+По каждому `CovenantResult`:
 
 1. `_load_calculation` — `SELECT … WHERE calculation_id = ? AND borrower_id = ?`.
-2. `_resolve_spec` — three-tier: the spec whose `covenant_id` matches the calculation → the sole
-   candidate → the version active at the evaluation date → newest, with an explicit issue string
-   recorded when ambiguity was resolved by fallback.
-3. `build_rationale` — a **deterministic** English summary: metric, window, effective range,
-   calculated value and matched row count, the rule, the verdict, the evidence, verification issues.
-4. Question — the organizer-supplied one for `(borrower, covenant)`, else a generated
+2. `_resolve_spec` — три уровня: спецификация, чей `covenant_id` совпал с расчётом → единственный
+   кандидат → версия, действующая на дату оценки → самая новая, с явной записью проблемы, когда
+   неоднозначность разрешили запасным путём.
+3. `build_rationale` — **детерминированная** сводка: метрика, окно, период действия, вычисленное
+   значение и число совпавших строк, правило, вердикт, доказательство, замечания верификации.
+4. Вопрос — заданный организатором для `(заёмщик, ковенант)`, иначе сгенерированный
    `"Does borrower {id} comply with the following covenant as of {date}? {raw_text}"`.
 
-### 4.2 Review (`review/service.py:48`)
+### 4.2 Ревью (`review/service.py:48`)
 
 ```text
-first_pass  = reviewer.review(case, similar_cases=[])
-validate(first_pass)                       ← raises InvalidReviewerDecision on any violation
-reasons = fallback_reasons(case, first_pass)
-if not reasons:  → "accepted"
-else:
-    matches = similarity.search(case.question, k=5, min_sim=0.55)
-    second  = reviewer.review(case, similar_cases=matches)
-    validate(second)
-    → "accepted_after_similarity" if second.accepted and confidence ≥ 0.70
-    → "low_confidence" otherwise
+первый_проход = reviewer.review(случай, similar_cases=[])
+validate(первый_проход)                    ← бросает InvalidReviewerDecision при любом нарушении
+причины = fallback_reasons(случай, первый_проход)
+если причин нет:  → "accepted"
+иначе:
+    совпадения = similarity.search(случай.question, k=5, min_sim=0.55)
+    второй     = reviewer.review(случай, similar_cases=совпадения)
+    validate(второй)
+    → "accepted_after_similarity", если второй.accepted и уверенность ≥ 0.70
+    → "low_confidence" в остальных случаях
 ```
 
-Fallback triggers (any one suffices):
+Триггеры запасного пути (достаточно любого одного):
 
-| Trigger | Source |
+| Триггер | Источник |
 | --- | --- |
-| `review_confidence` | first-pass confidence < 0.70 |
-| `review_rejected` | first pass set `accepted=false` |
-| `verification_issue` | `ResultVerifier` flagged this pair |
+| `review_confidence` | уверенность первого прохода < 0.70 |
+| `review_rejected` | первый проход выставил `accepted=false` |
+| `verification_issue` | `ResultVerifier` пометил эту пару |
 | `result_status` | `CovenantResult.status != "success"` |
 | `compiler_confidence` | `CovenantSpec.confidence` < 0.70 |
 
-### 4.3 The reviewer's cage (`review/service.py:168`)
+### 4.3 Клетка ревьюера (`review/service.py:168`)
 
-`_validate_decision` rejects the decision outright if:
+`_validate_decision` полностью отвергает решение, если:
 
 ```text
-decision.number ≠ answer.number                                → "changed deterministic number"
-decision.evidence_tx ∉ {None, answer.evidence_tx}              → "injected foreign evidence"
-decision.verdict ≠ compare(answer.number, comparator, threshold) → "contradicts comparator"
+decision.number ≠ answer.number                                  → «изменил детерминированное число»
+decision.evidence_tx ∉ {None, answer.evidence_tx}                → «подставил чужое доказательство»
+decision.verdict ≠ compare(answer.number, оператор, порог)       → «противоречит оператору сравнения»
 ```
 
-An `InvalidReviewerDecision` produces `review_status="invalid_reviewer_output"` and the deterministic
-result is retained verbatim.
+`InvalidReviewerDecision` даёт `review_status="invalid_reviewer_output"`, и детерминированный
+результат сохраняется дословно.
 
-**Consequence:** the reviewer's only free variables are `accepted` (bool), `confidence` (0–1),
-`issues` (list) and `rationale` (prose). Every field that appears in the submission is pinned.
+**Следствие:** единственные свободные переменные ревьюера — `accepted` (да/нет), `confidence` (0–1),
+`issues` (список) и `rationale` (текст). Каждое поле, попадающее в итоговый ответ, зафиксировано.
 
-### 4.4 Similarity (`review/similarity.py`)
+### 4.4 Схожесть (`review/similarity.py`)
 
-In-process numpy cosine over a corpus of curated `SimilarReviewCase` records. Corpus vectors are
-embedded lazily and cached per `case_id`; the query is embedded per call. Matches below
-`minimum_similarity` are dropped; the rest are sorted by `(-similarity, case_id)` and truncated to
-top-k. Default embedder is `intfloat/multilingual-e5-small` via SentenceTransformers.
+Косинусная схожесть на numpy внутри процесса по корпусу отобранных записей `SimilarReviewCase`.
+Векторы корпуса вычисляются лениво и кешируются по `case_id`; вектор запроса вычисляется при каждом
+вызове. Совпадения ниже `minimum_similarity` отбрасываются, остальные сортируются по
+`(-схожесть, case_id)` и обрезаются до top-k. Эмбеддер по умолчанию — `intfloat/multilingual-e5-small`
+через SentenceTransformers.
 
-The prompt (`llm/prompts/review.py`) instructs the model that similar cases are *reasoning-pattern
-references only* and forbids copying IDs, thresholds, numbers, verdicts or transaction IDs from them.
-This instruction is belt; `_validate_decision` is braces.
+*Эмбеддинг* — перевод текста в вектор чисел, чтобы близкие по смыслу тексты давали близкие векторы.
+*Косинусная схожесть* — мера близости двух векторов от −1 до 1.
 
-### 4.5 Persistence
+Промпт (`llm/prompts/review.py`) сообщает модели, что похожие случаи — *только образцы способа
+рассуждения*, и запрещает копировать из них идентификаторы, пороги, числа, вердикты и транзакции. Эта
+инструкция — ремень; `_validate_decision` — подтяжки.
 
-`review_decisions` table, keyed `(review_run_id, borrower_id, covenant_id)`, storing status,
-reviewer model, prompt version and the full JSON decision. `ALTER TABLE … ADD COLUMN IF NOT EXISTS`
-is used for forward migration of the two metadata columns.
+### 4.5 Сохранение
 
-`covenant_results` is not modified — stated explicitly in the workflow doc and true in the code.
+Таблица `review_decisions` с ключом `(review_run_id, borrower_id, covenant_id)`, хранит статус, модель
+ревьюера, версию промпта и полное решение в JSON. Для добавления двух колонок метаданных используется
+`ALTER TABLE … ADD COLUMN IF NOT EXISTS`.
+
+`covenant_results` не изменяется — это явно заявлено в документации и соответствует коду.
 
 ---
 
-## 5. Assessment of the delta
+## 5. Оценка добавки
 
-### What it genuinely adds
+### Что она реально даёт
 
-- **A triage signal.** `review_status` + `fallback_reasons` + `similarity_scores` give a defensible
-  ranking of which answers to inspect first, combining LLM judgement with three deterministic
-  signals (verification issues, result status, compiler confidence).
-- **Reviewer metadata for reproducibility.** Model name and prompt version are persisted per decision.
-- **A clean safety proof.** The cage in `_validate_decision` is the correct pattern, correctly
-  implemented, and it is tested (`tests/unit/test_review_service.py`, `test_review_similarity.py`).
-- **The reviewer sees the right inputs.** The prompt payload includes `covenant.raw_text` **and** the
-  compiled spec. A reviewer with those two things can, in principle, notice that the spec
-  misrepresents the clause — which is exactly the highest-value error class in the system.
+- **Сигнал для сортировки по приоритету.** `review_status` + `fallback_reasons` +
+  `similarity_scores` дают обоснованное ранжирование, какие ответы проверять первыми, объединяя
+  суждение LLM с тремя детерминированными сигналами (замечания верификации, статус результата,
+  уверенность компилятора).
+- **Метаданные ревьюера для воспроизводимости.** Имя модели и версия промпта сохраняются с каждым
+  решением.
+- **Чистое доказательство безопасности.** Клетка в `_validate_decision` — правильный паттерн,
+  корректно реализованный и покрытый тестами (`tests/unit/test_review_service.py`,
+  `test_review_similarity.py`).
+- **Ревьюер видит нужные входные данные.** В промпт попадают `covenant.raw_text` **и**
+  скомпилированная спецификация. Ревьюер, имеющий и то и другое, в принципе способен заметить, что
+  спецификация искажает пункт договора, — а это ровно самый ценный класс ошибок в системе.
 
-### The central problem
+### Центральная проблема
 
-**The review layer is provably incapable of changing any scored output, and its most valuable signal
-is discarded.**
+**Слой ревью доказуемо не способен изменить ни один оцениваемый вывод, а его самый ценный сигнал
+выбрасывается.**
 
-`ReviewedBatchReport.authoritative_results` (`pipeline/review.py:33`) is literally:
+`ReviewedBatchReport.authoritative_results` (`pipeline/review.py:33`) — это буквально:
 
 ```python
 return [item.result for item in self.reviewed_results]
 ```
 
-— the untouched inputs. Combined with `_validate_decision` pinning verdict, number and evidence, and
-with the serializer reading `CovenantResult` directly, the following holds:
+— нетронутые входные данные. Вместе с `_validate_decision`, фиксирующим вердикт, число и
+доказательство, и с сериализатором, читающим `CovenantResult` напрямую, верно следующее:
 
-> For any covenant, the submitted `(verdict, number, evidence)` is bit-identical whether the review
-> layer runs or not.
+> Для любого ковенанта выдаваемая тройка `(вердикт, число, доказательство)` побитово идентична вне
+> зависимости от того, запускался слой ревью или нет.
 
-So the cost/benefit is:
+Соотношение затрат и выгоды:
 
 | | |
 | --- | --- |
-| **Cost** | 1–2 DeepSeek calls per covenant, plus a SentenceTransformer model load, plus a corpus |
-| **Effect on score** | **exactly zero**, by construction |
-| **Effect on operator insight** | real, but only if a human reads `reviewed-results.json` and acts |
+| **Затраты** | 1–2 вызова DeepSeek на ковенант, плюс загрузка модели SentenceTransformer, плюс корпус |
+| **Влияние на балл** | **ровно ноль**, по построению |
+| **Влияние на понимание оператором** | реальное, но только если человек прочитает `reviewed-results.json` и что-то сделает |
 
-This is not a bug — the design documents state the intent plainly and the constraint is deliberate.
-It is a **prioritisation** finding: the layer is aimed at a real problem (is the compiled spec
-faithful to the clause?) and stops one step short of doing anything about it. The signal is
-generated, persisted, and then dropped on the floor.
+Это не баг — проектные документы прямо заявляют такое намерение, и ограничение сознательное. Это
+находка о **приоритетах**: слой нацелен на реальную проблему (соответствует ли скомпилированная
+спецификация тексту пункта?) и останавливается за шаг до того, чтобы с ней что-то сделать. Сигнал
+вычисляется, сохраняется и выбрасывается.
 
-[09_ARCHITECTURE_V3.md](09_ARCHITECTURE_V3.md) keeps the reviewer's inputs and cage, and closes the
-loop: a rejected review becomes a bounded **re-compilation** trigger, not just a log line.
+В [09_ARCHITECTURE_V3.md](09_ARCHITECTURE_V3.md) сохранены входные данные ревьюера и его клетка, но
+цикл замкнут: отклонённое ревью становится триггером ограниченной **перекомпиляции**, а не просто
+строчкой в логе.
 
-### New failure modes introduced by the delta
+### Новые режимы отказа, привнесённые добавкой
 
-| # | Failure mode | Mechanism | Severity |
+| № | Режим отказа | Механизм | Серьёзность |
 | --- | --- | --- | --- |
-| D1 | **Asymmetric embedding text** | Query side always uses `case.question`; corpus side uses `embedding_text or question`. The generated default question embeds the borrower ID and an ISO date, so cosine is computed between two different text distributions. | Medium |
-| D2 | **Silent context degradation for group covenants** | `_load_calculation` filters on `calculation_id AND borrower_id`, but `calculation_id` collides across borrowers of a group-scope covenant (see [07_FINDINGS.md](07_FINDINGS.md) F-03), so all but one borrower get `calculation=None` and a weaker rationale. | Medium |
-| D3 | **Ambiguous spec resolution is silent-ish** | When several versions match, `_resolve_spec` picks the newest and appends an issue string — which then becomes a `verification_issue` fallback trigger, inflating fallback rate and LLM cost. | Low |
-| D4 | **Hard dependency on an uninstalled extra** | `SentenceTransformerEmbeddingProvider` needs the `semantic` extra, which CI does not install and the default `pip install -e '.[dev]'` does not provide. The review CLI fails at embedding time, only on the fallback path. | Medium |
-| D5 | **Undeclared `numpy`** | `review/similarity.py` imports numpy directly; it is not in `pyproject.toml` (arrives transitively via pandas/pyarrow). | Low |
-| D6 | **Confidence treated as a threshold despite being uncalibrated** | The docs correctly note LLM confidence is not a probability, then use `< 0.70` as a hard trigger. Fallback rate is therefore unpredictable and cost is unbounded in practice. | Low |
-| D7 | **Corpus poisoning risk** | The docs warn against auto-adding model answers to the corpus, but nothing in code enforces it. A wrong case in the corpus becomes a persistent reasoning-pattern example. | Low |
+| D1 | **Асимметрия текста для эмбеддинга** | Со стороны запроса всегда `case.question`; со стороны корпуса — `embedding_text or question`. Сгенерированный по умолчанию вопрос содержит идентификатор заёмщика и дату в формате ISO, поэтому косинус считается между двумя разными распределениями текста. | Средняя |
+| D2 | **Молчаливая деградация контекста для групповых ковенантов** | `_load_calculation` фильтрует по `calculation_id AND borrower_id`, но `calculation_id` конфликтует между заёмщиками группового ковенанта (см. [07_FINDINGS.md](07_FINDINGS.md), F-03), поэтому все заёмщики кроме одного получают `calculation=None` и более слабое обоснование. | Средняя |
+| D3 | **Разрешение неоднозначной спецификации почти молчаливое** | Когда подходит несколько версий, `_resolve_spec` берёт самую новую и добавляет строку-замечание — которая затем становится триггером `verification_issue`, раздувая долю запасных путей и стоимость LLM. | Низкая |
+| D4 | **Жёсткая зависимость от неустановленного extra** | `SentenceTransformerEmbeddingProvider` требует extra `semantic`, который CI не ставит и обычная установка `pip install -e '.[dev]'` не даёт. CLI ревью падает на этапе эмбеддинга, причём только на запасном пути. | Средняя |
+| D5 | **Необъявленный `numpy`** | `review/similarity.py` импортирует numpy напрямую; в `pyproject.toml` его нет (приходит транзитивно через pandas/pyarrow). | Низкая |
+| D6 | **Уверенность используется как порог, хотя она не откалибрована** | Документация верно отмечает, что уверенность LLM не вероятность, а затем использует `< 0.70` как жёсткий триггер. Доля запасных путей поэтому непредсказуема, а стоимость на практике не ограничена. | Низкая |
+| D7 | **Риск отравления корпуса** | Документация предупреждает не добавлять ответы модели в корпус автоматически, но в коде это ничем не обеспечено. Ошибочный случай в корпусе становится постоянным образцом рассуждения. | Низкая |
 
 ---
 
-## 6. Verdict on the delta
+## 6. Вердикт по добавке
 
-**Keep the ideas, rewire the output.** Specifically:
+**Идеи оставить, вывод перенаправить.** А именно:
 
-- **Keep** `_validate_decision` — it is the correct safety pattern and should survive into V3 unchanged.
-- **Keep** the deterministic rationale builder — cheap, useful, model-independent.
-- **Keep** the deterministic fallback triggers (verification issues, result status, compiler confidence).
-- **Drop** the similarity/embedding machinery for now: it adds a dependency, an asymmetry bug and a
-  corpus-curation burden, to select examples for a reviewer whose output changes nothing. Revisit only
-  if the reviewer's output becomes actionable *and* few-shot examples measurably improve it.
-- **Rewire** the reviewer from "answer reviewer" to "**spec reviewer**", and route rejection into a
-  bounded re-compilation, so the signal reaches the score.
+- **Оставить** `_validate_decision` — это правильный паттерн безопасности, он должен перейти в V3 без
+  изменений.
+- **Оставить** детерминированный сборщик обоснования — дёшево, полезно, не зависит от модели.
+- **Оставить** детерминированные триггеры запасного пути (замечания верификации, статус результата,
+  уверенность компилятора).
+- **Убрать** пока машинерию схожести и эмбеддингов: она добавляет зависимость, ошибку асимметрии и
+  нагрузку по ведению корпуса — ради подбора примеров для ревьюера, чей вывод ни на что не влияет.
+  Вернуться к ней, только если вывод ревьюера станет действующим *и* few-shot-примеры измеримо его
+  улучшат.
+- **Перенаправить** ревьюера с «проверки ответа» на «**проверку спецификации**», а отклонение
+  завести в ограниченную перекомпиляцию, чтобы сигнал доходил до балла.
 
 ---
 
-Next: [06_CODEX_1_VS_CODEX_2.md](06_CODEX_1_VS_CODEX_2.md)
+Далее: [06_CODEX_1_VS_CODEX_2.md](06_CODEX_1_VS_CODEX_2.md)
