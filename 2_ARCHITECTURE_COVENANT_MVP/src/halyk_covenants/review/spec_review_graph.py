@@ -32,7 +32,7 @@ from typing import TYPE_CHECKING, Any, Protocol, TypedDict
 from langgraph.graph import END, START, StateGraph
 
 from halyk_covenants.domain import CovenantSpec
-from halyk_covenants.observability import trace_stage
+from halyk_covenants.observability import annotate_current_trace, trace_context, trace_stage
 from halyk_covenants.review.spec_models import ContextGrade, SpecReviewDecision
 from halyk_covenants.review.spec_reviewer import SpecReviewer
 
@@ -122,16 +122,31 @@ class SpecReviewGraph:
             spec = spec.model_copy(
                 update={"spec_trust": trust, "review_confidence": decision.confidence}
             )
-            return {"spec": spec, "decision": decision, "reviews": reviews, "status": "accepted"}
+            status = "accepted"
+        else:
+            trust = "low"
+            spec = spec.model_copy(
+                update={
+                    "spec_trust": trust,
+                    "review_objection": decision.objection,
+                    "review_confidence": decision.confidence,
+                }
+            )
+            status = "rejected"
 
-        spec = spec.model_copy(
-            update={
-                "spec_trust": "low",
-                "review_objection": decision.objection,
+        annotate_current_trace(
+            metadata={
+                "pass_number": reviews,
+                "accepted": decision.accepted,
                 "review_confidence": decision.confidence,
-            }
+                "spec_trust": trust,
+                "objection": decision.objection,
+                "issue_count": len(decision.issues),
+                "context_chars": len(state.get("context", "")),
+            },
+            tags=(f"review_{status}", f"trust_{trust}"),
         )
-        return {"spec": spec, "decision": decision, "reviews": reviews, "status": "rejected"}
+        return {"spec": spec, "decision": decision, "reviews": reviews, "status": status}
 
     @trace_stage("review.graph.grade_context", run_type="chain", tags=("review", "rag"))
     def _grade_context_node(self, state: SpecReviewState) -> SpecReviewState:
@@ -145,6 +160,21 @@ class SpecReviewGraph:
             # and let the ordinary recompile attempt proceed.
             logger.warning("Context grading failed, assuming sufficient: %s", exc)
             grade = ContextGrade(sufficient=True, confidence=0.0, reasoning=str(exc)[:200])
+            annotate_current_trace(
+                metadata={"grade_error": type(exc).__name__}, tags=("grade_degraded",)
+            )
+
+        # This is the branch point that separates "compiler misread the context"
+        # from "the context never contained the answer".
+        annotate_current_trace(
+            metadata={
+                "context_sufficient": grade.sufficient,
+                "grade_confidence": grade.confidence,
+                "missing_query": grade.missing_query,
+                "grade_reasoning": grade.reasoning,
+            },
+            tags=("context_sufficient" if grade.sufficient else "context_insufficient",),
+        )
         return {"grade": grade}
 
     @trace_stage("review.graph.expand_retrieval", run_type="retriever", tags=("review", "rag"))
@@ -155,11 +185,24 @@ class SpecReviewGraph:
             extra = self.expander.expand(query, state.get("candidate"), state.get("context", ""))
         except Exception as exc:
             logger.warning("Retrieval expansion failed: %s", exc)
+            annotate_current_trace(
+                metadata={"expand_error": type(exc).__name__}, tags=("expand_degraded",)
+            )
             extra = ""
 
         context = state.get("context", "")
         if extra:
             context = f"{context}\n\nEXPANDED_RETRIEVAL (query: {query}):\n{extra}"
+
+        annotate_current_trace(
+            metadata={
+                "expansion_query": query,
+                "added_chars": len(extra),
+                "context_chars_before": len(state.get("context", "")),
+                "context_chars_after": len(context),
+            },
+            tags=("expand_hit" if extra else "expand_empty",),
+        )
         return {
             "context": context,
             "expansions": state.get("expansions", 0) + 1,
@@ -181,7 +224,19 @@ class SpecReviewGraph:
         final = self.compiler_graph.invoke(
             {"candidate": state["candidate"], "context": augmented, "attempt": 0}
         )
-        if final.get("status") == "compiled" and final["outcome"].specs:
+        succeeded = final.get("status") == "compiled" and bool(final["outcome"].specs)
+
+        annotate_current_trace(
+            metadata={
+                "attempt": recompiles,
+                "context_was_expanded": state.get("expanded_context", False),
+                "compiler_status": final.get("status"),
+                "validation_errors": final.get("validation_errors", []),
+            },
+            tags=("recompile_ok" if succeeded else "recompile_failed",),
+        )
+
+        if succeeded:
             return {"spec": final["outcome"].specs[0], "recompiles": recompiles}
 
         logger.warning(
@@ -224,8 +279,32 @@ class SpecReviewGraph:
 
     @trace_stage("review.graph", run_type="chain", tags=("review", "spec", "langgraph"))
     def invoke(self, initial: SpecReviewState) -> SpecReviewState:
-        return self.graph.invoke(
-            initial,
-            # reviews + grade + expand + recompile + margin
-            config={"recursion_limit": 12},
+        spec = initial["spec"]
+        # Propagates covenant identity into every node span below this one.
+        with trace_context(covenant_id=spec.covenant_id, stage="spec_review"):
+            annotate_current_trace(
+                metadata={
+                    "covenant_id": spec.covenant_id,
+                    "compiler_confidence": spec.confidence,
+                    "initial_context_chars": len(initial.get("context", "")),
+                    "expander_available": self.expander is not None,
+                    "compiler_available": self.compiler_graph is not None,
+                }
+            )
+            final = self.graph.invoke(
+                initial,
+                # reviews + grade + expand + recompile + margin
+                config={"recursion_limit": 12},
+            )
+
+        annotate_current_trace(
+            metadata={
+                "final_spec_trust": final["spec"].spec_trust,
+                "reviews": final.get("reviews", 0),
+                "context_expansions": final.get("expansions", 0),
+                "recompiles": final.get("recompiles", 0),
+                "context_expanded": final.get("expanded_context", False),
+            },
+            tags=(f"outcome_{final['spec'].spec_trust}",),
         )
+        return final
