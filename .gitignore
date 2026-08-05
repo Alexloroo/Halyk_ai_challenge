@@ -11,3 +11,6 @@
 .env.local
 *.env
 !.env.example
+
+# Live-run output
+2_ARCHITECTURE_COVENANT_MVP/data/live/
