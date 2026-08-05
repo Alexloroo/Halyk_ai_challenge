@@ -24,6 +24,25 @@ x-common: &common
       target: /app/data
 
 services:
+  # Full test suite inside the canonical environment: Python 3.12 + fonts-dejavu-core.
+  # Sources and tests are bind-mounted so a rebuild is not needed after every edit.
+  test:
+    profiles: ["test"]
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: runtime
+    image: halyk-covenants:synthetic
+    user: root
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - "python -m pip install --quiet -e '.[dev]' && python -m pytest -q"
+    working_dir: /app
+    volumes:
+      - type: bind
+        source: .
+        target: /app
+
   generate-synthetic:
     <<: *common
     command: ["generate-synthetic", "--output", "/app/data/synthetic"]

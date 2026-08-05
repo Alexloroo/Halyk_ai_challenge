@@ -2,13 +2,16 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
+from typing import TYPE_CHECKING
 
-from halyk_covenants.covenants.compiler_graph import CompilerGraph
-from halyk_covenants.covenants.detector import CovenantCandidate
 from halyk_covenants.domain import CovenantSpec
 from halyk_covenants.observability import trace_stage
 from halyk_covenants.review.spec_models import SpecReviewDecision
 from halyk_covenants.review.spec_reviewer import SpecReviewer
+
+if TYPE_CHECKING:
+    from halyk_covenants.covenants.compiler_graph import CompilerGraph
+    from halyk_covenants.covenants.detector import CovenantCandidate
 
 logger = logging.getLogger(__name__)
 
@@ -48,7 +51,11 @@ class SpecReviewService:
         document_context: str = "",
     ) -> SpecReviewResult:
         if spec.status != "compiled":
-            decision = SpecReviewDecision(accepted=True, confidence=0.0, issues=["not compiled — skipped review"])
+            decision = SpecReviewDecision(
+                accepted=True,
+                confidence=0.0,
+                issues=["not compiled — skipped review"],
+            )
             return SpecReviewResult(spec=spec, decision=decision)
 
         decision = self.reviewer.review_spec(spec)
@@ -131,7 +138,7 @@ class SpecReviewService:
 
         logger.warning(
             "Bounded recompile failed for %s: %s",
-            candidate.candidate_id,
+            getattr(candidate, "candidate_id", "<unknown candidate>"),
             final.get("validation_errors", []),
         )
         return None
@@ -168,8 +175,12 @@ class SpecReviewService:
                 stats.low_trust += 1
 
         logger.info(
-            "Spec review batch: %d reviewed, %d accepted, %d recompiled (%d accepted), %d low trust",
-            stats.reviewed, stats.accepted_first, stats.recompiled,
-            stats.accepted_after_recompile, stats.low_trust,
+            "Spec review batch: %d reviewed, %d accepted, %d recompiled "
+            "(%d accepted), %d low trust",
+            stats.reviewed,
+            stats.accepted_first,
+            stats.recompiled,
+            stats.accepted_after_recompile,
+            stats.low_trust,
         )
         return results, stats

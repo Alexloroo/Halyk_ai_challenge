@@ -10,8 +10,6 @@ from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
-logger = logging.getLogger(__name__)
-
 from pydantic import BaseModel, ConfigDict, Field
 
 from halyk_covenants.borrowers import BorrowerClaim, BorrowerResolver
@@ -23,6 +21,8 @@ from halyk_covenants.ingestion import PDFIngestor
 from halyk_covenants.observability import trace_stage
 from halyk_covenants.review.spec_review_service import SpecReviewService
 from halyk_covenants.storage import DuckDBStore
+
+logger = logging.getLogger(__name__)
 
 STRUCTURED_SUFFIXES = frozenset({".csv", ".xlsx", ".xlsm", ".parquet"})
 TRANSACTION_SEMANTIC_CATALOG = """SEMANTIC_CATALOG:

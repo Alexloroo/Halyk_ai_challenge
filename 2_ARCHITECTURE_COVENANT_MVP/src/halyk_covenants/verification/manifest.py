@@ -5,7 +5,6 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field
 
 from halyk_covenants.covenants import CovenantRegistry
-from halyk_covenants.domain import CovenantSpec
 from halyk_covenants.observability import trace_stage
 from halyk_covenants.storage import DuckDBStore
 

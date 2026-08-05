@@ -68,25 +68,31 @@ def build_confidence_report(
     specs = specs or {}
     verification_flags = verification_flags or {}
 
-    entries: list[AnswerConfidence] = []
+    scored: list[tuple[ConfidenceLevel, CovenantResult, CovenantSpec | None, set[str]]] = []
     for result in results:
         pair = (result.borrower_id, result.covenant_id)
         spec = specs.get(result.covenant_id)
         flags = verification_flags.get(pair, set())
-        level = compute_confidence(result, spec, flags)
+        scored.append((compute_confidence(result, spec, flags), result, spec, flags))
 
-        entries.append(AnswerConfidence(
+    # Worst answers first, so a human working top-down spends attention where it pays.
+    scored.sort(
+        key=lambda item: (
+            _LEVEL_ORDER.get(item[0], 2),
+            item[1].borrower_id,
+            item[1].covenant_id,
+        )
+    )
+
+    return [
+        AnswerConfidence(
             borrower_id=result.borrower_id,
             covenant_id=result.covenant_id,
             level=level,
-            triage_rank=0,
+            triage_rank=rank,
             flags=sorted(flags),
             spec_trust=spec.spec_trust if spec else "accepted",
             review_objection=spec.review_objection if spec else None,
-        ))
-
-    entries.sort(key=lambda e: (_LEVEL_ORDER.get(e.level, 2), e.borrower_id, e.covenant_id))
-    for rank, entry in enumerate(entries, start=1):
-        entry.triage_rank = rank
-
-    return entries
+        )
+        for rank, (level, result, spec, flags) in enumerate(scored, start=1)
+    ]

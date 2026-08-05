@@ -11,7 +11,7 @@ from halyk_covenants.evaluators import EvaluationService, TemporalEvaluationServ
 from halyk_covenants.observability import annotate_current_trace, trace_context, trace_stage
 from halyk_covenants.storage import DuckDBStore
 from halyk_covenants.verification import ResultVerifier, VerificationReport
-from halyk_covenants.verification.manifest import ExpectationManifest, ManifestBuilder
+from halyk_covenants.verification.manifest import ExpectationManifest
 
 
 class BatchEvaluationReport(BaseModel):
