@@ -14,12 +14,13 @@ import sys
 from datetime import date
 from decimal import Decimal
 from pathlib import Path
+from types import SimpleNamespace
 
 from halyk_covenants.covenants import CovenantRegistry
 from halyk_covenants.domain import CovenantSpec
 from halyk_covenants.evaluators import EvaluationService, TemporalEvaluationService
 from halyk_covenants.pipeline import BatchEvaluationPipeline
-from halyk_covenants.review.spec_models import SpecReviewDecision
+from halyk_covenants.review.spec_models import ContextGrade, SpecReviewDecision
 from halyk_covenants.review.spec_review_service import SpecReviewService
 from halyk_covenants.storage import DuckDBStore
 from halyk_covenants.verification import ManifestBuilder, build_confidence_report
@@ -48,21 +49,29 @@ def head(title: str) -> None:
 
 
 class ScriptedReviewer:
-    """Stands in for the LLM reviewer so the demo runs offline.
+    """Stands in for the LLM reviewer and context grader so the demo runs offline.
 
-    Rejects exactly one covenant to make the recompilation path visible.
+    Reproduces both causes of a wrong specification:
+      A. the compiler misread context it had        -> recompile can fix it
+      B. the context never contained the answer     -> needs a targeted re-search
     """
 
     model_name = "scripted-demo"
-    prompt_version = "demo-v1"
+    prompt_version = "demo-v2"
 
-    def __init__(self, reject: set[str]) -> None:
-        self.reject = reject
+    def __init__(self, misread: set[str], missing_context: set[str]) -> None:
+        self.misread = misread
+        self.missing_context = missing_context
         self.seen: list[str] = []
+        self.graded: list[str] = []
+        self.rejected_once: set[str] = set()
 
-    def review_spec(self, spec: CovenantSpec) -> SpecReviewDecision:
+    def review_spec(self, spec: CovenantSpec, context: str = "") -> SpecReviewDecision:
         self.seen.append(spec.covenant_id)
-        if spec.covenant_id in self.reject:
+        first_pass = spec.covenant_id not in self.rejected_once
+
+        if spec.covenant_id in self.misread and first_pass:
+            self.rejected_once.add(spec.covenant_id)
             return SpecReviewDecision(
                 accepted=False,
                 confidence=0.35,
@@ -72,7 +81,64 @@ class ScriptedReviewer:
                 ),
                 issues=["metric_type mismatch"],
             )
+
+        if spec.covenant_id in self.missing_context and first_pass:
+            self.rejected_once.add(spec.covenant_id)
+            return SpecReviewDecision(
+                accepted=False,
+                confidence=0.30,
+                objection="В строке таблицы не указана валюта, а в контексте нет её определения.",
+                issues=["currency undetermined"],
+            )
+
         return SpecReviewDecision(accepted=True, confidence=0.93)
+
+    def grade_context(self, spec: CovenantSpec, context: str, objection: str) -> ContextGrade:
+        self.graded.append(spec.covenant_id)
+        if spec.covenant_id in self.missing_context:
+            return ContextGrade(
+                sufficient=False,
+                missing_query="пустая валюта означает KZT вводное определение",
+                confidence=0.82,
+                reasoning="сноска, определяющая пустую ячейку валюты, не попала в контекст",
+            )
+        return ContextGrade(
+            sufficient=True,
+            confidence=0.88,
+            reasoning="текст пункта присутствует целиком, ошибка в прочтении",
+        )
+
+
+class DemoExpander:
+    """Returns the footnote that the original retrieval missed."""
+
+    FOOTNOTE = (
+        "[document=borrower_limits_appendix.pdf page=1 type=text] "
+        "* Пустая валюта в строке MAX означает KZT согласно вводному определению на этой странице."
+    )
+
+    def __init__(self) -> None:
+        self.queries: list[str] = []
+
+    def expand(self, query: str, candidate: object, current_context: str) -> str:
+        self.queries.append(query)
+        return self.FOOTNOTE
+
+
+class ReplayCompiler:
+    """Stands in for CompilerGraph: returns the candidate spec unchanged.
+
+    The golden specs are already correct, so recompilation is a no-op here — the
+    demo is about which path the graph takes, not about the compiler's output.
+    """
+
+    def __init__(self) -> None:
+        self.contexts: list[str] = []
+
+    def invoke(self, state: dict) -> dict:
+        self.contexts.append(state.get("context", ""))
+        outcome = SimpleNamespace(specs=[state["candidate"]])
+        return {"status": "compiled", "outcome": outcome, "validation_errors": []}
 
 
 def load_dataset(store: DuckDBStore) -> tuple[list[CovenantSpec], list[dict]]:
@@ -107,17 +173,25 @@ def main() -> int:
         specs, golden = load_dataset(store)
         registry = CovenantRegistry(store)
 
-        # --- 2. spec review, the Cloud1 move --------------------------------------
-        head("ШАГ 2 — Ревью спецификаций (главное отличие Cloud1)")
-        print(f"{DIM}Ревьюер видит текст пункта и спецификацию. Чисел ещё нет —")
-        print(f"вычисление не запускалось. Изменить ответ он физически не может.{RESET}\n")
+        # --- 2. spec review graph, the Cloud1 move --------------------------------
+        head("ШАГ 2 — Граф ревью спецификаций (LangGraph)")
+        print(f"{DIM}review -> grade_context -> expand_retrieval -> recompile -> review")
+        print("Ревьюер видит текст пункта, спецификацию и контекст документа.")
+        print(f"Чисел ещё нет — вычисление не запускалось.{RESET}\n")
 
-        reviewer = ScriptedReviewer(reject={"COV-ALPHA-COUNT"})
-        service = SpecReviewService(reviewer=reviewer, compiler_graph=None)
+        reviewer = ScriptedReviewer(
+            misread={"COV-ALPHA-COUNT"},  # причина A: неверно прочитал
+            missing_context={"COV-BETA-MAX"},  # причина B: не хватило контекста
+        )
+        expander = DemoExpander()
+        compiler = ReplayCompiler()
+        service = SpecReviewService(reviewer=reviewer, compiler_graph=compiler, expander=expander)
 
         reviewed: list[CovenantSpec] = []
         for spec in specs:
-            result = service.review_and_maybe_recompile(spec)
+            result = service.review_and_maybe_recompile(
+                spec, candidate=spec, document_context=f"CLAUSE: {spec.raw_text}"
+            )
             reviewed.append(result.spec)
             registry.save(result.spec)
 
@@ -126,6 +200,25 @@ def main() -> int:
             print(f"  {colour}{trust:<9}{RESET} {spec.covenant_id}")
             if result.spec.review_objection:
                 print(f"            {DIM}-> {result.spec.review_objection}{RESET}")
+            if result.context_grade is not None:
+                grade = result.context_grade
+                verdict = "хватало" if grade.sufficient else "НЕ хватало"
+                print(
+                    f"            {DIM}   грейдинг контекста: {verdict} — {grade.reasoning}{RESET}"
+                )
+            if result.context_expanded:
+                print(f"            {YELLOW}   повторный поиск: '{expander.queries[-1]}'{RESET}")
+
+        print(
+            f"\n{DIM}Причина A ({BOLD}COV-ALPHA-COUNT{RESET}{DIM}): контекст был полным, "
+            f"модель ошиблась в прочтении."
+        )
+        print(f"  -> перекомпиляция с тем же контекстом{RESET}")
+        print(
+            f"{DIM}Причина B ({BOLD}COV-BETA-MAX{RESET}{DIM}): валюта определена сноской, "
+            f"которой не было в контексте."
+        )
+        print(f"  -> перекомпиляция с тем же контекстом БЕССМЫСЛЕННА, нужен повторный поиск{RESET}")
 
         # --- 3. expectation manifest ----------------------------------------------
         head("ШАГ 3 — Манифест ожиданий (независимая проверка полноты)")

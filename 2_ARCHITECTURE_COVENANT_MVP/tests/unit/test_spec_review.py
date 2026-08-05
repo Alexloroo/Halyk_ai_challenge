@@ -14,7 +14,7 @@ from halyk_covenants.domain import (
     MetricSpec,
     SourceRef,
 )
-from halyk_covenants.review.spec_models import SpecReviewDecision
+from halyk_covenants.review.spec_models import ContextGrade, SpecReviewDecision
 from halyk_covenants.review.spec_review_service import SpecReviewService
 
 
@@ -42,12 +42,20 @@ class StubReviewer:
     def __init__(self, *decisions: SpecReviewDecision) -> None:
         self.queue = list(decisions)
         self.calls: list[CovenantSpec] = []
+        self.contexts_seen: list[str] = []
+        self.grades: list[ContextGrade] = []
+        self.grade_calls: list[str] = []
 
-    def review_spec(self, spec: CovenantSpec) -> SpecReviewDecision:
+    def review_spec(self, spec: CovenantSpec, context: str = "") -> SpecReviewDecision:
         self.calls.append(spec)
+        self.contexts_seen.append(context)
         return (
             self.queue.pop(0) if self.queue else SpecReviewDecision(accepted=True, confidence=1.0)
         )
+
+    def grade_context(self, spec: CovenantSpec, context: str, objection: str) -> ContextGrade:
+        self.grade_calls.append(objection)
+        return self.grades.pop(0) if self.grades else ContextGrade(sufficient=True, confidence=0.9)
 
 
 class StubCompilerGraph:

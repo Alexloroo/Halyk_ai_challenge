@@ -19,6 +19,7 @@ from halyk_covenants.documents.retrieval import HybridRetriever
 from halyk_covenants.domain import DocumentBlock
 from halyk_covenants.ingestion import PDFIngestor
 from halyk_covenants.observability import trace_stage
+from halyk_covenants.review.context_expander import RetrieverContextExpander
 from halyk_covenants.review.spec_review_service import SpecReviewService
 from halyk_covenants.storage import DuckDBStore
 
@@ -170,6 +171,11 @@ class PreprocessPipeline:
         retriever = HybridRetriever(embedder=embedder)
         stored_blocks = self._stored_document_blocks()
         retriever.index(stored_blocks)
+
+        # The spec-review graph re-searches this same index when its context grader
+        # reports that the compiler could not have had the answer in the first place.
+        if self.spec_review_service is not None and self.spec_review_service.expander is None:
+            self.spec_review_service.attach_expander(RetrieverContextExpander(retriever))
         for candidate_index, candidate in enumerate(candidates, start=1):
             if not candidate.borrower_ids and only_borrower:
                 candidate = candidate.model_copy(update={"borrower_ids": [only_borrower]})
