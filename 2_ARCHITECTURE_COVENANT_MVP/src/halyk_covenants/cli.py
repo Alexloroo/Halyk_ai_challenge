@@ -1,5 +1,5 @@
 import json
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
 from pathlib import Path
 from typing import Annotated
@@ -8,6 +8,7 @@ import typer
 from dotenv import load_dotenv
 from pydantic import TypeAdapter, ValidationError
 
+from halyk_covenants.ask import render, route_question
 from halyk_covenants.benchmark.reporting import write_benchmark_reports
 from halyk_covenants.benchmark.runner import run_benchmark
 from halyk_covenants.config import load_settings
@@ -18,12 +19,13 @@ from halyk_covenants.covenants import (
     LangChainCompilerRepairer,
 )
 from halyk_covenants.domain import CovenantResult, CovenantSpec
-from halyk_covenants.evaluators import EvaluationService
+from halyk_covenants.evaluators import EvaluationService, TemporalEvaluationService
 from halyk_covenants.ingestion import PageQualityRouter, PDFIngestor
 from halyk_covenants.llm import DeepSeekChatFactory, DeepSeekConfigurationError
 from halyk_covenants.logging import configure_logging
 from halyk_covenants.ocr import PaddleOCRProvider
 from halyk_covenants.pipeline import BatchEvaluationPipeline, PreprocessPipeline
+from halyk_covenants.reporting import AnswerReportBuilder, load_confidence, render_html
 from halyk_covenants.review import LangChainSpecReviewer, SpecReviewService
 from halyk_covenants.storage import DuckDBStore
 from halyk_covenants.submission import (
@@ -33,7 +35,11 @@ from halyk_covenants.submission import (
 )
 from halyk_covenants.synthetic.generator import generate_synthetic_dataset
 from halyk_covenants.synthetic.validation import DatasetValidationError
-from halyk_covenants.verification import ManifestBuilder, build_confidence_report
+from halyk_covenants.verification import (
+    ManifestBuilder,
+    build_confidence_report,
+    compute_confidence,
+)
 from halyk_covenants.vlm import PaddleLayoutProvider
 
 
@@ -300,6 +306,110 @@ def evaluate_all_command(
         output.parent.mkdir(parents=True, exist_ok=True)
         output.write_text(payload, encoding="utf-8")
     typer.echo(payload)
+
+
+@app.command("ask")
+def ask_command(
+    question: Annotated[str, typer.Argument(help="Вопрос обычным текстом")],
+    db_path: Annotated[Path, typer.Option("--db")] = Path("data/duckdb/hackathon.duckdb"),
+    at_date: Annotated[
+        datetime | None, typer.Option("--at-date", formats=["%Y-%m-%d"])
+    ] = None,
+    borrower: Annotated[str | None, typer.Option("--borrower")] = None,
+    covenant: Annotated[str | None, typer.Option("--covenant")] = None,
+) -> None:
+    """Ответить на вопрос обычным текстом, показав, откуда взялся ответ."""
+    default_date = at_date.date() if at_date else date.today()
+    try:
+        with DuckDBStore(db_path) as store:
+            specs = CovenantRegistry(store).list()
+            if not specs:
+                typer.echo(
+                    "В базе нет скомпилированных ковенантов. "
+                    "Сначала выполните: halyk-covenants preprocess <папка>",
+                    err=True,
+                )
+                raise typer.Exit(code=2)
+
+            route = route_question(
+                question,
+                store.list_borrowers(),
+                specs,
+                default_date=default_date,
+                borrower_id=borrower,
+                covenant_id=covenant,
+            )
+
+            result = calculation = evidence = None
+            confidence = "medium"
+            if route.covenant is not None and route.borrower_id:
+                versions = [
+                    s
+                    for s in specs
+                    if (s.covenant_group_id or s.covenant_id)
+                    == (route.covenant.covenant_group_id or route.covenant.covenant_id)
+                ]
+                result = TemporalEvaluationService(EvaluationService(store)).evaluate_versions(
+                    versions, route.borrower_id, route.at_date
+                )
+                builder = AnswerReportBuilder(store)
+                calculation = builder._load_calculation(result)
+                evidence = builder._load_transaction(result.evidence_transaction_id)
+                confidence = compute_confidence(result, route.covenant, set())
+            elif not route.problems:
+                route.problems.append("Не удалось определить пару заёмщик/ковенант.")
+    except typer.Exit:
+        raise
+    except (OSError, ValueError, ValidationError) as exc:
+        typer.echo(f"Не удалось ответить: {exc}", err=True)
+        raise typer.Exit(code=2) from exc
+
+    typer.echo(render(question, route, result, calculation, evidence, confidence))
+    if result is None:
+        raise typer.Exit(code=1)
+
+
+@app.command("answer-report")
+def answer_report_command(
+    results: Annotated[Path, typer.Option("--results", exists=True, dir_okay=False)],
+    output: Annotated[Path, typer.Option("--output")] = Path("data/answers.html"),
+    db_path: Annotated[Path, typer.Option("--db")] = Path("data/duckdb/hackathon.duckdb"),
+    questions_path: Annotated[
+        Path | None,
+        typer.Option("--questions", exists=True, file_okay=True, dir_okay=False),
+    ] = None,
+    confidence_path: Annotated[
+        Path | None, typer.Option("--confidence", exists=True, dir_okay=False)
+    ] = None,
+) -> None:
+    """Render a readable answer report: verdict, number, evidence and source clause."""
+    try:
+        payload = json.loads(results.read_text(encoding="utf-8"))
+        evaluation_date = datetime.fromisoformat(
+            payload.get("evaluation_date", str(date.today()))
+        ).date() if isinstance(payload, dict) else date.today()
+        raw_results = payload["results"] if isinstance(payload, dict) else payload
+        parsed = TypeAdapter(list[CovenantResult]).validate_python(raw_results)
+
+        questions = load_manifest_questions(questions_path)
+        confidence = load_confidence(confidence_path)
+
+        with DuckDBStore(db_path) as store:
+            specs = {}
+            for spec in CovenantRegistry(store).list():
+                specs[spec.covenant_id] = spec
+                specs.setdefault(spec.covenant_group_id or spec.covenant_id, spec)
+            cards = AnswerReportBuilder(store).build_cards(
+                parsed, specs, questions, confidence
+            )
+        output.parent.mkdir(parents=True, exist_ok=True)
+        output.write_text(render_html(cards, evaluation_date), encoding="utf-8")
+    except (OSError, ValueError, ValidationError, KeyError) as exc:
+        typer.echo(f"Answer report failed: {exc}", err=True)
+        raise typer.Exit(code=2) from exc
+
+    typer.echo(f"Отчёт готов: {output.resolve()}")
+    typer.echo(f"Ответов: {len(cards)}")
 
 
 @app.command("serialize-submission")
