@@ -1,289 +1,290 @@
 # RUNBOOK — как запустить Cloud1
 
-> Пошаговая инструкция для запуска системы оценки ковенантов с архитектурой Cloud1.
-> Проект архитектуры: [09_ARCHITECTURE_CLOUD1.md](09_ARCHITECTURE_CLOUD1.md).
+> Пошаговая инструкция. Каноническое окружение — **Docker**: в образе уже стоит Python 3.12 и
+> шрифты DejaVu, без которых не работает генерация синтетики.
+>
+> Архитектура: [09_ARCHITECTURE_CLOUD1.md](09_ARCHITECTURE_CLOUD1.md) ·
+> План до 9 августа: [PLAN_HACKATHON.md](PLAN_HACKATHON.md)
 
 ---
 
 ## Оглавление
 
-1. [Требования](#1-требования)
-2. [Установка](#2-установка)
-3. [Настройка ключа DeepSeek](#3-настройка-ключа-deepseek)
-4. [Полный прогон за пять команд](#4-полный-прогон-за-пять-команд)
-5. [Разбор каждой команды](#5-разбор-каждой-команды)
-6. [Флаги Cloud1](#6-флаги-cloud1)
-7. [Что читать в результатах](#7-что-читать-в-результатах)
-8. [Проверка без ключа LLM](#8-проверка-без-ключа-llm)
-9. [Типичные проблемы](#9-типичные-проблемы)
+1. [Быстрый старт](#1-быстрый-старт)
+2. [Почему Docker, а не локальный Python](#2-почему-docker-а-не-локальный-python)
+3. [Установка](#3-установка)
+4. [Ключ DeepSeek](#4-ключ-deepseek)
+5. [Куда класть данные](#5-куда-класть-данные)
+6. [Форматы файлов](#6-форматы-файлов)
+7. [Полный прогон](#7-полный-прогон)
+8. [Разбор каждой команды](#8-разбор-каждой-команды)
+9. [Флаги Cloud1](#9-флаги-cloud1)
+10. [Что читать в результатах](#10-что-читать-в-результатах)
+11. [Тесты](#11-тесты)
+12. [Локальный запуск без Docker](#12-локальный-запуск-без-docker)
+13. [Проблемы](#13-проблемы)
 
 ---
 
-## 1. Требования
-
-| | |
-| --- | --- |
-| **Python** | **3.12** или 3.13. **НЕ 3.14** — зависимость `pyyaml==6.0.2` не собирается |
-| Диск | ~2 ГБ (модель эмбеддингов ~120 МБ + зависимости) |
-| Ключ API | DeepSeek — нужен для компиляции и ревью спецификаций |
-| ОС | Windows / Linux / macOS |
-
-Проверить версию Python:
-
-```bash
-python --version
-```
-
-Если стоит 3.14 — поставьте 3.12 рядом. На Windows удобнее через
-[python.org](https://www.python.org/downloads/release/python-3128/), при установке отметить
-«Add python.exe to PATH».
-
----
-
-## 2. Установка
-
-Все команды выполняются **из папки `2_ARCHITECTURE_COVENANT_MVP`**, а не из корня репозитория.
-
-### 2.1 Перейти в папку проекта
+## 1. Быстрый старт
 
 ```bash
 cd 2_ARCHITECTURE_COVENANT_MVP
 ```
 
-### 2.2 Создать виртуальное окружение
-
-*Виртуальное окружение* — отдельная папка с библиотеками только для этого проекта, чтобы не
-засорять систему.
-
 ```bash
-python -m venv .venv
+docker compose --profile test run --rm test
 ```
 
-### 2.3 Активировать окружение
-
-Windows (PowerShell):
-
-```bash
-.venv\Scripts\Activate.ps1
-```
-
-Linux / macOS:
-
-```bash
-source .venv/bin/activate
-```
-
-После активации в начале строки терминала появится `(.venv)`.
-
-### 2.4 Установить проект
-
-```bash
-pip install -e ".[dev,semantic]"
-```
-
-Что означают части:
-
-| Часть | Что даёт |
-| --- | --- |
-| `-e` | режим разработки — правки в коде подхватываются без переустановки |
-| `dev` | pytest и ruff для тестов и проверки стиля |
-| `semantic` | sentence-transformers для семантического поиска (Cloud1 его использует) |
-
-Без `semantic` система запустится, но поиск контекста для компилятора деградирует до поиска по
-ключевым словам. **Cloud1 напишет об этом в лог** — молчаливой деградации, как в `codex-1`, больше нет.
+Если тесты зелёные — окружение исправно, можно работать.
 
 ---
 
-## 3. Настройка ключа DeepSeek
+## 2. Почему Docker, а не локальный Python
+
+| | Docker | Локальный Python |
+| --- | --- | --- |
+| Версия Python | 3.12 из образа | нужна ваша, ≥3.12 |
+| Шрифты DejaVu | стоят через `fonts-dejavu-core` | ставить руками |
+| Синтетические тесты | работают | падают без шрифтов |
+| Совпадение с CI | полное | зависит от машины |
+
+Проверено на практике: 16 тестов из 239 требуют шрифт DejaVu. Ни в Windows, ни в стандартном
+Python его нет. В образе он есть.
+
+---
+
+## 3. Установка
+
+Нужен только Docker Desktop. Запустите его — демон должен работать, иначе команды `docker`
+завершатся ошибкой подключения.
+
+Проверка:
+
+```bash
+docker info --format "{{.ServerVersion}}"
+```
+
+Первая сборка образа занимает 3–5 минут, дальше кешируется.
+
+---
+
+## 4. Ключ DeepSeek
 
 Создайте файл `.env` в папке `2_ARCHITECTURE_COVENANT_MVP`:
 
 ```
-DEEPSEEK_API_KEY=sk-ваш-ключ-сюда
+DEEPSEEK_API_KEY=sk-ваш-ключ
 ```
 
-Либо задайте переменную окружения.
+`docker compose` подхватывает `.env` автоматически. Файл содержит секрет — в git не коммитить.
 
-Windows (PowerShell):
-
-```bash
-$env:DEEPSEEK_API_KEY = "sk-ваш-ключ-сюда"
-```
-
-Linux / macOS:
-
-```bash
-export DEEPSEEK_API_KEY="sk-ваш-ключ-сюда"
-```
-
-> `.env` содержит секрет. Не коммитьте его в git.
+Без ключа работает всё, кроме компиляции ковенантов и ревью спецификаций: тесты, генерация
+синтетики, бенчмарк детерминированной части.
 
 ---
 
-## 4. Полный прогон за пять команд
-
-```bash
-halyk-covenants preprocess data/raw --db data/duckdb/run.duckdb
-```
-
-```bash
-halyk-covenants inspect-covenants --db data/duckdb/run.duckdb
-```
-
-```bash
-halyk-covenants evaluate-all --at-date 2026-08-05 --db data/duckdb/run.duckdb --output out/results.json --confidence-output out/confidence-report.json
-```
-
-```bash
-halyk-covenants serialize-submission --results out/results.json --profile config/submission_profile.json --output out/submission.json
-```
-
-```bash
-halyk-covenants validate-submission --submission out/submission.json --profile config/submission_profile.json
-```
-
----
-
-## 5. Разбор каждой команды
-
-### Шаг 1 — `preprocess`
-
-```bash
-halyk-covenants preprocess data/raw --db data/duckdb/run.duckdb
-```
-
-Что происходит внутри (это **пайплайн 1** из архитектуры):
+## 5. Куда класть данные
 
 ```
-1. читает CSV/XLSX  →  таблица transactions
-2. читает PDF       →  OCR  →  таблица document_blocks
-3. детектор ищет ковенанты (EN / RU / KZ)
-4. загружает эмбеддер, строит гибридный поиск
-5. LLM компилирует текст пункта → CovenantSpec        ← вызов LLM #1
-6. ★ РЕВЬЮ СПЕЦИФИКАЦИИ                                ← вызов LLM #2
-      отклонено? → перекомпиляция → повторное ревью    ← вызовы #3, #4
-7. сохраняет в таблицу covenants с меткой spec_trust
+2_ARCHITECTURE_COVENANT_MVP/
+└── data/
+    ├── raw/                    ← ваши данные
+    │   ├── documents/          ← PDF договоров
+    │   └── transactions/       ← CSV/XLSX
+    │       ├── borrowers.csv
+    │       └── transactions.csv
+    ├── questions.json          ← вопросы организатора
+    ├── duckdb/                 ← база, создаётся сама
+    └── submissions/            ← результаты
 ```
 
-**Это единственная команда, которая обращается к LLM.** Результат кешируется по SHA-256 —
-повторный запуск на тех же файлах пропустит всю работу.
+Подпапки можно называть как угодно — обход рекурсивный. Важно расширение:
 
-Полезные флаги:
-
-```bash
-# посмотреть подробный лог, включая работу ревьюера
-halyk-covenants --log-level INFO preprocess data/raw --db data/duckdb/run.duckdb
-
-# включить OCR (нужен extra `ocr`, требует GPU)
-halyk-covenants preprocess data/raw --db data/duckdb/run.duckdb --ocr
-
-# выключить ревью спецификаций — получится поведение codex-1
-halyk-covenants preprocess data/raw --db data/duckdb/run.duckdb --no-spec-review
-```
-
-### Шаг 2 — `inspect-covenants`
-
-```bash
-halyk-covenants inspect-covenants --db data/duckdb/run.duckdb
-```
-
-Печатает все скомпилированные спецификации. **Здесь видно результат работы Cloud1** — поле
-`spec_trust` у каждого ковенанта:
-
-| Значение | Что означает |
+| Расширение | Обработка |
 | --- | --- |
-| `accepted` | ревьюер принял спецификацию с первого раза |
-| `revised` | ревьюер отклонил, перекомпиляция помогла |
-| `low` | отклонена дважды — **посмотрите на этот ковенант глазами** |
+| `.pdf` | OCR → поиск ковенантов → компиляция |
+| `.csv` `.xlsx` `.xlsm` `.parquet` | загрузка транзакций |
+| прочее | пропускается |
 
-Плюс поля `review_objection` (что именно не понравилось ревьюеру) и `review_confidence`.
+Структурные файлы обрабатываются раньше PDF — чтобы при компиляции заёмщики уже были в базе.
 
-### Шаг 3 — `evaluate-all`
+---
 
-```bash
-halyk-covenants evaluate-all \
-  --at-date 2026-08-05 \
-  --db data/duckdb/run.duckdb \
-  --output out/results.json \
-  --confidence-output out/confidence-report.json
+## 6. Форматы файлов
+
+### `borrowers.csv`
+
+```csv
+borrower_id,canonical_name,bin
+B001,Alpha Trade,990140000001
+B002,Beta Logistics,990140000002
 ```
 
-Это **пайплайн 2**. Вызовов LLM здесь **ноль** — только SQL и Python.
+| Колонка | Обязательна | Назначение |
+| --- | --- | --- |
+| `borrower_id` | да | ключ, по которому всё связывается |
+| `canonical_name` | да | название как в договоре |
+| `bin` | нет | помогает найти заёмщика в тексте PDF |
 
-```
-1. строит МАНИФЕСТ ОЖИДАНИЙ (что вообще должно быть посчитано)
-2. по каждой паре (заёмщик, ковенант):
-      SQL → число → вердикт → доказательство
-3. проверяет полноту ПРОТИВ МАНИФЕСТА, а не сам против себя
-4. пишет confidence-report.json со списком на разбор
-```
+### `transactions.csv`
 
-С файлом вопросов организатора (сильнее проверка полноты — источник не зависит от нашего
-обнаружения):
-
-```bash
-halyk-covenants evaluate-all --at-date 2026-08-05 --db data/duckdb/run.duckdb --questions data/questions.json --output out/results.json --confidence-output out/confidence-report.json
+```csv
+transaction_id,borrower_id,transaction_date,amount,currency,direction,counterparty_name,purpose
+TX-A1,B001,2026-04-01,5000000,KZT,outgoing,Vendor One LLP,Оплата по договору A-11
 ```
 
-Формат `questions.json`:
+| Колонка | Обязательна | Формат |
+| --- | --- | --- |
+| `transaction_id` | **да** | уникальная строка |
+| `transaction_date` | **да** | `ГГГГ-ММ-ДД`, можно назвать `date` |
+| `amount` | **да** | число, точка как разделитель |
+| `borrower_id` | нет | ссылка на `borrowers.csv` |
+| `currency` | нет | `KZT`, `USD`, `EUR`, `RUB` |
+| `direction` | нет | см. ниже |
+| `counterparty_id`, `counterparty_name`, `purpose`, `account_id` | нет | — |
+
+Синонимы `direction` приводятся к норме автоматически:
+
+| Пишете | Становится |
+| --- | --- |
+| `in`, `credit`, `входящий`, `входящая` | `incoming` |
+| `out`, `debit`, `исходящий`, `исходящая` | `outgoing` |
+
+### `questions.json`
 
 ```json
 [
-  {"borrower_id": "B001", "covenant_id": "COV-001", "question": "Соблюдает ли заёмщик..."},
-  {"borrower_id": "B002", "covenant_id": "COV-003", "question": "..."}
+  {
+    "borrower_id": "B001",
+    "covenant_id": "COV-ALPHA-SUM",
+    "question": "Соблюдён ли месячный лимит исходящих KZT-платежей за апрель?"
+  }
 ]
 ```
 
-### Шаг 4 — `serialize-submission`
+Квадратные скобки снаружи, между блоками запятая, после последнего — нет.
+
+Не знаете `covenant_id`? Сначала обработайте документы, потом посмотрите список:
 
 ```bash
-halyk-covenants serialize-submission --results out/results.json --profile config/submission_profile.json --output out/submission.json
+docker compose run --rm --entrypoint halyk-covenants generate-synthetic inspect-covenants --db /app/data/duckdb/run.duckdb
 ```
-
-Превращает внутренние результаты в формат ответа организатора. **Формат не менялся** — Cloud1
-совместим с существующей проверкой.
-
-### Шаг 5 — `validate-submission`
-
-```bash
-halyk-covenants validate-submission --submission out/submission.json --profile config/submission_profile.json
-```
-
-Проверяет файл ответа независимо от того, как он был получен. Код возврата `3` означает, что файл
-не прошёл проверку.
 
 ---
 
-## 6. Флаги Cloud1
-
-Все новые возможности включены по умолчанию и отключаются флагом.
-
-| Флаг | Команда | По умолчанию | Что делает |
-| --- | --- | --- | --- |
-| `--spec-review` / `--no-spec-review` | `preprocess` | включено | Ревью спецификаций + ограниченная перекомпиляция |
-| `--manifest` / `--no-manifest` | `evaluate-all` | включено | Проверка полноты против манифеста вместо тавтологичной |
-| `--questions ФАЙЛ` | `evaluate-all` | нет | Добавляет независимый источник ожиданий |
-| `--confidence-output ФАЙЛ` | `evaluate-all` | нет | Пишет отчёт с рангом разбора |
-
-### Как получить поведение codex-1 для сравнения
+## 7. Полный прогон
 
 ```bash
-halyk-covenants preprocess data/raw --db data/duckdb/base.duckdb --no-spec-review
+docker compose --profile ai run --rm preprocess-ai
 ```
 
 ```bash
-halyk-covenants evaluate-all --at-date 2026-08-05 --db data/duckdb/base.duckdb --no-manifest --output out/base-results.json
+docker compose --profile ai run --rm evaluate-all
 ```
 
-Потом сравните `out/base-results.json` с `out/results.json` — разница и есть вклад Cloud1.
+Своя команда с нужными путями:
+
+```bash
+docker compose run --rm --entrypoint halyk-covenants generate-synthetic preprocess /app/data/raw --db /app/data/duckdb/run.duckdb
+```
+
+```bash
+docker compose run --rm --entrypoint halyk-covenants generate-synthetic evaluate-all --at-date 2026-08-05 --db /app/data/duckdb/run.duckdb --questions /app/data/questions.json --output /app/data/submissions/results.json --confidence-output /app/data/submissions/confidence-report.json
+```
+
+```bash
+docker compose run --rm --entrypoint halyk-covenants generate-synthetic serialize-submission --results /app/data/submissions/results.json --profile /app/config/submission_profile.json --output /app/data/submissions/submission.json
+```
+
+> Пути внутри контейнера начинаются с `/app/`. Папка `./data` примонтирована в `/app/data`,
+> поэтому результаты появляются у вас на диске.
 
 ---
 
-## 7. Что читать в результатах
+## 8. Разбор каждой команды
 
-### `out/confidence-report.json` — главный файл для человека
+### `preprocess` — пайплайн 1
 
-Отсортирован так, что **самое сомнительное сверху**:
+```
+1. CSV/XLSX      → таблица transactions
+2. PDF → OCR     → таблица document_blocks
+3. детектор ищет ковенанты (EN / RU / KZ)
+4. загружается эмбеддер, строится гибридный поиск
+5. LLM компилирует текст пункта → CovenantSpec       ← вызов LLM #1
+6. ★ РЕВЬЮ СПЕЦИФИКАЦИИ                               ← вызов LLM #2
+     отклонено? → перекомпиляция → повторное ревью    ← вызовы #3, #4
+7. сохранение в covenants с меткой spec_trust
+```
+
+**Единственная команда, обращающаяся к LLM.** Кешируется по SHA-256 — повторный запуск на тех же
+файлах пропускает работу.
+
+Подробный лог, включая работу ревьюера:
+
+```bash
+docker compose run --rm --entrypoint halyk-covenants generate-synthetic --log-level INFO preprocess /app/data/raw --db /app/data/duckdb/run.duckdb
+```
+
+### `inspect-covenants`
+
+Печатает скомпилированные спецификации. Здесь виден результат Cloud1 — поле `spec_trust`:
+
+| Значение | Смысл |
+| --- | --- |
+| `accepted` | ревьюер принял с первого раза |
+| `revised` | отклонил, перекомпиляция помогла |
+| `low` | отклонил дважды — **посмотреть глазами** |
+
+Плюс `review_objection` — что именно не понравилось.
+
+### `evaluate-all` — пайплайн 2
+
+Вызовов LLM: **ноль**. Только SQL и Python.
+
+```
+1. строится МАНИФЕСТ ОЖИДАНИЙ
+2. по каждой паре: SQL → число → вердикт → доказательство
+3. полнота проверяется ПРОТИВ МАНИФЕСТА, а не сама против себя
+4. пишется confidence-report.json
+```
+
+### `serialize-submission` / `validate-submission`
+
+Формат ответа организатора не менялся — Cloud1 совместим с существующей проверкой.
+
+---
+
+## 9. Флаги Cloud1
+
+Всё включено по умолчанию, отключается флагом.
+
+| Флаг | Команда | Что делает |
+| --- | --- | --- |
+| `--spec-review` / `--no-spec-review` | `preprocess` | Ревью спецификаций + перекомпиляция |
+| `--manifest` / `--no-manifest` | `evaluate-all` | Полнота против манифеста |
+| `--questions ФАЙЛ` | `evaluate-all` | Независимый источник ожиданий |
+| `--confidence-output ФАЙЛ` | `evaluate-all` | Отчёт с рангом разбора |
+
+### Сравнение с codex-1 без переключения веток
+
+```bash
+docker compose run --rm --entrypoint halyk-covenants generate-synthetic preprocess /app/data/raw --db /app/data/duckdb/base.duckdb --no-spec-review
+```
+
+```bash
+docker compose run --rm --entrypoint halyk-covenants generate-synthetic evaluate-all --at-date 2026-08-05 --db /app/data/duckdb/base.duckdb --no-manifest --output /app/data/submissions/base-results.json
+```
+
+Разница между `base-results.json` и `results.json` — вклад Cloud1.
+
+---
+
+## 10. Что читать в результатах
+
+### `confidence-report.json` — главный файл для человека
+
+Отсортирован: самое сомнительное сверху.
 
 ```json
 [
@@ -299,89 +300,115 @@ halyk-covenants evaluate-all --at-date 2026-08-05 --db data/duckdb/base.duckdb -
 ]
 ```
 
-Уровни уверенности:
-
 | Уровень | Когда | Что делать |
 | --- | --- | --- |
-| `unreliable` | расхождение двойного пути или статус `failed` | **разобрать обязательно** |
+| `unreliable` | расхождение двойного пути или `failed` | **разобрать обязательно** |
 | `low` | `spec_trust=low` или несовпадение доказательства | разобрать |
-| `medium` | спецификация переписана, или частичный результат | посмотреть по возможности |
+| `medium` | спека переписана, или частичный результат | посмотреть по возможности |
 | `high` | всё чисто, обе уверенности ≥ 0.70 | можно доверять |
 
-Начинайте с `triage_rank: 1` и идите вниз, пока есть время.
+Идите с `triage_rank: 1` вниз, пока есть время.
 
-### `out/results.json`
+### `results.json`
 
-Полный отчёт: результаты + блок `verification` с найденными проблемами. Смотрите поле
-`verification.issues` — коды `missing_result` и `unexpected_result` теперь **работают** (в codex-1 и
-codex-2 они не могли сработать никогда).
-
-### `out/submission.json`
-
-Файл ответа для организатора. Формат тот же, что в codex-1/codex-2.
+Полный отчёт. Смотрите `verification.issues` — коды `missing_result` и `unexpected_result` теперь
+**работают** (в codex-1 и codex-2 сработать не могли).
 
 ---
 
-## 8. Проверка без ключа LLM
-
-Если ключа DeepSeek нет, детерминированную часть можно проверить на синтетических данных:
+## 11. Тесты
 
 ```bash
-halyk-covenants benchmark-full --output data/synthetic
+docker compose --profile test run --rm test
 ```
 
-Генерирует тестовый набор и прогоняет по нему вычислители. LLM не задействована.
+Ожидаемо: **255 passed, 3 skipped**. Пропущенные — live-тесты, требующие ключей API.
 
-Запустить тесты:
+Отдельно тесты Cloud1:
 
 ```bash
-pytest
+docker compose --profile test run --rm test python -m pytest tests/unit/test_spec_review.py tests/unit/test_cloud1_verification.py -v
 ```
 
-Проверить стиль кода:
+Что они проверяют:
 
-```bash
-ruff check src tests
-```
+| Файл | Проверки |
+| --- | --- |
+| `test_spec_review.py` | тип решения ревьюера не содержит полей числа/вердикта/доказательства; попытка их подсунуть отвергается; отклонение доводит возражение до компилятора; перекомпиляция ровно одна; дважды отклонённая спека всё равно оценивается |
+| `test_cloud1_verification.py` | манифест ловит вопрос, который детектор не нашёл; `missing_result` срабатывает; приоритет правил уверенности; ранжирование разбора; двойной путь ловит расхождение; групповые ковенанты не затирают расчёты друг друга |
 
 ---
 
-## 9. Типичные проблемы
+## 12. Локальный запуск без Docker
 
-### `ModuleNotFoundError: No module named 'duckdb'`
+Работает, но 16 синтетических тестов упадут без шрифтов DejaVu.
 
-Окружение не активировано или проект не установлен.
+```bash
+cd 2_ARCHITECTURE_COVENANT_MVP
+python -m venv .venv
+```
+
+Windows:
+
+```bash
+.venv\Scripts\Activate.ps1
+```
+
+Linux / macOS:
+
+```bash
+source .venv/bin/activate
+```
 
 ```bash
 pip install -e ".[dev,semantic]"
 ```
 
+Прогон без шрифтозависимых тестов:
+
+```bash
+pytest --ignore=tests/integration/test_synthetic_generator.py --ignore=tests/integration/test_synthetic_renderers.py --ignore=tests/integration/test_synthetic_cli.py --ignore=tests/integration/test_synthetic_regression_v2.py --ignore=tests/integration/test_benchmark_runner.py --ignore=tests/integration/test_full_pipeline_e2e.py --ignore=tests/integration/test_regression_v2_runner.py
+```
+
+Если шрифты DejaVu у вас есть, укажите папку — тогда пройдёт всё:
+
+```bash
+export HALYK_DEJAVU_DIR=/путь/к/папке/со/шрифтами
+```
+
+---
+
+## 13. Проблемы
+
+### `failed to connect to the docker API`
+
+Docker Desktop не запущен. Запустите приложение и дождитесь статуса «Running».
+
+### `DejaVuSans.ttf and DejaVuSans-Bold.ttf are required`
+
+Запуск вне контейнера без шрифтов. Варианты: перейти на Docker, поставить шрифты, или задать
+`HALYK_DEJAVU_DIR`. Сообщение об ошибке перечисляет все просмотренные папки.
+
+### `ModuleNotFoundError: No module named 'duckdb'`
+
+Локальное окружение не активировано или проект не установлен: `pip install -e ".[dev]"`.
+
 ### При установке падает сборка `pyyaml`
 
-У вас Python 3.14. Нужен 3.12.
-
-```bash
-py -3.12 -m venv .venv
-```
-
-### В логе `Semantic embedder unavailable — falling back to BM25-only retrieval`
-
-Не установлен extra `semantic`. Система работает, но поиск контекста хуже.
-
-```bash
-pip install -e ".[semantic]"
-```
-
-Это сообщение — **специально добавленное в Cloud1**. В `codex-1` та же деградация происходила
-молча.
+Python 3.14 — колёс под него нет. Нужен 3.12, либо используйте Docker.
 
 ### `DeepSeekConfigurationError`
 
-Не задан `DEEPSEEK_API_KEY`. См. [раздел 3](#3-настройка-ключа-deepseek).
+Не задан `DEEPSEEK_API_KEY`, см. [раздел 4](#4-ключ-deepseek).
 
-### `preprocess` ничего не делает и сразу завершается
+### `Semantic embedder unavailable — falling back to BM25-only`
 
-Файлы уже обработаны — сработала идемпотентность по SHA-256. Чтобы прогнать заново, удалите базу:
+Не установлен extra `semantic`. Система работает, поиск контекста хуже. Это сообщение
+**специально добавлено в Cloud1** — в codex-1 та же деградация происходила молча.
+
+### `preprocess` сразу завершается, ничего не делая
+
+Файлы уже обработаны, сработала идемпотентность по SHA-256. Удалите базу:
 
 ```bash
 rm data/duckdb/run.duckdb
@@ -389,30 +416,24 @@ rm data/duckdb/run.duckdb
 
 ### Много ковенантов со `spec_trust: "low"`
 
-Ревьюер массово отклоняет спецификации. Проверьте `review_objection` — если возражения осмысленные,
-проблема в компиляции. Если ревьюер придирается к верным спецификациям, временно отключите:
-
-```bash
-halyk-covenants preprocess data/raw --db data/duckdb/run.duckdb --no-spec-review
-```
+Проверьте `review_objection`. Если возражения осмысленные — проблема в компиляции. Если ревьюер
+придирается к верным спекам — временно отключите `--no-spec-review`.
 
 ---
 
 ## Шпаргалка
 
 ```bash
-# установка
 cd 2_ARCHITECTURE_COVENANT_MVP
-python -m venv .venv
-.venv\Scripts\Activate.ps1
-pip install -e ".[dev,semantic]"
+
+# тесты
+docker compose --profile test run --rm test
 
 # полный прогон
-halyk-covenants preprocess data/raw --db data/duckdb/run.duckdb
-halyk-covenants evaluate-all --at-date 2026-08-05 --db data/duckdb/run.duckdb --output out/results.json --confidence-output out/confidence-report.json
-halyk-covenants serialize-submission --results out/results.json --profile config/submission_profile.json --output out/submission.json
+docker compose --profile ai run --rm preprocess-ai
+docker compose --profile ai run --rm evaluate-all
 
 # что смотреть
-# out/confidence-report.json  → отсортирован, сверху самое сомнительное
-# out/submission.json         → файл ответа
+# data/submissions/confidence-report.json  → сверху самое сомнительное
+# data/submissions/submission.json         → файл ответа
 ```
