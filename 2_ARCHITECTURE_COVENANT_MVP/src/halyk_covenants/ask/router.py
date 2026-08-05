@@ -66,6 +66,11 @@ class Route:
     covenant: CovenantSpec | None = None
     covenant_score: float = 0.0
     at_date: date | None = None
+    # Inclusive bounds when the question names a month or a year. A covenant with
+    # its own time window ignores this; one without a window uses it, so that
+    # "в апреле" is not silently dropped.
+    period: tuple[date, date] | None = None
+    period_applied: bool = False
     steps: list[RouteStep] = field(default_factory=list)
     alternatives: list[tuple[CovenantSpec, float]] = field(default_factory=list)
     problems: list[str] = field(default_factory=list)
@@ -121,11 +126,17 @@ def resolve_borrower(question: str, borrowers: list[Borrower]) -> tuple[str | No
     return None, "", "не найден"
 
 
-def resolve_date(question: str, default: date) -> tuple[date, str]:
-    """Prefer an explicit date, then month+year, then year; otherwise the default."""
+def resolve_date(
+    question: str, default: date
+) -> tuple[date, str, tuple[date, date] | None]:
+    """Return (evaluation date, how, inclusive period).
+
+    The period is set only when the question names a month or a year, because
+    only then does the user mean a span rather than a point in time.
+    """
     iso = _ISO_DATE.search(question)
     if iso:
-        return date(int(iso[1]), int(iso[2]), int(iso[3])), "дата указана явно"
+        return date(int(iso[1]), int(iso[2]), int(iso[3])), "дата указана явно", None
 
     year_match = _YEAR.search(question)
     for match in _MONTH_YEAR.finditer(question):
@@ -134,18 +145,22 @@ def resolve_date(question: str, default: date) -> tuple[date, str]:
             if word.startswith(stem):
                 year = int(match[2])
                 last = calendar.monthrange(year, month)[1]
-                return date(year, month, last), f"конец месяца «{match[1]}»"
+                end = date(year, month, last)
+                return end, f"конец месяца «{match[1]}»", (date(year, month, 1), end)
 
     lowered = question.casefold()
     for stem, month in sorted(_MONTHS.items(), key=lambda kv: -len(kv[0])):
         if re.search(rf"\b{stem}\w*", lowered):
             year = int(year_match[1]) if year_match else default.year
             last = calendar.monthrange(year, month)[1]
-            return date(year, month, last), f"конец месяца, год {year}"
+            end = date(year, month, last)
+            return end, f"конец месяца, год {year}", (date(year, month, 1), end)
 
     if year_match:
-        return date(int(year_match[1]), 12, 31), "конец указанного года"
-    return default, "дата не указана, взята по умолчанию"
+        year = int(year_match[1])
+        end = date(year, 12, 31)
+        return end, "конец указанного года", (date(year, 1, 1), end)
+    return default, "дата не указана, взята по умолчанию", None
 
 
 def rank_covenants(
@@ -195,8 +210,9 @@ def route_question(
                 "Заёмщик не распознан. Укажите его через --borrower или назовите в вопросе."
             )
 
-    at_date, how = resolve_date(question, default_date)
+    at_date, how, period = resolve_date(question, default_date)
     route.at_date = at_date
+    route.period = period
     route.steps.append(RouteStep("Дата оценки", at_date.isoformat(), how))
 
     if covenant_id:

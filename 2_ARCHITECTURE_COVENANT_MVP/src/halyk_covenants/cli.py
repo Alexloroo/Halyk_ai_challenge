@@ -8,7 +8,7 @@ import typer
 from dotenv import load_dotenv
 from pydantic import TypeAdapter, ValidationError
 
-from halyk_covenants.ask import render, route_question
+from halyk_covenants.ask import Route, render, route_question
 from halyk_covenants.benchmark.reporting import write_benchmark_reports
 from halyk_covenants.benchmark.runner import run_benchmark
 from halyk_covenants.config import load_settings
@@ -18,7 +18,7 @@ from halyk_covenants.covenants import (
     CovenantRegistry,
     LangChainCompilerRepairer,
 )
-from halyk_covenants.domain import CovenantResult, CovenantSpec
+from halyk_covenants.domain import CovenantResult, CovenantSpec, TimeWindowSpec
 from halyk_covenants.evaluators import EvaluationService, TemporalEvaluationService
 from halyk_covenants.ingestion import PageQualityRouter, PDFIngestor
 from halyk_covenants.llm import DeepSeekChatFactory, DeepSeekConfigurationError
@@ -41,6 +41,52 @@ from halyk_covenants.verification import (
     compute_confidence,
 )
 from halyk_covenants.vlm import PaddleLayoutProvider
+
+
+def resolve_document_name(store: DuckDBStore, spec: CovenantSpec | None) -> str | None:
+    """Map a content-addressed document_id back to its file name for display.
+
+    The id is a SHA-256 of the file contents, which is right for provenance and
+    useless to a reader; documents.source_path holds the original path.
+    """
+    if spec is None or spec.source is None or not spec.source.document_id:
+        return None
+    row = store.connection.execute(
+        "SELECT source_path FROM documents WHERE document_id = ?",
+        [spec.source.document_id],
+    ).fetchone()
+    return Path(row[0]).name if row and row[0] else None
+
+
+def apply_question_period(
+    versions: list[CovenantSpec], route: "Route"
+) -> list[CovenantSpec]:
+    """Narrow covenants that define no period of their own to the asked-about span.
+
+    A covenant with its own window ("за календарный месяц") keeps it — the
+    question only selects which month. A covenant without one constrains every
+    transaction individually, so "в апреле" is a genuine narrowing rather than a
+    contradiction, and dropping it would answer a different question.
+    """
+    if route.period is None:
+        return versions
+    start, end = route.period
+    narrowed: list[CovenantSpec] = []
+    for spec in versions:
+        if spec.time_window is not None and spec.time_window.type != "none":
+            narrowed.append(spec)
+            continue
+        narrowed.append(
+            spec.model_copy(
+                update={
+                    "time_window": TimeWindowSpec(
+                        type="custom", start_date=start, end_date=end
+                    )
+                }
+            )
+        )
+        route.period_applied = True
+    return narrowed
 
 
 def load_manifest_questions(path: Path | None) -> dict[tuple[str, str], str]:
@@ -342,6 +388,7 @@ def ask_command(
 
             result = calculation = evidence = None
             confidence = "medium"
+            document_name = None
             if route.covenant is not None and route.borrower_id:
                 versions = [
                     s
@@ -349,6 +396,12 @@ def ask_command(
                     if (s.covenant_group_id or s.covenant_id)
                     == (route.covenant.covenant_group_id or route.covenant.covenant_id)
                 ]
+                versions = apply_question_period(versions, route)
+                route.covenant = next(
+                    (v for v in versions if v.covenant_id == route.covenant.covenant_id),
+                    route.covenant,
+                )
+                document_name = resolve_document_name(store, route.covenant)
                 result = TemporalEvaluationService(EvaluationService(store)).evaluate_versions(
                     versions, route.borrower_id, route.at_date
                 )
@@ -364,7 +417,9 @@ def ask_command(
         typer.echo(f"Не удалось ответить: {exc}", err=True)
         raise typer.Exit(code=2) from exc
 
-    typer.echo(render(question, route, result, calculation, evidence, confidence))
+    typer.echo(
+        render(question, route, result, calculation, evidence, confidence, document_name)
+    )
     if result is None:
         raise typer.Exit(code=1)
 

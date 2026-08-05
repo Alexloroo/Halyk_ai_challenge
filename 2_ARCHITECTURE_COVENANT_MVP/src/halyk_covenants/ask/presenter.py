@@ -67,6 +67,7 @@ def render(
     calculation: Calculation | None,
     evidence: dict[str, Any] | None,
     confidence: str,
+    document_name: str | None = None,
     width: int = 74,
 ) -> str:
     line = "─" * width
@@ -90,10 +91,19 @@ def render(
     if spec is not None:
         metric = METRIC.get(spec.metric.metric_type, spec.metric.metric_type)
         threshold = number(spec.condition.threshold, spec.condition.currency)
-        window = WINDOW.get(spec.time_window.type, "") if spec.time_window else ""
         rule = f"{metric} {spec.condition.comparator} {threshold}"
+        window = ""
+        if spec.time_window and spec.time_window.type == "custom":
+            window = f"{spec.time_window.start_date} … {spec.time_window.end_date}"
+        elif spec.time_window:
+            window = WINDOW.get(spec.time_window.type, "")
         out.append(f"  Правило    {rule}" + (f", за {window}" if window else ""))
-    out.append(f"  Дата       {route.at_date}")
+
+    if route.period_applied and route.period:
+        start, end = route.period
+        out.append(f"  Период     {start} … {end}  {DIM}(взят из вопроса){RESET}")
+    else:
+        out.append(f"  Дата       {route.at_date}")
     out.append("")
 
     out.append(f"{BOLD}ПОЧЕМУ ИМЕННО ЭТОТ КОВЕНАНТ{RESET}")
@@ -132,7 +142,8 @@ def render(
 
     if spec is not None and spec.source:
         out.append(f"{BOLD}ИСТОЧНИК{RESET}")
-        out.append(f"  {CYAN}{spec.source.document_id}{RESET}, страница {spec.source.page}")
+        shown = document_name or spec.source.document_id
+        out.append(f"  {CYAN}{shown}{RESET}, страница {spec.source.page}")
         for text_line in spec.raw_text.strip().splitlines():
             if text_line.strip():
                 out.append(f"  {DIM}│{RESET} {text_line.strip()}")
