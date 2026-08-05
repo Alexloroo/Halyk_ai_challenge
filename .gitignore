@@ -2,3 +2,6 @@
 # Local dev virtualenvs
 .venv/
 .venv311/
+
+# Demo output
+2_ARCHITECTURE_COVENANT_MVP/data/demo/
