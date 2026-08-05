@@ -59,7 +59,7 @@ target-version = "py312"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "SIM", "RUF"]
-ignore = ["RUF001"]  # Russian fixtures intentionally contain Cyrillic confusables.
+ignore = ["RUF001", "RUF002", "RUF003"]  # Russian CLI text intentionally contains Cyrillic confusables.
 
 [tool.ruff.lint.per-file-ignores]
 # This module intentionally keeps full synthetic contract clauses/rows as readable literals.

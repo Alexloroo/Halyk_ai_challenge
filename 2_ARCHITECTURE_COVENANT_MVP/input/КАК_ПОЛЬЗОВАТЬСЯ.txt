@@ -1,0 +1,59 @@
+ЧТО КУДА КЛАСТЬ
+═══════════════
+
+input/
+  documents/          ← PDF кредитных договоров
+                        любые имена, можно подпапки
+
+  transactions/       ← таблицы CSV / XLSX
+                        borrowers.csv     справочник заёмщиков
+                        transactions.csv  сами операции
+
+  questions.json      ← вопросы (необязательно)
+
+
+ФОРМАТ borrowers.csv
+────────────────────
+borrower_id,canonical_name,bin
+B001,Alpha Trade,990140000001
+B002,Beta Logistics,990140000002
+
+  borrower_id      обязательно, по нему всё связывается
+  canonical_name   обязательно, название как в договоре
+  bin              необязательно, помогает найти заёмщика в PDF
+
+
+ФОРМАТ transactions.csv
+───────────────────────
+transaction_id,borrower_id,transaction_date,amount,currency,direction,counterparty_name,purpose
+TX-1,B001,2026-04-01,5000000,KZT,outgoing,Vendor One,Оплата по договору
+
+  обязательные:  transaction_id, transaction_date (ГГГГ-ММ-ДД), amount
+  остальные:     необязательны
+
+  direction понимает синонимы:
+    incoming ← in, credit, входящий, входящая
+    outgoing ← out, debit, исходящий, исходящая
+
+
+ФОРМАТ questions.json  (необязательно)
+──────────────────────────────────────
+[
+  {"borrower_id": "B001", "covenant_id": "COV-001",
+   "question": "Соблюдён ли месячный лимит за апрель?"}
+]
+
+  Нужен, чтобы система проверила ПОЛНОТУ ответа: если про пару спросили,
+  а она не посчиталась — будет видно. Без файла такой проверки нет.
+
+
+ЗАПУСК
+──────
+Из папки D:\Projects\Halyk\2_ARCHITECTURE_COVENANT_MVP
+
+  .\run.bat                  обработать input\ целиком
+  .\ask.bat "вопрос"         задать вопрос по обработанному
+
+Обработка идёт примерно 1 минуту на каждый найденный ковенант.
+Повторный запуск на тех же файлах ничего не делает — стоит кеш.
+Чтобы прогнать заново:  del data\run.duckdb

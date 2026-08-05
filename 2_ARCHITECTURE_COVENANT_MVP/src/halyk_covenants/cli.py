@@ -25,6 +25,7 @@ from halyk_covenants.llm import DeepSeekChatFactory, DeepSeekConfigurationError
 from halyk_covenants.logging import configure_logging
 from halyk_covenants.ocr import PaddleOCRProvider
 from halyk_covenants.pipeline import BatchEvaluationPipeline, PreprocessPipeline
+from halyk_covenants.pipeline.preprocess import STRUCTURED_SUFFIXES
 from halyk_covenants.reporting import AnswerReportBuilder, load_confidence, render_html
 from halyk_covenants.review import LangChainSpecReviewer, SpecReviewService
 from halyk_covenants.storage import DuckDBStore
@@ -352,6 +353,105 @@ def evaluate_all_command(
         output.parent.mkdir(parents=True, exist_ok=True)
         output.write_text(payload, encoding="utf-8")
     typer.echo(payload)
+
+
+@app.command("run")
+def run_command(
+    input_root: Annotated[Path, typer.Argument()] = Path("input"),
+    db_path: Annotated[Path, typer.Option("--db")] = Path("data/run.duckdb"),
+    at_date: Annotated[
+        datetime | None, typer.Option("--at-date", formats=["%Y-%m-%d"])
+    ] = None,
+    out_dir: Annotated[Path, typer.Option("--out")] = Path("data"),
+    config_path: Annotated[Path | None, typer.Option("--config")] = None,
+    enable_ocr: Annotated[bool, typer.Option("--ocr/--no-ocr")] = False,
+) -> None:
+    """Обработать папку с данными и посчитать все ковенанты — одной командой."""
+    problems = _check_input(input_root)
+    if problems:
+        typer.echo("Входные данные не готовы:\n", err=True)
+        for problem in problems:
+            typer.echo(f"  • {problem}", err=True)
+        typer.echo(
+            f"\nСмотрите {input_root / 'КАК_ПОЛЬЗОВАТЬСЯ.txt'}",
+            err=True,
+        )
+        raise typer.Exit(code=2)
+
+    questions_file = input_root / "questions.json"
+    questions_path = questions_file if questions_file.exists() else None
+    evaluation_date = at_date.date() if at_date else date.today()
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    typer.echo("[1/3] Чтение документов и компиляция ковенантов…")
+    preprocess_command(
+        input_root=input_root,
+        db_path=db_path,
+        config_path=config_path,
+        enable_ocr=enable_ocr,
+        spec_review=True,
+    )
+
+    typer.echo(f"\n[2/3] Оценка на {evaluation_date}…")
+    evaluate_all_command(
+        at_date=datetime.combine(evaluation_date, datetime.min.time()),
+        db_path=db_path,
+        output=out_dir / "results.json",
+        questions_path=questions_path,
+        confidence_output=out_dir / "confidence.json",
+        use_manifest=True,
+    )
+
+    typer.echo("\n[3/3] Отчёт…")
+    answer_report_command(
+        results=out_dir / "results.json",
+        output=out_dir / "answers.html",
+        db_path=db_path,
+        questions_path=questions_path,
+        confidence_path=out_dir / "confidence.json",
+    )
+
+    typer.echo("\nГотово. Что дальше:")
+    typer.echo(f"  {out_dir / 'answers.html'}     открыть в браузере")
+    typer.echo(f"  {out_dir / 'confidence.json'}  сомнительное сверху")
+    typer.echo('  .\\ask.bat "ваш вопрос"        спросить своими словами')
+
+
+def _check_input(root: Path) -> list[str]:
+    """Fail with a sentence a person can act on, not a traceback."""
+    if not root.exists():
+        return [f"Папки {root} нет. Создайте её и положите данные."]
+
+    problems: list[str] = []
+    files = [p for p in root.rglob("*") if p.is_file()]
+    pdfs = [p for p in files if p.suffix.casefold() == ".pdf"]
+    tables = [p for p in files if p.suffix.casefold() in STRUCTURED_SUFFIXES]
+
+    if not pdfs:
+        problems.append(f"Нет ни одного PDF. Положите договоры в {root / 'documents'}")
+    if not tables:
+        problems.append(
+            f"Нет ни одной таблицы CSV/XLSX. Положите их в {root / 'transactions'}"
+        )
+
+    questions = root / "questions.json"
+    if questions.exists():
+        try:
+            raw = json.loads(questions.read_text(encoding="utf-8"))
+            if not isinstance(raw, list):
+                problems.append("questions.json должен быть списком в квадратных скобках []")
+            else:
+                for index, record in enumerate(raw, start=1):
+                    missing = {"borrower_id", "covenant_id"} - set(record)
+                    if missing:
+                        problems.append(
+                            f"questions.json, запись {index}: нет полей "
+                            f"{', '.join(sorted(missing))}"
+                        )
+                        break
+        except json.JSONDecodeError as exc:
+            problems.append(f"questions.json — сломанный JSON: {exc}")
+    return problems
 
 
 @app.command("ask")
