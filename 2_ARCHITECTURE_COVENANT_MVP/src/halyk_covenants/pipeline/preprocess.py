@@ -329,17 +329,28 @@ class PreprocessPipeline:
 
     @staticmethod
     def _try_create_embedder():
+        """Return a working embedder, or None to run BM25-only.
+
+        The provider loads its model lazily, so constructing it proves nothing —
+        a missing `semantic` extra only surfaces on the first embed() call, which
+        would otherwise happen inside index() and fail the whole document. Probe
+        it here so the failure degrades instead of propagating.
+        """
         try:
             from halyk_covenants.documents.retrieval import SentenceTransformerEmbeddingProvider
+
             embedder = SentenceTransformerEmbeddingProvider()
-            logger.info("Semantic embedder loaded: hybrid retrieval active")
-            return embedder
+            embedder.embed(["probe"])
         except Exception as exc:
             logger.warning(
                 "Semantic embedder unavailable — falling back to BM25-only retrieval. "
-                "Install extra 'semantic' for hybrid search. Error: %s", exc,
+                "Install the 'semantic' extra for hybrid search. Reason: %s",
+                exc,
             )
             return None
+
+        logger.info("Semantic embedder loaded: hybrid retrieval active")
+        return embedder
 
     def _is_unchanged(self, path: Path, digest: str) -> bool:
         row = self.store.connection.execute(

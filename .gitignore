@@ -5,3 +5,9 @@
 
 # Demo output
 2_ARCHITECTURE_COVENANT_MVP/data/demo/
+
+# Secrets — never commit
+.env
+.env.local
+*.env
+!.env.example

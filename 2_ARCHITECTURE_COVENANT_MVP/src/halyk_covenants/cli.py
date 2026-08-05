@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Annotated
 
 import typer
+from dotenv import load_dotenv
 from pydantic import TypeAdapter, ValidationError
 
 from halyk_covenants.benchmark.reporting import write_benchmark_reports
@@ -57,8 +58,12 @@ app = typer.Typer(
 @app.callback()
 def main(
     log_level: Annotated[str, typer.Option("--log-level")] = "WARNING",
+    env_file: Annotated[Path | None, typer.Option("--env-file")] = None,
 ) -> None:
     """Halyk covenant evaluation MVP."""
+    # Outside the container nothing else loads .env, so DEEPSEEK_API_KEY and the
+    # LANGSMITH_* variables would be missing. Real environment variables win.
+    load_dotenv(dotenv_path=env_file, override=False)
     configure_logging(log_level)
 
 
