@@ -23,6 +23,7 @@ from halyk_covenants.llm import DeepSeekChatFactory, DeepSeekConfigurationError
 from halyk_covenants.logging import configure_logging
 from halyk_covenants.ocr import PaddleOCRProvider
 from halyk_covenants.pipeline import BatchEvaluationPipeline, PreprocessPipeline
+from halyk_covenants.review import LangChainSpecReviewer, SpecReviewService
 from halyk_covenants.storage import DuckDBStore
 from halyk_covenants.submission import (
     SubmissionSerializer,
@@ -31,7 +32,20 @@ from halyk_covenants.submission import (
 )
 from halyk_covenants.synthetic.generator import generate_synthetic_dataset
 from halyk_covenants.synthetic.validation import DatasetValidationError
+from halyk_covenants.verification import ManifestBuilder, build_confidence_report
 from halyk_covenants.vlm import PaddleLayoutProvider
+
+
+def load_manifest_questions(path: Path | None) -> dict[tuple[str, str], str]:
+    """Load organizer questions as an independent source for the expectation manifest."""
+    if path is None:
+        return {}
+    raw = json.loads(path.read_text(encoding="utf-8"))
+    questions: dict[tuple[str, str], str] = {}
+    for record in raw:
+        key = (str(record["borrower_id"]), str(record["covenant_id"]))
+        questions[key] = str(record.get("question", ""))
+    return questions
 
 app = typer.Typer(
     name="halyk-covenants",
@@ -175,11 +189,13 @@ def preprocess_command(
     db_path: Annotated[Path, typer.Option("--db")] = Path("data/duckdb/hackathon.duckdb"),
     config_path: Annotated[Path | None, typer.Option("--config")] = None,
     enable_ocr: Annotated[bool, typer.Option("--ocr/--no-ocr")] = False,
+    spec_review: Annotated[bool, typer.Option("--spec-review/--no-spec-review")] = True,
 ) -> None:
     """Ingest structured files and compile PDF covenants through DeepSeek/LangGraph."""
     try:
         settings = load_settings(config_path)
         compiler_graph = None
+        spec_review_service = None
         router = PageQualityRouter(native_text_min_chars=settings.ocr.native_text_min_chars)
         pdf_ingestor = PDFIngestor(
             router=router,
@@ -204,11 +220,17 @@ def preprocess_command(
                 compiler=CovenantCompiler(model),
                 repairer=LangChainCompilerRepairer(model),
             )
+            if spec_review:
+                spec_review_service = SpecReviewService(
+                    reviewer=LangChainSpecReviewer(model),
+                    compiler_graph=compiler_graph,
+                )
         with DuckDBStore(db_path) as store:
             report = PreprocessPipeline(
                 store,
                 pdf_ingestor=pdf_ingestor,
                 compiler_graph=compiler_graph,
+                spec_review_service=spec_review_service,
                 progress=lambda message: typer.echo(message, err=True),
             ).run(input_root)
     except (OSError, RuntimeError, ValueError, ValidationError, DeepSeekConfigurationError) as exc:
@@ -232,10 +254,42 @@ def evaluate_all_command(
     at_date: Annotated[datetime, typer.Option("--at-date", formats=["%Y-%m-%d"])],
     db_path: Annotated[Path, typer.Option("--db")] = Path("data/duckdb/hackathon.duckdb"),
     output: Annotated[Path | None, typer.Option("--output")] = None,
+    questions_path: Annotated[
+        Path | None,
+        typer.Option("--questions", exists=True, file_okay=True, dir_okay=False, readable=True),
+    ] = None,
+    confidence_output: Annotated[Path | None, typer.Option("--confidence-output")] = None,
+    use_manifest: Annotated[bool, typer.Option("--manifest/--no-manifest")] = True,
 ) -> None:
     """Evaluate every active borrower/covenant pair independently."""
     with DuckDBStore(db_path) as store:
-        report = BatchEvaluationPipeline(store).run(at_date.date())
+        registry = CovenantRegistry(store)
+        manifest = None
+        if use_manifest:
+            questions = load_manifest_questions(questions_path)
+            manifest = ManifestBuilder(store, registry).build(questions)
+        report = BatchEvaluationPipeline(store, registry, manifest=manifest).run(at_date.date())
+
+        if confidence_output is not None:
+            specs = {spec.covenant_id: spec for spec in registry.list()}
+            for spec in registry.list():
+                group_id = spec.covenant_group_id or spec.covenant_id
+                specs.setdefault(group_id, spec)
+            flags: dict[tuple[str, str], set[str]] = {}
+            for issue in report.verification.issues:
+                if issue.borrower_id and issue.covenant_id:
+                    flags.setdefault((issue.borrower_id, issue.covenant_id), set()).add(issue.code)
+            entries = build_confidence_report(report.results, specs, flags)
+            confidence_output.parent.mkdir(parents=True, exist_ok=True)
+            confidence_output.write_text(
+                json.dumps(
+                    [entry.model_dump(mode="json") for entry in entries],
+                    ensure_ascii=False,
+                    indent=2,
+                ),
+                encoding="utf-8",
+            )
+
     payload = report.model_dump_json(indent=2)
     if output is not None:
         output.parent.mkdir(parents=True, exist_ok=True)
