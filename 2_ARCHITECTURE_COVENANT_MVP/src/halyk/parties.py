@@ -29,7 +29,7 @@ THRESHOLD = re.compile(
 #:     34.5%
 #: so the name and its share are on separate lines, not side by side.
 HOLDING = re.compile(
-    r"^[ \t]*([^\n%]*?(?:LLP|JSC|LLC|Ltd|АО|ТОО|ООО))[ \t]*\n"
+    r"^[ \t]*([^\n%]*?(?:L\.?L\.?P\.?|JSC|LLC|Ltd|АО|ТОО|ООО))\.?[ \t]*\n"
     r"[ \t]*(\d+(?:[.,]\d+)?)[ \t]*%",
     re.MULTILINE,
 )
@@ -74,7 +74,7 @@ def extract_related_parties(scenario_id: str, kyc_text: str) -> RelatedParties:
 
 def _key(name: str) -> str:
     """Loose form for comparison: case and legal suffix carry no meaning here."""
-    text = re.sub(r"\b(LLP|JSC|LLC|Ltd|АО|ТОО|ООО)\b", "", name, flags=re.I)
+    text = re.sub(r"\b(L\.?L\.?P\.?|JSC|LLC|Ltd|АО|ТОО|ООО)\b", "", name, flags=re.I)
     return re.sub(r"[^a-zа-я0-9 ]", "", text.casefold()).strip()
 
 

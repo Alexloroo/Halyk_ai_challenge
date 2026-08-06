@@ -31,9 +31,13 @@ class OutputKind(StrEnum):
 class AggKind(StrEnum):
     SUM_OUTFLOW = "sum_outflow"
     SUM_INFLOW = "sum_inflow"
+    FINANCING_INFLOW = "financing_inflow"
+    REVENUE_PLUS_FINANCING = "revenue_plus_financing"
     REVENUE = "revenue"
     EBITDA = "ebitda"
     MAX_SINGLE_CATEGORY = "max_single_category"
+    REVENUE_MINUS_MAX_CATEGORY = "revenue_minus_max_category"
+    RELATED_PARTY_OUTFLOW = "related_party_outflow"
 
 
 class FormulaSpec(BaseModel):
@@ -46,10 +50,17 @@ class FormulaSpec(BaseModel):
         description="How to compute the numerator. "
         "sum_outflow: total outgoing in given categories. "
         "sum_inflow: total incoming in given categories. "
+        "financing_inflow: inflows from financing activities only (loan drawdowns, "
+        "facility proceeds — excludes revenue, refunds, interest income). "
+        "revenue_plus_financing: sum of revenue PLUS financing inflows "
+        "(when the covenant tests 'revenue and financing proceeds' combined). "
         "revenue: inflows classified as revenue. "
         "ebitda: revenue minus all operating expenses. "
         "max_single_category: the LARGEST category total among the listed categories "
-        "(each category summed separately, then take the max)."
+        "(each category summed separately, then take the max). "
+        "revenue_minus_max_category: revenue MINUS the largest of the listed categories "
+        "(e.g. revenue minus max(personnel, tax)). "
+        "related_party_outflow: total outgoing to counterparties flagged as related/affiliated parties."
     )
     numerator_categories: list[str] = Field(
         description="Category slugs for the numerator: "
@@ -114,6 +125,22 @@ the test is the LARGEST single category total. Use max_single_category \
 and list each category. output_kind = "dollar_amount".
 6. A springing/conditional covenant (applies only if some precondition holds): \
 set is_conditional=True and condition_threshold_dollars.
+7. If the formula is "Revenue minus the largest of [Category A] and [Category B]" \
+("Выручка за вычетом наибольшей из величин ..."), use \
+numerator_agg = "revenue_minus_max_category" and list the categories \
+(e.g. ["personnel", "tax"]). output_kind = "dollar_amount".
+8. If the covenant tests "assets transferred to unrestricted subsidiaries" \
+("активов, переданных неограниченным дочерним организациям") as a fraction \
+of something — the numerator is payments to related/affiliated parties \
+(those subsidiaries are identified in KYC as related parties). \
+Use numerator_agg = "related_party_outflow" with empty numerator_categories.
+9. If the covenant tests "financing receipts" / "поступления по финансированию" \
+(loan drawdowns, facility proceeds), use numerator_agg = "financing_inflow". \
+These are NOT revenue — they are borrowing proceeds.
+10. If the covenant tests the SUM of revenue AND financing proceeds \
+("суммы выручки и поступлений по финансированию"), use \
+numerator_agg = "revenue_plus_financing". This combines both revenue inflows \
+and financing inflows (loan drawdowns) into a single numerator.
 
 Respond ONLY with valid JSON matching the schema. No explanation."""
 
@@ -155,6 +182,18 @@ def extract_formula(clause_text: str, *, max_retries: int = 3) -> FormulaSpec | 
     return None
 
 
+_REVENUE_FINANCING_RE = __import__("re").compile(
+    r"выручк\w*\s+и\s+поступлен\w+\s+по\s+финансирован", __import__("re").I,
+)
+
+
+def _fixup(spec: FormulaSpec, rule_text: str) -> FormulaSpec:
+    if _REVENUE_FINANCING_RE.search(rule_text):
+        spec.numerator_agg = AggKind.REVENUE_PLUS_FINANCING
+        spec.numerator_categories = []
+    return spec
+
+
 def extract_formulas(
     rules: dict[str, dict[str, Rule]],
 ) -> dict[str, FormulaSpec]:
@@ -169,6 +208,7 @@ def extract_formulas(
             print(f"LLM: parsing {key} ({rule.heading[:60]})")
             spec = extract_formula(rule.text)
             if spec:
+                spec = _fixup(spec, rule.text)
                 results[key] = spec
                 print(f"  -> {spec.output_kind} {spec.numerator_agg}/{spec.numerator_categories} "
                       f"/ {spec.denominator_agg}/{spec.denominator_categories} "

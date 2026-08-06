@@ -19,8 +19,9 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from . import paths
+from .audit import apply_adjustments, extract_adjustments, extract_fx_rates
 from .categorize import categorize
-from .docs import DocKind, Document, load_documents, pick
+from .docs import DocKind, Document, Edition, load_documents, pick
 from .evaluate import Answer, evaluate, find_evidence
 from .ledger import LedgerEntry, by_scenario, load_ledger
 from .llm_extract import FormulaSpec, extract_formulas
@@ -92,6 +93,28 @@ def solve(
     for scenario_id, clauses in template.items():
         account = accounts.get(scenario_id, "")
         scenario_entries = grouped.get(scenario_id, [])
+
+        audit_docs = [
+            d for d in docs
+            if d.kind in (DocKind.AUDIT_NOTES, DocKind.UNKNOWN)
+            and d.edition is Edition.CURRENT
+            and account in d.account_ids
+        ]
+        all_adjs = []
+        fx_rates: dict[str, object] = {}
+        for adoc in audit_docs:
+            all_adjs.extend(extract_adjustments(adoc.text))
+            fx_rates.update(extract_fx_rates(adoc.text))
+        if all_adjs:
+            scenario_entries = apply_adjustments(scenario_entries, all_adjs)
+            grouped[scenario_id] = scenario_entries
+        if fx_rates:
+            from decimal import Decimal
+            for entry in scenario_entries:
+                if entry.currency in fx_rates and entry.amount is not None:
+                    rate = fx_rates[entry.currency]
+                    entry.amount = (Decimal(str(entry.amount)) * rate).quantize(Decimal("0.01"))
+                    entry.currency = "USD"
 
         kyc = pick(docs, DocKind.KYC, account)
         if kyc is not None:

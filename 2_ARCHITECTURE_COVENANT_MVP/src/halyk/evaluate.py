@@ -83,12 +83,7 @@ def _verdict(actual: Decimal, rule: Rule, *, comparator_override: str | None = N
     return "COMPLIANT" if actual <= rule.threshold else "BREACH"
 
 
-EBITDA_OPEX = frozenset({
-    Category.OPEX,
-    Category.PERSONNEL,
-    Category.UTILITIES,
-    Category.PROFESSIONAL,
-})
+EBITDA_OPEX = frozenset({Category.OPEX})
 
 
 def _ebitda(entries: list[LedgerEntry]) -> Decimal:
@@ -124,6 +119,41 @@ def _agg(
                 best_total = cat_total
                 best_entries = cat_entries
         return best_total, best_entries
+    if agg == AggKind.REVENUE_MINUS_MAX_CATEGORY:
+        rev_entries = _revenue(entries)
+        rev = _sum(rev_entries)
+        best_total = Decimal(0)
+        best_cat_entries: list[LedgerEntry] = []
+        for cat in (cats or OPEX_LIKE):
+            cat_entries = _spend(entries, frozenset({cat}))
+            cat_total = _sum(cat_entries)
+            if cat_total > best_total:
+                best_total = cat_total
+                best_cat_entries = cat_entries
+        return rev - best_total, rev_entries + best_cat_entries
+    if agg == AggKind.FINANCING_INFLOW:
+        chosen = [
+            e for e in entries
+            if e.is_inflow and e.category not in (
+                Category.REVENUE, Category.CONTRA, Category.INTEREST,
+                Category.INSURANCE, Category.LEASE, Category.MARKETING,
+            )
+        ]
+        return _sum(chosen), chosen
+    if agg == AggKind.REVENUE_PLUS_FINANCING:
+        rev = _revenue(entries)
+        fin = [
+            e for e in entries
+            if e.is_inflow and e.category not in (
+                Category.REVENUE, Category.CONTRA, Category.INTEREST,
+                Category.INSURANCE, Category.LEASE, Category.MARKETING,
+            )
+        ]
+        chosen = rev + fin
+        return _sum(chosen), chosen
+    if agg == AggKind.RELATED_PARTY_OUTFLOW:
+        chosen = _related(entries)
+        return _sum(chosen), chosen
     chosen = _spend(entries, cats)
     return _sum(chosen), chosen
 

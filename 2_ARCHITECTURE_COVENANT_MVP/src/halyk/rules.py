@@ -26,6 +26,12 @@ CLAUSE_BLOCK = re.compile(
     re.S,
 )
 PERIOD = re.compile(r"с\s*(\d{4}-\d{2}-\d{2})\s*по\s*(\d{4}-\d{2}-\d{2})")
+QUARTER = re.compile(
+    r"(?:за|в)\s+(?:(\w+)\s+)?(?:финансов\w+\s+)?квартал\w*"
+    r".*?оканчивающ\w+\s+(\d{4})-(\d{2})-(\d{2})",
+    re.I | re.S,
+)
+QUARTER_WORDS = {"первый": 1, "второй": 2, "третий": 3, "четвёртый": 4, "четвертый": 4}
 MONEY = re.compile(r"\$\s*([\d,]+(?:\.\d{2})?)")
 RATIO = re.compile(r"(\d+(?:\.\d+)?)\s*x", re.I)
 PERCENT = re.compile(r"(\d+(?:\.\d+)?)\s*%")
@@ -58,6 +64,8 @@ class Rule:
 
 
 HEADING_RULES: list[tuple[re.Pattern[str], RuleKind, str, frozenset[Category]]] = [
+    (re.compile(r"выручк\w*\s+за\s+вычет", re.I),
+     RuleKind.UNKNOWN, ">=", frozenset()),
     (re.compile(r"минимальн\w*\s+выручк", re.I),
      RuleKind.MIN_REVENUE, ">=", frozenset({Category.REVENUE})),
     (re.compile(r"максимальн\w*\s+платеж\w*\s+связанн", re.I),
@@ -84,16 +92,51 @@ CATEGORY_WORDS: list[tuple[re.Pattern[str], Category]] = [
 ]
 
 
-def _threshold(text: str) -> Decimal | None:
-    money = MONEY.search(text)
-    if money:
-        return Decimal(money.group(1).replace(",", ""))
+def _quarter_period(text: str) -> tuple[date, date] | None:
+    m = QUARTER.search(text)
+    if not m:
+        return None
+    word, year_s, month_s, day_s = m.groups()
+    end = date(int(year_s), int(month_s), int(day_s))
+    q = QUARTER_WORDS.get((word or "").lower(), 0)
+    if not q:
+        heading_q = re.search(r"(перв|втор|трет|четвёрт|четверт)\w*\s+квартал", text, re.I)
+        if heading_q:
+            prefix = heading_q.group(1).lower()
+            for w, n in QUARTER_WORDS.items():
+                if w.startswith(prefix):
+                    q = n
+                    break
+    if q == 4:
+        return (date(end.year, 10, 1), end)
+    if q == 3:
+        return (date(end.year, 7, 1), date(end.year, 9, 30))
+    if q == 2:
+        return (date(end.year, 4, 1), date(end.year, 6, 30))
+    if q == 1:
+        return (date(end.year, 1, 1), date(end.year, 3, 31))
+    return None
+
+
+def _threshold(text: str, kind: RuleKind = RuleKind.UNKNOWN) -> Decimal | None:
     ratio = RATIO.search(text)
-    if ratio:
-        return Decimal(ratio.group(1))
     percent = PERCENT.search(text)
-    if percent:
-        return Decimal(percent.group(1)) / Decimal(100)
+    money = MONEY.search(text)
+
+    if kind in (RuleKind.RATIO, RuleKind.UNKNOWN):
+        if ratio:
+            return Decimal(ratio.group(1))
+        if percent:
+            return Decimal(percent.group(1)) / Decimal(100)
+        if money:
+            return Decimal(money.group(1).replace(",", ""))
+    else:
+        if money:
+            return Decimal(money.group(1).replace(",", ""))
+        if ratio:
+            return Decimal(ratio.group(1))
+        if percent:
+            return Decimal(percent.group(1)) / Decimal(100)
     return None
 
 
@@ -127,7 +170,16 @@ def extract_rules(scenario_id: str, agreement_text: str) -> dict[str, Rule]:
         kind, comparator, categories = _kind(heading, body)
         if not categories:
             categories = _categories(body)
-        local_period = PERIOD.search(body)
+        clause_text = heading + " " + body
+        clause_period = _quarter_period(clause_text)
+        if clause_period is None:
+            local_period = PERIOD.search(body)
+            clause_period = (
+                (date.fromisoformat(local_period.group(1)),
+                 date.fromisoformat(local_period.group(2)))
+                if local_period
+                else period
+            )
         rules[clause] = Rule(
             scenario_id=scenario_id,
             clause=clause,
@@ -135,13 +187,8 @@ def extract_rules(scenario_id: str, agreement_text: str) -> dict[str, Rule]:
             text=" ".join(body.split())[:1200],
             kind=kind,
             comparator=comparator,
-            threshold=_threshold(body),
-            period=(
-                (date.fromisoformat(local_period.group(1)),
-                 date.fromisoformat(local_period.group(2)))
-                if local_period
-                else period
-            ),
+            threshold=_threshold(body, kind),
+            period=clause_period,
             categories=categories,
         )
     return rules

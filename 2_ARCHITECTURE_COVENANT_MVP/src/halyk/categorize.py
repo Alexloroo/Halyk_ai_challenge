@@ -59,15 +59,15 @@ REVENUE = _rx(
 )
 
 RULES: list[tuple[re.Pattern[str], Category]] = [
+    (_rx(r"\binsurance\b", r"\bpremium\b", r"\bpolicy\b", r"\bunderwrit"),
+     Category.INSURANCE),
+
     (_rx(r"\bpayroll\b", r"\bsalar", r"\bwage", r"\bstaff\b", r"\bpersonnel\b",
          r"\bshift\b", r"\bovertime\b", r"\bseverance\b", r"\bbonus\b",
          r"\bpension\b"), Category.PERSONNEL),
 
     (_rx(r"\btax\b", r"\bvat\b", r"\bduty\b", r"\bexcise\b", r"\bcustoms\b",
          r"\blevy\b", r"\bmineral extraction\b", r"\bwithholding\b"), Category.TAX),
-
-    (_rx(r"\binsurance\b", r"\bpremium\b", r"\bpolicy\b", r"\bunderwrit"),
-     Category.INSURANCE),
 
     (_rx(r"\binterest\b", r"\bcoupon\b", r"\bloan (?:fee|charge)", r"\bfacility fee\b",
          r"\bfinance (?:cost|charge)"), Category.INTEREST),
@@ -82,10 +82,11 @@ RULES: list[tuple[re.Pattern[str], Category]] = [
 
     (_rx(r"\bmarketing\b", r"\badvertis", r"\bmedia buy\b", r"\bpromotion",
          r"\bexhibition\b", r"\bbranding\b", r"\bsponsorship\b", r"\bnewsletter\b",
-         r"\btrade press\b", r"\bdigital media\b"), Category.MARKETING),
+         r"\btrade press\b", r"\bdigital media\b", r"\bcampaign\b"), Category.MARKETING),
 
     (_rx(r"\baudit\b", r"\blegal\b", r"\bconsult", r"\badvisory\b", r"\bnotar",
-         r"\bvaluation\b", r"\bappraisal\b", r"\bengineering bureau\b"),
+         r"\bvaluation\b", r"\bappraisal\b", r"\bengineering bureau\b",
+         r"\bremediation\b"),
      Category.PROFESSIONAL),
 
     (_rx(r"\bcapital expenditure\b", r"\bcapex\b", r"\bconstruction\b",
