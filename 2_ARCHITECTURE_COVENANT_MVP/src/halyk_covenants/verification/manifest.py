@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import json
 import logging
 from collections.abc import Mapping
 from dataclasses import dataclass, field
+from pathlib import Path
 
 from halyk_covenants.covenants import CovenantRegistry
 from halyk_covenants.observability import trace_stage
@@ -32,6 +34,39 @@ class ExpectationManifest:
     @property
     def required_pairs(self) -> set[tuple[str, str]]:
         return {(e.borrower_id, e.covenant_id) for e in self.entries if e.required}
+
+
+def manifest_from_template(path: Path) -> ExpectationManifest:
+    """Build the manifest from the submission template.
+
+    On the real dataset the template *is* the contract: it names every cell that
+    must be answered, and a missing cell scores the same as a wrong one. So the
+    expectation is not derived from what the pipeline happened to detect — it is
+    given, and detection is checked against it.
+
+    Entries are marked required: with this source there is no optional cell.
+    """
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    answers = payload.get("answers")
+    if not isinstance(answers, dict) or not answers:
+        raise ValueError(f"submission template has no answers block: {path}")
+
+    entries = [
+        ManifestEntry(
+            borrower_id=scenario_id,
+            covenant_id=clause,
+            source="submission_template",
+            required=True,
+        )
+        for scenario_id, clauses in answers.items()
+        for clause in clauses
+    ]
+    logger.info(
+        "Manifest from template: %d cells across %d scenarios",
+        len(entries),
+        len(answers),
+    )
+    return ExpectationManifest(entries=entries)
 
 
 class ManifestBuilder:
