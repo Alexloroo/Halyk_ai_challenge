@@ -2,9 +2,13 @@ import json
 from decimal import Decimal
 from pathlib import Path
 
+import pytest
+
 from halyk_covenants.benchmark.reporting import write_benchmark_reports
 from halyk_covenants.benchmark.runner import run_benchmark
 from halyk_covenants.synthetic.generator import generate_synthetic_dataset
+
+pytestmark = pytest.mark.mock_dataset
 
 
 def test_benchmark_awards_all_independent_components_after_trigger_selection(

@@ -1,11 +1,14 @@
 from pathlib import Path
 
 import fitz
+import pytest
 from openpyxl import load_workbook
 
 from halyk_covenants.synthetic import build_synthetic_definition
 from halyk_covenants.synthetic.pdf import render_pdfs
 from halyk_covenants.synthetic.workbook import render_workbook
+
+pytestmark = pytest.mark.mock_dataset
 
 
 def test_workbook_preserves_sheet_contract_text_ids_numeric_amounts_and_anomalies(

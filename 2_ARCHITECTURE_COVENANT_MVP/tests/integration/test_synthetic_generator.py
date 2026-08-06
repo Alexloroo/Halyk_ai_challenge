@@ -10,6 +10,8 @@ from halyk_covenants.synthetic.generator import generate_synthetic_dataset
 from halyk_covenants.synthetic.models import DatasetManifest
 from halyk_covenants.synthetic.validation import DatasetValidationError, validate_dataset
 
+pytestmark = pytest.mark.mock_dataset
+
 EXPECTED_COVENANTS = {
     "COV-ALPHA-SUM.json",
     "COV-ALPHA-MAX.json",

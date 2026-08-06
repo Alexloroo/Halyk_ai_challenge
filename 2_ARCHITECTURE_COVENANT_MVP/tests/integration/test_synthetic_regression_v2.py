@@ -2,8 +2,11 @@ import json
 from pathlib import Path
 
 import fitz
+import pytest
 
 from halyk_covenants.synthetic.regression_v2 import generate_regression_dataset_v2
+
+pytestmark = pytest.mark.mock_dataset
 
 
 def test_regression_v2_contains_new_hackathon_failure_modes(tmp_path: Path) -> None:

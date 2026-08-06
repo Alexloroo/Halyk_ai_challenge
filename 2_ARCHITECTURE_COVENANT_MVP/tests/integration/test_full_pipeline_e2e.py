@@ -1,7 +1,11 @@
 from pathlib import Path
 
+import pytest
+
 from halyk_covenants.synthetic.definitions import build_synthetic_definition
 from halyk_covenants.synthetic.full_pipeline import run_full_synthetic_pipeline
+
+pytestmark = pytest.mark.mock_dataset
 
 
 class FixtureRunnable:

@@ -1,9 +1,12 @@
 import json
 from pathlib import Path
 
+import pytest
 from typer.testing import CliRunner
 
 from halyk_covenants.cli import app
+
+pytestmark = pytest.mark.mock_dataset
 
 runner = CliRunner()
 

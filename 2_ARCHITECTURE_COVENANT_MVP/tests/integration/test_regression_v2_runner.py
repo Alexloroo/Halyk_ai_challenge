@@ -1,7 +1,11 @@
 from pathlib import Path
 
+import pytest
+
 from halyk_covenants.synthetic.regression_runner import run_regression_v2
 from halyk_covenants.synthetic.regression_v2 import generate_regression_dataset_v2
+
+pytestmark = pytest.mark.mock_dataset
 
 
 def test_expanded_regression_v2_scores_all_hackathon_components(tmp_path: Path) -> None:

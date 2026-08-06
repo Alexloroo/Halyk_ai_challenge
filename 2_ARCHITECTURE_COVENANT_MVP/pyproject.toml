@@ -52,6 +52,12 @@ packages = ["src/halyk_covenants"]
 [tool.pytest.ini_options]
 addopts = "-ra"
 testpaths = ["tests"]
+markers = [
+  # Tests that exercise the synthetic dataset generator or the benchmark built
+  # on top of it. They disappear with those packages; everything unmarked must
+  # survive the migration. Run the survivors with: pytest -m "not mock_dataset"
+  "mock_dataset: depends on halyk_covenants.synthetic or .benchmark",
+]
 
 [tool.ruff]
 line-length = 100

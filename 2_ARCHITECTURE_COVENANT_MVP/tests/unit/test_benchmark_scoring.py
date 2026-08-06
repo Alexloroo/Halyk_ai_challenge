@@ -1,9 +1,13 @@
 from decimal import Decimal
 
+import pytest
+
 from halyk_covenants.benchmark import summarize_scores
 from halyk_covenants.benchmark.scoring import score_answer
 from halyk_covenants.domain import CovenantResult
 from halyk_covenants.synthetic.models import ExpectedAnswer
+
+pytestmark = pytest.mark.mock_dataset
 
 
 def expected(

@@ -1,7 +1,11 @@
 from collections import Counter
 from decimal import Decimal
 
+import pytest
+
 from halyk_covenants.synthetic import build_synthetic_definition
+
+pytestmark = pytest.mark.mock_dataset
 
 
 def test_definition_covers_documents_workbook_entities_and_supported_metrics() -> None:
