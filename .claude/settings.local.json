@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(grep -n \"^#\\\\{1,3\\\\} \" docs/1_ARCHITECTURE_Halyk_Agentic_Challenge_MVP.md)",
+      "Bash(grep -n \"^#\\\\{1,3\\\\} \" docs/2_ARCHITECTURE_COVENANT_MVP.md)"
+    ]
+  }
+}

@@ -4,27 +4,17 @@ build-backend = "hatchling.build"
 
 [project]
 name = "halyk-covenants"
-version = "0.1.0"
-description = "Deterministic covenant evaluation MVP"
+version = "0.2.0"
+description = "Covenant evaluation MVP — Halyk AI Challenge"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
-  "duckdb>=1.1",
+  "python-dotenv>=1.0",
   "langchain>=1.0,<2",
   "langchain-deepseek>=1.0,<2",
-  "langgraph>=1.0,<2",
   "langsmith>=0.4,<1",
-  "openpyxl>=3.1",
-  "pandas>=2.2",
   "pydantic>=2.8",
-  "pydantic-settings>=2.4",
-  "pyarrow>=17",
-  "pyyaml==6.0.2",
   "pymupdf>=1.24",
-  "reportlab>=4.2",
-  "rapidfuzz>=3.9",
-  "rank-bm25>=0.2.2",
-  "typer>=0.12",
 ]
 
 [project.optional-dependencies]
@@ -32,24 +22,9 @@ dev = [
   "pytest>=8.3",
   "ruff>=0.6",
 ]
-semantic = [
-  "faiss-cpu>=1.8",
-  "sentence-transformers>=3,<6",
-]
-ocr = [
-  "paddleocr==3.4.1",
-]
-
-[project.scripts]
-halyk-covenants = "halyk_covenants.cli:app"
-halyk-review = "halyk_covenants.review_cli:app"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/halyk_covenants"]
-
-[tool.pytest.ini_options]
-addopts = "-ra"
-testpaths = ["tests"]
+packages = ["src/halyk"]
 
 [tool.ruff]
 line-length = 100
@@ -57,11 +32,7 @@ target-version = "py312"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "SIM", "RUF"]
-ignore = ["RUF001"]  # Russian fixtures intentionally contain Cyrillic confusables.
-
-[tool.ruff.lint.per-file-ignores]
-# This module intentionally keeps full synthetic contract clauses/rows as readable literals.
-"src/halyk_covenants/synthetic/regression_v2.py" = ["E501", "RUF059"]
+ignore = ["RUF001", "RUF002", "RUF003"]
 
 [tool.ruff.format]
 quote-style = "double"
