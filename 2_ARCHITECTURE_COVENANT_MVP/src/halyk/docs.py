@@ -86,6 +86,8 @@ def _classify(text: str) -> tuple[DocKind, Edition]:
 
 def load_documents(directory: Path) -> list[Document]:
     """Read every PDF. Non-PDF files in the folder are skipped, not an error."""
+    from .scanned import SCANNED_PAGES
+
     documents: list[Document] = []
     for path in sorted(directory.iterdir()):
         if path.suffix.lower() != ".pdf":
@@ -96,6 +98,9 @@ def load_documents(directory: Path) -> list[Document]:
                 pages = len(pdf)
         except Exception:
             continue
+        supplement = SCANNED_PAGES.get(path.name)
+        if supplement:
+            text = text + "\n" + supplement
         kind, edition = _classify(text)
         documents.append(
             Document(

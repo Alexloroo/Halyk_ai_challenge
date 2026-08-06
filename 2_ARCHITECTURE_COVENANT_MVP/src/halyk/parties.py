@@ -24,6 +24,16 @@ THRESHOLD = re.compile(
     r"(\d+(?:[.,]\d+)?)\s*%\s*и\s*более",
     re.I,
 )
+#: Some dossiers carry a second table — the share of each subsidiary's assets
+#: pledged as security. Subsidiaries below the stated pledge threshold sit
+#: outside the security perimeter and count as *unrestricted* for the
+#: agreement. That table must not leak into the ownership parsing.
+PLEDGE_SECTION = re.compile(
+    r"Обеспечительное\s+покрытие\s+дочерних\s+организаций"
+    r".*?как\s+неограниченные\.",
+    re.S | re.I,
+)
+PLEDGE_THRESHOLD = re.compile(r"ниже\s+(\d+(?:[.,]\d+)?)\s*%", re.I)
 #: The dossier renders its ownership table one cell per line:
 #:     Aktau Holdings LLP
 #:     34.5%
@@ -41,6 +51,7 @@ class RelatedParties:
     threshold_percent: Decimal | None
     holdings: list[tuple[str, Decimal]] = field(default_factory=list)
     names: frozenset[str] = frozenset()
+    unrestricted: frozenset[str] = frozenset()
 
     @property
     def resolved(self) -> bool:
@@ -52,6 +63,20 @@ def _number(text: str) -> Decimal:
 
 
 def extract_related_parties(scenario_id: str, kyc_text: str) -> RelatedParties:
+    unrestricted: frozenset[str] = frozenset()
+    pledge = PLEDGE_SECTION.search(kyc_text)
+    if pledge:
+        section = pledge.group(0)
+        kyc_text = kyc_text[: pledge.start()] + kyc_text[pledge.end():]
+        pledge_thr = PLEDGE_THRESHOLD.search(section)
+        if pledge_thr:
+            limit = _number(pledge_thr.group(1))
+            unrestricted = frozenset(
+                " ".join(name.split())
+                for name, share in HOLDING.findall(section)
+                if _number(share) < limit
+            )
+
     match = THRESHOLD.search(kyc_text)
     threshold = _number(match.group(1) or match.group(2)) if match else None
 
@@ -69,6 +94,7 @@ def extract_related_parties(scenario_id: str, kyc_text: str) -> RelatedParties:
         threshold_percent=threshold,
         holdings=holdings,
         names=names,
+        unrestricted=unrestricted,
     )
 
 
@@ -88,5 +114,19 @@ def mark_related(entries: list[LedgerEntry], parties: RelatedParties) -> int:
         counterparty = _key(entry.counterparty)
         if any(key and (key in counterparty or counterparty in key) for key in keys):
             entry.is_related_party = True
+            flagged += 1
+    return flagged
+
+
+def mark_unrestricted(entries: list[LedgerEntry], parties: RelatedParties) -> int:
+    """Flag entries paid to an unrestricted subsidiary."""
+    if not parties.unrestricted:
+        return 0
+    keys = {_key(name) for name in parties.unrestricted}
+    flagged = 0
+    for entry in entries:
+        counterparty = _key(entry.counterparty)
+        if any(key and (key in counterparty or counterparty in key) for key in keys):
+            entry.is_unrestricted_transfer = True
             flagged += 1
     return flagged

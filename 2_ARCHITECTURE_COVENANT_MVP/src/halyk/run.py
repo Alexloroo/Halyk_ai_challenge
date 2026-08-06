@@ -15,18 +15,24 @@ one.
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
 
 from . import paths
-from .audit import apply_adjustments, extract_adjustments, extract_fx_rates
+from .audit import (
+    apply_adjustments,
+    extract_adjustments,
+    extract_fx_rates,
+    extract_group_capex,
+)
 from .categorize import categorize
 from .docs import DocKind, Document, Edition, load_documents, pick
 from .evaluate import Answer, evaluate, find_evidence
 from .ledger import LedgerEntry, by_scenario, load_ledger
 from .llm_extract import FormulaSpec, extract_formulas
-from .parties import extract_related_parties, mark_related
-from .rules import Rule, RuleKind, extract_rules
+from .parties import extract_related_parties, mark_related, mark_unrestricted
+from .rules import Rule, extract_rules
 
 
 @dataclass
@@ -53,6 +59,29 @@ def load_template(path: Path) -> dict[str, list[str]]:
     payload = json.loads(path.read_text(encoding="utf-8"))
     answers = payload.get("answers") or {}
     return {scenario: list(clauses) for scenario, clauses in answers.items()}
+
+
+_GROUP_CAPEX_CLAUSE = re.compile(r"капитальн\w+\s+затрат\w*\s+Группы", re.I)
+_BORROWER_NAME = re.compile(r"([A-Z][A-Za-z\- ]+?(?:JSC|LLP))")
+
+
+def _group_capex_for(rule_text: str, docs: list[Document]) -> object | None:
+    """Group capex from the ultimate parent's consolidated statements.
+
+    The clause names the borrower; the consolidated report of its group is the
+    document that both carries a PP&E movement note and mentions that borrower.
+    """
+    name_match = _BORROWER_NAME.search(rule_text)
+    if not name_match:
+        return None
+    borrower = name_match.group(1)
+    for doc in docs:
+        flat = " ".join(doc.text.split())
+        if borrower in flat and "Consolidated Financial Statements" in flat:
+            capex = extract_group_capex(doc.text)
+            if capex is not None:
+                return capex
+    return None
 
 
 def _fallback(scenario_id: str, clause: str, note: str) -> Answer:
@@ -90,7 +119,7 @@ def solve(
     grouped = by_scenario(entries)
 
     all_rules: dict[str, dict[str, Rule]] = {}
-    for scenario_id, clauses in template.items():
+    for scenario_id in template:
         account = accounts.get(scenario_id, "")
         scenario_entries = grouped.get(scenario_id, [])
 
@@ -123,6 +152,7 @@ def solve(
                 mark_related(scenario_entries, parties)
             else:
                 report.parties_unresolved.append(scenario_id)
+            mark_unrestricted(scenario_entries, parties)
         else:
             report.parties_unresolved.append(scenario_id)
 
@@ -151,9 +181,16 @@ def solve(
                 cells[clause] = _fallback(scenario_id, clause, "no rule extracted")
                 continue
             formula = formulas.get(f"{scenario_id}/{clause}")
-            answer = evaluate(rule, scenario_entries, formula=formula)
+            numerator_constant = None
+            if _GROUP_CAPEX_CLAUSE.search(rule.text):
+                numerator_constant = _group_capex_for(rule.text, docs)
+            answer = evaluate(
+                rule, scenario_entries,
+                formula=formula, numerator_constant=numerator_constant,
+            )
             answer.evidence_txn_id = find_evidence(
-                rule, scenario_entries, answer, formula=formula,
+                rule, scenario_entries, answer,
+                formula=formula, numerator_constant=numerator_constant,
             )
             cells[clause] = answer
         report.answers[scenario_id] = cells

@@ -154,6 +154,9 @@ def _agg(
     if agg == AggKind.RELATED_PARTY_OUTFLOW:
         chosen = _related(entries)
         return _sum(chosen), chosen
+    if agg == AggKind.UNRESTRICTED_TRANSFER:
+        chosen = [e for e in entries if e.is_outflow and e.is_unrestricted_transfer]
+        return _sum(chosen), chosen
     chosen = _spend(entries, cats)
     return _sum(chosen), chosen
 
@@ -167,13 +170,19 @@ def _evaluate_with_formula(
     rule: Rule,
     scope: list[LedgerEntry],
     formula: FormulaSpec,
+    numerator_constant: Decimal | None = None,
 ) -> Answer:
     from .llm_extract import OutputKind
 
     num_cats = _cats_from_slugs(formula.numerator_categories)
     den_cats = _cats_from_slugs(formula.denominator_categories)
 
-    numerator, num_entries = _agg(scope, formula.numerator_agg, num_cats)
+    if numerator_constant is not None:
+        # The numerator comes from a document (e.g. group capex in the
+        # consolidated statements), not from ledger entries.
+        numerator, num_entries = numerator_constant, []
+    else:
+        numerator, num_entries = _agg(scope, formula.numerator_agg, num_cats)
 
     if formula.is_conditional and formula.condition_threshold_dollars is not None:
         cond_val = abs(numerator)
@@ -217,11 +226,12 @@ def evaluate(
     entries: list[LedgerEntry],
     *,
     formula: FormulaSpec | None = None,
+    numerator_constant: Decimal | None = None,
 ) -> Answer:
     scope = _select(entries, rule)
 
     if formula is not None and rule.kind in (RuleKind.RATIO, RuleKind.UNKNOWN):
-        return _evaluate_with_formula(rule, scope, formula)
+        return _evaluate_with_formula(rule, scope, formula, numerator_constant)
 
     if rule.kind is RuleKind.MIN_REVENUE:
         chosen = _revenue(scope)
@@ -237,8 +247,13 @@ def evaluate(
 
     elif rule.kind is RuleKind.RELATED_PARTY_SHARE:
         chosen = _related(scope)
-        revenue = _sum(_revenue(scope))
-        actual = (_sum(chosen) / revenue) if revenue else Decimal(0)
+        # The share is "of revenue" unless the clause names an expense base
+        # ("0.08x Операционных расходов" — then it is a share of that spend).
+        if Category.OPEX in rule.categories:
+            base = _sum(_spend(scope, frozenset({Category.OPEX})))
+        else:
+            base = _sum(_revenue(scope))
+        actual = (_sum(chosen) / base) if base else Decimal(0)
 
     elif rule.kind is RuleKind.RATIO:
         ordered = sorted(rule.categories, key=lambda c: c.value)
@@ -271,18 +286,31 @@ def find_evidence(
     answer: Answer,
     *,
     formula: FormulaSpec | None = None,
+    numerator_constant: Decimal | None = None,
 ) -> str | None:
     """The transaction whose removal flips the verdict."""
     if answer.status != "BREACH" or not answer.basis:
         return None
 
-    deciding = [
+    # Evidence is only ever a *remarkable* transaction: one the auditors
+    # reclassified, or one paid to a related party / unrestricted subsidiary.
+    # An ordinary ledger line inside an aggregate is never singled out, even
+    # when its removal alone would flip the verdict.
+    by_id = {e.txn_id: e for e in entries}
+    candidates = [
         txn_id
         for txn_id in answer.basis
+        if (e := by_id.get(txn_id)) is not None
+        and (e.audit_reclassified or e.is_related_party or e.is_unrestricted_transfer)
+    ]
+    deciding = [
+        txn_id
+        for txn_id in candidates
         if evaluate(
             rule,
             [e for e in entries if e.txn_id != txn_id],
             formula=formula,
+            numerator_constant=numerator_constant,
         ).status != "BREACH"
     ]
     return deciding[0] if len(deciding) == 1 else None

@@ -9,9 +9,13 @@ One short call per clause, structured output via Pydantic, retry on errors.
 
 from __future__ import annotations
 
+import hashlib
+import json
 import os
+import re
 import time
 from enum import StrEnum
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 from dotenv import load_dotenv
@@ -38,6 +42,7 @@ class AggKind(StrEnum):
     MAX_SINGLE_CATEGORY = "max_single_category"
     REVENUE_MINUS_MAX_CATEGORY = "revenue_minus_max_category"
     RELATED_PARTY_OUTFLOW = "related_party_outflow"
+    UNRESTRICTED_TRANSFER = "unrestricted_transfer"
 
 
 class FormulaSpec(BaseModel):
@@ -60,7 +65,8 @@ class FormulaSpec(BaseModel):
         "(each category summed separately, then take the max). "
         "revenue_minus_max_category: revenue MINUS the largest of the listed categories "
         "(e.g. revenue minus max(personnel, tax)). "
-        "related_party_outflow: total outgoing to counterparties flagged as related/affiliated parties."
+        "related_party_outflow: total outgoing to counterparties flagged as "
+        "related/affiliated parties."
     )
     numerator_categories: list[str] = Field(
         description="Category slugs for the numerator: "
@@ -158,6 +164,30 @@ def _build_llm():
     )
 
 
+def _cache_path() -> Path:
+    return Path(__file__).resolve().parents[2] / "data" / "check" / "formula_cache.json"
+
+
+def _cache_load() -> dict[str, dict]:
+    path = _cache_path()
+    if path.exists():
+        try:
+            return json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return {}
+    return {}
+
+
+def _cache_save(cache: dict[str, dict]) -> None:
+    path = _cache_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(cache, indent=2, ensure_ascii=False), encoding="utf-8")
+
+
+def _clause_key(clause_text: str) -> str:
+    return hashlib.sha256(clause_text.encode("utf-8")).hexdigest()[:16]
+
+
 def extract_formula(clause_text: str, *, max_retries: int = 3) -> FormulaSpec | None:
     llm = _build_llm()
     structured = llm.with_structured_output(FormulaSpec)
@@ -182,14 +212,20 @@ def extract_formula(clause_text: str, *, max_retries: int = 3) -> FormulaSpec | 
     return None
 
 
-_REVENUE_FINANCING_RE = __import__("re").compile(
-    r"выручк\w*\s+и\s+поступлен\w+\s+по\s+финансирован", __import__("re").I,
+_REVENUE_FINANCING_RE = re.compile(
+    r"выручк\w*\s+и\s+поступлен\w+\s+по\s+финансирован", re.I,
 )
+_UNRESTRICTED_RE = re.compile(r"неограниченн\w+\s+дочерн", re.I)
 
 
 def _fixup(spec: FormulaSpec, rule_text: str) -> FormulaSpec:
     if _REVENUE_FINANCING_RE.search(rule_text):
         spec.numerator_agg = AggKind.REVENUE_PLUS_FINANCING
+        spec.numerator_categories = []
+    if _UNRESTRICTED_RE.search(rule_text):
+        # Transfers to unrestricted subsidiaries are identified via the KYC
+        # pledge-coverage table, not via the related-party ownership table.
+        spec.numerator_agg = AggKind.UNRESTRICTED_TRANSFER
         spec.numerator_categories = []
     return spec
 
@@ -199,14 +235,25 @@ def extract_formulas(
 ) -> dict[str, FormulaSpec]:
     from .rules import RuleKind
 
+    cache = _cache_load()
+    cache_dirty = False
+
     results: dict[str, FormulaSpec] = {}
     for scenario_id, clauses in rules.items():
         for clause_id, rule in clauses.items():
             if rule.kind not in (RuleKind.RATIO, RuleKind.UNKNOWN):
                 continue
             key = f"{scenario_id}/{clause_id}"
-            print(f"LLM: parsing {key} ({rule.heading[:60]})")
-            spec = extract_formula(rule.text)
+            ckey = _clause_key(rule.text)
+            if ckey in cache:
+                spec = FormulaSpec.model_validate(cache[ckey])
+                print(f"LLM: cached  {key} ({rule.heading[:60]})")
+            else:
+                print(f"LLM: parsing {key} ({rule.heading[:60]})")
+                spec = extract_formula(rule.text)
+                if spec:
+                    cache[ckey] = spec.model_dump(mode="json")
+                    cache_dirty = True
             if spec:
                 spec = _fixup(spec, rule.text)
                 results[key] = spec
@@ -214,4 +261,6 @@ def extract_formulas(
                       f"/ {spec.denominator_agg}/{spec.denominator_categories} "
                       f"{spec.comparator}"
                       f"{' CONDITIONAL' if spec.is_conditional else ''}")
+    if cache_dirty:
+        _cache_save(cache)
     return results

@@ -1,0 +1,169 @@
+{
+  "b18e7a648efb0a4a": {
+    "output_kind": "ratio",
+    "numerator_agg": "sum_outflow",
+    "numerator_categories": [
+      "capex"
+    ],
+    "denominator_agg": "sum_outflow",
+    "denominator_categories": [
+      "opex",
+      "lease"
+    ],
+    "comparator": "<=",
+    "is_conditional": false,
+    "condition_threshold_dollars": null
+  },
+  "1432283a21c8e7f4": {
+    "output_kind": "ratio",
+    "numerator_agg": "revenue_plus_financing",
+    "numerator_categories": [],
+    "denominator_agg": "sum_outflow",
+    "denominator_categories": [
+      "opex",
+      "capex"
+    ],
+    "comparator": ">=",
+    "is_conditional": false,
+    "condition_threshold_dollars": null
+  },
+  "d3e4bb8edeaa2060": {
+    "output_kind": "ratio",
+    "numerator_agg": "financing_inflow",
+    "numerator_categories": [],
+    "denominator_agg": "ebitda",
+    "denominator_categories": [],
+    "comparator": "<=",
+    "is_conditional": true,
+    "condition_threshold_dollars": 4000000.0
+  },
+  "f327a82c314a35bb": {
+    "output_kind": "ratio",
+    "numerator_agg": "ebitda",
+    "numerator_categories": [],
+    "denominator_agg": "revenue",
+    "denominator_categories": [
+      "revenue"
+    ],
+    "comparator": ">=",
+    "is_conditional": false,
+    "condition_threshold_dollars": null
+  },
+  "ad6f517764a8121c": {
+    "output_kind": "ratio",
+    "numerator_agg": "sum_outflow",
+    "numerator_categories": [
+      "capex"
+    ],
+    "denominator_agg": "ebitda",
+    "denominator_categories": [],
+    "comparator": "<=",
+    "is_conditional": false,
+    "condition_threshold_dollars": null
+  },
+  "a6525e3f3b5f422f": {
+    "output_kind": "ratio",
+    "numerator_agg": "revenue",
+    "numerator_categories": [
+      "revenue"
+    ],
+    "denominator_agg": "sum_outflow",
+    "denominator_categories": [
+      "personnel",
+      "utilities"
+    ],
+    "comparator": ">=",
+    "is_conditional": false,
+    "condition_threshold_dollars": null
+  },
+  "12046f639579c174": {
+    "output_kind": "ratio",
+    "numerator_agg": "sum_outflow",
+    "numerator_categories": [
+      "tax",
+      "utilities"
+    ],
+    "denominator_agg": "ebitda",
+    "denominator_categories": [],
+    "comparator": "<=",
+    "is_conditional": false,
+    "condition_threshold_dollars": null
+  },
+  "4f8c47118c59e133": {
+    "output_kind": "dollar_amount",
+    "numerator_agg": "sum_outflow",
+    "numerator_categories": [
+      "personnel"
+    ],
+    "denominator_agg": "sum_outflow",
+    "denominator_categories": [],
+    "comparator": "<=",
+    "is_conditional": false,
+    "condition_threshold_dollars": null
+  },
+  "3e82370882391fec": {
+    "output_kind": "ratio",
+    "numerator_agg": "related_party_outflow",
+    "numerator_categories": [],
+    "denominator_agg": "sum_outflow",
+    "denominator_categories": [
+      "capex"
+    ],
+    "comparator": "<=",
+    "is_conditional": false,
+    "condition_threshold_dollars": null
+  },
+  "2862cc477cbf25e5": {
+    "output_kind": "ratio",
+    "numerator_agg": "sum_outflow",
+    "numerator_categories": [
+      "insurance"
+    ],
+    "denominator_agg": "sum_outflow",
+    "denominator_categories": [
+      "lease",
+      "utilities"
+    ],
+    "comparator": ">=",
+    "is_conditional": false,
+    "condition_threshold_dollars": null
+  },
+  "d47cfdec440bcda8": {
+    "output_kind": "dollar_amount",
+    "numerator_agg": "revenue_minus_max_category",
+    "numerator_categories": [
+      "personnel",
+      "tax"
+    ],
+    "denominator_agg": "sum_outflow",
+    "denominator_categories": [],
+    "comparator": ">=",
+    "is_conditional": false,
+    "condition_threshold_dollars": null
+  },
+  "63e39fdbf4990948": {
+    "output_kind": "ratio",
+    "numerator_agg": "ebitda",
+    "numerator_categories": [],
+    "denominator_agg": "sum_outflow",
+    "denominator_categories": [
+      "interest"
+    ],
+    "comparator": ">=",
+    "is_conditional": false,
+    "condition_threshold_dollars": null
+  },
+  "3dd479b8304cb907": {
+    "output_kind": "dollar_amount",
+    "numerator_agg": "max_single_category",
+    "numerator_categories": [
+      "personnel",
+      "utilities"
+    ],
+    "denominator_agg": "sum_outflow",
+    "denominator_categories": [],
+    "comparator": "<=",
+    "is_conditional": false,
+    "condition_threshold_dollars": null
+  }
+}
