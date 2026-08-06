@@ -61,7 +61,7 @@ REVENUE = _rx(
 RULES: list[tuple[re.Pattern[str], Category]] = [
     (_rx(r"\bpayroll\b", r"\bsalar", r"\bwage", r"\bstaff\b", r"\bpersonnel\b",
          r"\bshift\b", r"\bovertime\b", r"\bseverance\b", r"\bbonus\b",
-         r"\bsocial (?:tax|contribution)", r"\bpension\b"), Category.PERSONNEL),
+         r"\bpension\b"), Category.PERSONNEL),
 
     (_rx(r"\btax\b", r"\bvat\b", r"\bduty\b", r"\bexcise\b", r"\bcustoms\b",
          r"\blevy\b", r"\bmineral extraction\b", r"\bwithholding\b"), Category.TAX),
@@ -89,7 +89,9 @@ RULES: list[tuple[re.Pattern[str], Category]] = [
      Category.PROFESSIONAL),
 
     (_rx(r"\bcapital expenditure\b", r"\bcapex\b", r"\bconstruction\b",
-         r"\bequipment purchase\b", r"\bplant and machinery\b", r"\bacquisition of\b",
+         r"\bequipment purchase\b", r"\bpurchase of\b.*\bequipment\b",
+         r"\btransfer of\b.*\bequipment\b",
+         r"\bplant and machinery\b", r"\bacquisition of\b",
          r"\binstallation of\b", r"\bmodernisation\b", r"\bmodernization\b",
          r"\bupgrade of\b", r"\brefurbish", r"\boverhaul\b", r"\bfixed asset"),
      Category.CAPEX),

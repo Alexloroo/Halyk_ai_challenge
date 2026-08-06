@@ -15,10 +15,14 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from decimal import ROUND_HALF_UP, Decimal
+from typing import TYPE_CHECKING
 
 from .categorize import OPEX_LIKE, Category
 from .ledger import LedgerEntry
 from .rules import Rule, RuleKind
+
+if TYPE_CHECKING:
+    from .llm_extract import FormulaSpec
 
 CENTS = Decimal("0.01")
 
@@ -70,16 +74,124 @@ def _related(entries: list[LedgerEntry]) -> list[LedgerEntry]:
     return [e for e in entries if e.is_outflow and e.is_related_party]
 
 
-def _verdict(actual: Decimal, rule: Rule) -> str:
+def _verdict(actual: Decimal, rule: Rule, *, comparator_override: str | None = None) -> str:
     if rule.threshold is None:
         return "COMPLIANT"
-    if rule.is_minimum:
+    comp = comparator_override or rule.comparator
+    if comp == ">=":
         return "COMPLIANT" if actual >= rule.threshold else "BREACH"
     return "COMPLIANT" if actual <= rule.threshold else "BREACH"
 
 
-def evaluate(rule: Rule, entries: list[LedgerEntry]) -> Answer:
+EBITDA_OPEX = frozenset({
+    Category.OPEX,
+    Category.PERSONNEL,
+    Category.UTILITIES,
+    Category.PROFESSIONAL,
+})
+
+
+def _ebitda(entries: list[LedgerEntry]) -> Decimal:
+    rev = _sum(_revenue(entries))
+    opex = _sum(_spend(entries, EBITDA_OPEX))
+    return rev - opex
+
+
+def _agg(
+    entries: list[LedgerEntry], agg: str, cats: frozenset[Category],
+) -> tuple[Decimal, list[LedgerEntry]]:
+    from .llm_extract import AggKind
+
+    if agg == AggKind.REVENUE:
+        chosen = _revenue(entries)
+        return _sum(chosen), chosen
+    if agg == AggKind.EBITDA:
+        rev_entries = _revenue(entries)
+        opex_entries = _spend(entries, OPEX_LIKE)
+        return _ebitda(entries), rev_entries + opex_entries
+    if agg == AggKind.SUM_INFLOW:
+        chosen = [e for e in entries if e.is_inflow and (not cats or e.category in cats)]
+        return _sum(chosen), chosen
+    if agg == AggKind.MAX_SINGLE_CATEGORY:
+        if not cats:
+            cats = OPEX_LIKE
+        best_total = Decimal(0)
+        best_entries: list[LedgerEntry] = []
+        for cat in cats:
+            cat_entries = _spend(entries, frozenset({cat}))
+            cat_total = _sum(cat_entries)
+            if cat_total > best_total:
+                best_total = cat_total
+                best_entries = cat_entries
+        return best_total, best_entries
+    chosen = _spend(entries, cats)
+    return _sum(chosen), chosen
+
+
+def _cats_from_slugs(slugs: list[str]) -> frozenset[Category]:
+    mapping = {c.value: c for c in Category}
+    return frozenset(mapping[s] for s in slugs if s in mapping)
+
+
+def _evaluate_with_formula(
+    rule: Rule,
+    scope: list[LedgerEntry],
+    formula: FormulaSpec,
+) -> Answer:
+    from .llm_extract import OutputKind
+
+    num_cats = _cats_from_slugs(formula.numerator_categories)
+    den_cats = _cats_from_slugs(formula.denominator_categories)
+
+    numerator, num_entries = _agg(scope, formula.numerator_agg, num_cats)
+
+    if formula.is_conditional and formula.condition_threshold_dollars is not None:
+        cond_val = abs(numerator)
+        if cond_val <= Decimal(str(formula.condition_threshold_dollars)):
+            return Answer(
+                scenario_id=rule.scenario_id,
+                clause=rule.clause,
+                status="COMPLIANT",
+                actual=Decimal(0),
+                basis=[e.txn_id for e in num_entries],
+                note="conditional_not_triggered",
+            )
+
+    if formula.output_kind == OutputKind.DOLLAR_AMOUNT:
+        actual = abs(numerator)
+        return Answer(
+            scenario_id=rule.scenario_id,
+            clause=rule.clause,
+            status=_verdict(actual, rule, comparator_override=formula.comparator),
+            actual=actual,
+            basis=[e.txn_id for e in num_entries],
+            note=f"llm_dollar:{formula.numerator_agg}",
+        )
+
+    denominator, den_entries = _agg(scope, formula.denominator_agg, den_cats)
+    actual = (numerator / denominator) if denominator else Decimal(0)
+    chosen = list({e.txn_id: e for e in num_entries + den_entries}.values())
+
+    return Answer(
+        scenario_id=rule.scenario_id,
+        clause=rule.clause,
+        status=_verdict(actual, rule, comparator_override=formula.comparator),
+        actual=abs(actual),
+        basis=[e.txn_id for e in chosen],
+        note=f"llm_ratio:{formula.numerator_agg}/{formula.denominator_agg}",
+    )
+
+
+def evaluate(
+    rule: Rule,
+    entries: list[LedgerEntry],
+    *,
+    formula: FormulaSpec | None = None,
+) -> Answer:
     scope = _select(entries, rule)
+
+    if formula is not None and rule.kind in (RuleKind.RATIO, RuleKind.UNKNOWN):
+        return _evaluate_with_formula(rule, scope, formula)
 
     if rule.kind is RuleKind.MIN_REVENUE:
         chosen = _revenue(scope)
@@ -99,8 +211,6 @@ def evaluate(rule: Rule, entries: list[LedgerEntry]) -> Answer:
         actual = (_sum(chosen) / revenue) if revenue else Decimal(0)
 
     elif rule.kind is RuleKind.RATIO:
-        # Ratio of the first named category over the rest, which covers capital
-        # intensity, coverage and leverage tests alike.
         ordered = sorted(rule.categories, key=lambda c: c.value)
         if len(ordered) >= 2:
             numerator = _sum(_spend(scope, frozenset({ordered[0]})))
@@ -125,19 +235,24 @@ def evaluate(rule: Rule, entries: list[LedgerEntry]) -> Answer:
     )
 
 
-def find_evidence(rule: Rule, entries: list[LedgerEntry], answer: Answer) -> str | None:
-    """The transaction whose removal flips the verdict.
-
-    Straight from the case: evidence is the line that *decides* the outcome, not
-    the largest contributor and not the one that happened to tip a running total.
-    Removing it changes the verdict; if no single line does, there is none.
-    """
+def find_evidence(
+    rule: Rule,
+    entries: list[LedgerEntry],
+    answer: Answer,
+    *,
+    formula: FormulaSpec | None = None,
+) -> str | None:
+    """The transaction whose removal flips the verdict."""
     if answer.status != "BREACH" or not answer.basis:
         return None
 
     deciding = [
         txn_id
         for txn_id in answer.basis
-        if evaluate(rule, [e for e in entries if e.txn_id != txn_id]).status != "BREACH"
+        if evaluate(
+            rule,
+            [e for e in entries if e.txn_id != txn_id],
+            formula=formula,
+        ).status != "BREACH"
     ]
     return deciding[0] if len(deciding) == 1 else None

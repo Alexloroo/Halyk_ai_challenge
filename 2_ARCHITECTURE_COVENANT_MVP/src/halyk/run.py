@@ -23,8 +23,9 @@ from .categorize import categorize
 from .docs import DocKind, Document, load_documents, pick
 from .evaluate import Answer, evaluate, find_evidence
 from .ledger import LedgerEntry, by_scenario, load_ledger
+from .llm_extract import FormulaSpec, extract_formulas
 from .parties import extract_related_parties, mark_related
-from .rules import Rule, extract_rules
+from .rules import Rule, RuleKind, extract_rules
 
 
 @dataclass
@@ -70,6 +71,7 @@ def solve(
     *,
     data_dir: Path | None = None,
     documents: list[Document] | None = None,
+    use_llm: bool = True,
 ) -> RunReport:
     root = data_dir or paths.data_dir()
     template = load_template(root / "submission_template.json")
@@ -86,6 +88,7 @@ def solve(
     accounts = account_map(entries)
     grouped = by_scenario(entries)
 
+    all_rules: dict[str, dict[str, Rule]] = {}
     for scenario_id, clauses in template.items():
         account = accounts.get(scenario_id, "")
         scenario_entries = grouped.get(scenario_id, [])
@@ -107,6 +110,16 @@ def solve(
         if agreement is None:
             report.agreements_missing.append(scenario_id)
         report.rules_found += len(rules)
+        all_rules[scenario_id] = rules
+
+    formulas: dict[str, FormulaSpec] = {}
+    if use_llm:
+        formulas = extract_formulas(all_rules)
+        report.notes.append(f"LLM formulas extracted: {len(formulas)}")
+
+    for scenario_id, clauses in template.items():
+        scenario_entries = grouped.get(scenario_id, [])
+        rules = all_rules.get(scenario_id, {})
 
         cells: dict[str, Answer] = {}
         for clause in clauses:
@@ -114,8 +127,11 @@ def solve(
             if rule is None:
                 cells[clause] = _fallback(scenario_id, clause, "no rule extracted")
                 continue
-            answer = evaluate(rule, scenario_entries)
-            answer.evidence_txn_id = find_evidence(rule, scenario_entries, answer)
+            formula = formulas.get(f"{scenario_id}/{clause}")
+            answer = evaluate(rule, scenario_entries, formula=formula)
+            answer.evidence_txn_id = find_evidence(
+                rule, scenario_entries, answer, formula=formula,
+            )
             cells[clause] = answer
         report.answers[scenario_id] = cells
 
