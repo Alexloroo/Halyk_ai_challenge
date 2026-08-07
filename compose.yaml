@@ -1,0 +1,18 @@
+services:
+  halyk:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: halyk-covenants-ocr:local
+    init: true
+    user: "${LOCAL_UID:-1000}:${LOCAL_GID:-1000}"
+    working_dir: /app
+    volumes:
+      - .:/app
+    environment:
+      TESSDATA_PREFIX: /usr/share/tesseract-ocr/5/tessdata
+      HALYK_OCR_ENABLED: "1"
+      HALYK_OCR_LANGUAGE: rus+kaz+eng
+      HALYK_OCR_DPI: "300"
+      HALYK_OCR_MIN_NATIVE_CHARS: "20"
+    command: ["make", "fulltrace-local"]

@@ -59,10 +59,17 @@ def test_cli_only_recreates_trace_when_fulltrace_is_enabled(tmp_path: Path) -> N
     )
     assert traced_submission == json.loads(traced_output.read_text(encoding="utf-8"))
     manifest = json.loads((trace_dir / "manifest.json").read_text(encoding="utf-8"))
-    submission_stage = manifest["stages"][-1]
+    submission_stage = manifest["stages"][-2]
     assert submission_stage["name"] == "13_submission"
     assert submission_stage["scenarios"] == 1
     assert submission_stage["cells"] == 1
+    ground_truth_stage = manifest["stages"][-1]
+    assert ground_truth_stage["name"] == "14_ground_truth"
+    assert ground_truth_stage["status"] == "skipped"
+    unavailable = json.loads(
+        (trace_dir / "14_ground_truth/not_available.json").read_text(encoding="utf-8")
+    )
+    assert unavailable["status"] == "not_available"
 
 
 def test_makefile_run_and_fulltrace_targets_execute_the_pipeline(tmp_path: Path) -> None:
@@ -88,6 +95,24 @@ def test_makefile_run_and_fulltrace_targets_execute_the_pipeline(tmp_path: Path)
 
     trace_dir = tmp_path / "make-trace"
     traced_output = tmp_path / "make-traced.json"
+    (data_dir / "ground_truth.json").write_text(
+        json.dumps(
+            {
+                "scenarios": {
+                    "P1": {
+                        "covenants": {
+                            "6.1": {
+                                "status": "COMPLIANT",
+                                "actual": 0,
+                                "evidence_txn_id": None,
+                            }
+                        }
+                    }
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
     subprocess.run(
         [
             "make",
@@ -104,3 +129,7 @@ def test_makefile_run_and_fulltrace_targets_execute_the_pipeline(tmp_path: Path)
     )
     assert traced_output.exists()
     assert (trace_dir / "13_submission/submission.json").exists()
+    comparison = json.loads(
+        (trace_dir / "14_ground_truth/comparison.json").read_text(encoding="utf-8")
+    )
+    assert comparison["summary"]["exact_cell_matches"] == 1

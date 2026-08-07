@@ -13,8 +13,9 @@ Reading the wrong one is not a small error — it changes the threshold.
 
 from __future__ import annotations
 
+import os
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import StrEnum
 from pathlib import Path
 
@@ -45,6 +46,11 @@ class Document:
     edition: Edition
     account_ids: list[str]
     pages: int
+    native_pages: list[int] = field(default_factory=list)
+    ocr_pages: list[int] = field(default_factory=list)
+    ocr_failed_pages: list[int] = field(default_factory=list)
+    ocr_language: str = ""
+    ocr_dpi: int | None = None
 
     @property
     def name(self) -> str:
@@ -53,17 +59,40 @@ class Document:
 
 @dataclass
 class DocumentLoadIssue:
-    """A PDF that PyMuPDF could not read, retained for diagnostics."""
+    """A PDF read or page OCR failure retained for diagnostics."""
 
     path: Path
     error_type: str
     message: str
+    operation: str = "pdf_read"
+    page: int | None = None
+
+
+@dataclass(frozen=True)
+class OCRConfig:
+    """Selective Tesseract OCR settings for pages without native text."""
+
+    enabled: bool = True
+    language: str = "rus+kaz+eng"
+    dpi: int = 300
+    min_native_chars: int = 20
+
+    @classmethod
+    def from_environment(cls) -> OCRConfig:
+        enabled = os.getenv("HALYK_OCR_ENABLED", "1").strip().casefold()
+        return cls(
+            enabled=enabled not in {"0", "false", "no", "off"},
+            language=os.getenv("HALYK_OCR_LANGUAGE", "rus+kaz+eng"),
+            dpi=int(os.getenv("HALYK_OCR_DPI", "300")),
+            min_native_chars=int(os.getenv("HALYK_OCR_MIN_NATIVE_CHARS", "20")),
+        )
 
 
 SUPERSEDED = re.compile(r"НЕДЕЙСТВУЮЩАЯ\s+РЕДАКЦИЯ|Заменена и изложена", re.I)
 DRAFT = re.compile(r"ПРОЕКТ\s*—\s*ПРОМЕЖУТОЧНАЯ|ПРОЕКТ —", re.I)
 EXECUTION = re.compile(r"ИСПОЛНИТЕЛЬНЫЙ\s+ЭКЗЕМПЛЯР", re.I)
 ACCOUNT = re.compile(r"ACC-\d{4}")
+OCR_ACCOUNT = re.compile(r"[AА][CС][CС]\s*[-‐‑‒–—]\s*(\d{4})", re.I)
 
 KIND_MARKERS: list[tuple[re.Pattern[str], DocKind]] = [
     (re.compile(r"Финансовые ковенанты|Статья 6|ДОГОВОР БАНКОВСКОГО", re.I),
@@ -93,19 +122,66 @@ def _classify(text: str) -> tuple[DocKind, Edition]:
     return DocKind.UNKNOWN, edition
 
 
+def _ocr_page(page: pymupdf.Page, config: OCRConfig) -> str:
+    textpage = page.get_textpage_ocr(
+        language=config.language,
+        dpi=config.dpi,
+        full=True,
+    )
+    return page.get_text(textpage=textpage)
+
+
+def _normalize_ocr_text(text: str) -> str:
+    """Normalize only stable identifiers affected by Cyrillic/Latin OCR ambiguity."""
+    return OCR_ACCOUNT.sub(lambda match: f"ACC-{match.group(1)}", text)
+
+
 def load_documents(
     directory: Path,
     *,
     issues: list[DocumentLoadIssue] | None = None,
+    ocr_config: OCRConfig | None = None,
 ) -> list[Document]:
     """Read every PDF. Non-PDF files in the folder are skipped, not an error."""
+    config = ocr_config or OCRConfig.from_environment()
     documents: list[Document] = []
     for path in sorted(directory.iterdir()):
         if path.suffix.lower() != ".pdf":
             continue
         try:
             with pymupdf.open(path) as pdf:
-                text = "\n".join(page.get_text() for page in pdf)
+                page_texts: list[str] = []
+                native_pages: list[int] = []
+                ocr_pages: list[int] = []
+                ocr_failed_pages: list[int] = []
+                for page_number, page in enumerate(pdf, start=1):
+                    native_text = page.get_text()
+                    if len(native_text.strip()) >= config.min_native_chars:
+                        native_pages.append(page_number)
+                        page_texts.append(native_text)
+                        continue
+                    if not config.enabled:
+                        if native_text.strip():
+                            native_pages.append(page_number)
+                        page_texts.append(native_text)
+                        continue
+                    try:
+                        page_texts.append(_normalize_ocr_text(_ocr_page(page, config)))
+                        ocr_pages.append(page_number)
+                    except Exception as exc:
+                        page_texts.append(native_text)
+                        ocr_failed_pages.append(page_number)
+                        if issues is not None:
+                            issues.append(
+                                DocumentLoadIssue(
+                                    path=path,
+                                    error_type=type(exc).__name__,
+                                    message=str(exc),
+                                    operation="ocr",
+                                    page=page_number,
+                                )
+                            )
+                text = "\n".join(page_texts)
                 pages = len(pdf)
         except Exception as exc:
             if issues is not None:
@@ -126,6 +202,11 @@ def load_documents(
                 edition=edition,
                 account_ids=sorted(set(ACCOUNT.findall(text))),
                 pages=pages,
+                native_pages=native_pages,
+                ocr_pages=ocr_pages,
+                ocr_failed_pages=ocr_failed_pages,
+                ocr_language=config.language if ocr_pages or ocr_failed_pages else "",
+                ocr_dpi=config.dpi if ocr_pages or ocr_failed_pages else None,
             )
         )
     return documents

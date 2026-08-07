@@ -16,6 +16,11 @@ def document_record(document: Document) -> dict[str, object]:
         "kind": document.kind,
         "edition": document.edition,
         "account_ids": document.account_ids,
+        "native_pages": document.native_pages,
+        "ocr_pages": document.ocr_pages,
+        "ocr_failed_pages": document.ocr_failed_pages,
+        "ocr_language": document.ocr_language,
+        "ocr_dpi": document.ocr_dpi,
     }
 
 
@@ -36,9 +41,11 @@ def trace_pymupdf(
             {
                 "source": issue.path,
                 "name": issue.path.name,
-                "status": "error",
+                "status": "warning" if issue.operation == "ocr" else "error",
                 "error_type": issue.error_type,
                 "message": issue.message,
+                "operation": issue.operation,
+                "page": issue.page,
             }
         )
     writer.write_json("04_pymupdf", "index.json", index)

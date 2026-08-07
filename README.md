@@ -564,6 +564,45 @@ python -m halyk --data-dir data/raw --output submission.json --fulltrace
 отдельный `.txt` для каждого PDF; табличные состояния записываются в CSV, а
 извлечённые правила, формулы и расчёты — в JSON.
 
+Если в `data-dir` присутствует `ground_truth.json`, финальный этап
+`14_ground_truth` сравнивает каждую ячейку submission с эталоном. Подробности
+записываются в `comparison.csv`, а summary, относительные ошибки `actual` и
+невзвешенный score по правилам кейса — в `comparison.json`. Если ground truth
+отсутствует, этап помечается как `skipped`.
+
+### Docker OCR для сканированных PDF
+
+PDF без текстового слоя автоматически проходят постраничный OCR. Native-текст
+остаётся основным быстрым путём; Tesseract вызывается только для страниц, где
+извлечено меньше 20 символов. Docker-образ содержит языки `rus`, `kaz` и `eng`.
+
+Сборка образа:
+
+```bash
+docker compose build halyk
+```
+
+Обычный запуск и fulltrace автоматически собирают Docker-образ и выполняют
+пайплайн внутри контейнера:
+
+```bash
+make run
+make fulltrace ARGS=--no-llm
+```
+
+Параметры OCR при необходимости задаются окружением:
+
+```text
+HALYK_OCR_ENABLED=1
+HALYK_OCR_LANGUAGE=rus+kaz+eng
+HALYK_OCR_DPI=300
+HALYK_OCR_MIN_NATIVE_CHARS=20
+```
+
+В `trace/04_pymupdf/index.json` для каждого документа видны `native_pages`,
+`ocr_pages`, `ocr_failed_pages`, язык и DPI. Распознанный текст сохраняется в
+том же `.txt`, который дальше использует классификация документов и rules.
+
 В целях безопасности автоматически очищается только каталог, созданный предыдущим
 fulltrace-запуском и содержащий ownership-marker в `manifest.json`. Если указать
 чужой непустой каталог через `--trace-dir`, запуск завершится ошибкой без удаления
@@ -612,7 +651,8 @@ evidence_txn_id
 
 Основные ограничения текущего `main`:
 
-- PDF читаются через native PyMuPDF text extraction; OCR fallback в `src/halyk` пока отсутствует;
+- PDF сначала читаются через native PyMuPDF text extraction; для image-only страниц OCR
+  требует Tesseract, который гарантированно установлен в Docker-образе;
 - document classification построен на текстовых маркерах и regex;
 - transaction categorization также в основном deterministic / regex-based;
 - сложные формулы зависят от корректной интерпретации DeepSeek;

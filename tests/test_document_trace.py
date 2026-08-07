@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import fitz
 
 from halyk.docs import DocumentLoadIssue, load_documents
+from halyk.tracing import TraceWriter
+from halyk.tracing.documents import trace_pymupdf
 
 
 def test_document_loader_reports_failed_pdfs_without_losing_valid_text(tmp_path: Path) -> None:
@@ -26,3 +29,16 @@ def test_document_loader_reports_failed_pdfs_without_losing_valid_text(tmp_path:
     assert issues[0].path.name == "broken.pdf"
     assert issues[0].error_type
     assert issues[0].message
+
+    writer = TraceWriter.create(tmp_path / "trace")
+    trace_pymupdf(writer, documents, issues)
+    index = json.loads(
+        (writer.root / "04_pymupdf/index.json").read_text(encoding="utf-8")
+    )
+    assert index[0]["native_pages"] == [1]
+    assert index[0]["ocr_pages"] == []
+    assert index[0]["ocr_failed_pages"] == []
+    assert index[0]["ocr_language"] == ""
+    assert index[0]["ocr_dpi"] is None
+    assert index[1]["operation"] == "pdf_read"
+    assert index[1]["page"] is None
