@@ -36,6 +36,8 @@ Tables use CSV plus JSON metadata. Each PDF produces `<source-stem>.txt`; `index
 
 `manifest.json` records stage order, status, counts, artifacts, and errors. No environment variables, API keys, or credential headers are written.
 
+Recursive recreation is permitted only for a directory positively identified by its fulltrace ownership marker. A nonempty unowned directory, symlink, broad filesystem root, input overlap, output overlap, or artifact path escaping its stage directory is rejected without deletion.
+
 ## CLI and Makefile
 
 `python -m halyk` is the supported entry point. It accepts input/output/team/model options, `--no-llm`, `--fulltrace`, and `--trace-dir` (default `trace`). The trace root is recreated only after CLI argument parsing succeeds. The implementation rejects dangerous trace targets such as the filesystem root or current project root.

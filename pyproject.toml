@@ -17,6 +17,9 @@ dependencies = [
   "pymupdf>=1.24",
 ]
 
+[project.scripts]
+halyk = "halyk.cli:main"
+
 [project.optional-dependencies]
 dev = [
   "pytest>=8.3",

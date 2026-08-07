@@ -60,7 +60,8 @@ class FormulaSpec(BaseModel):
         "(each category summed separately, then take the max). "
         "revenue_minus_max_category: revenue MINUS the largest of the listed categories "
         "(e.g. revenue minus max(personnel, tax)). "
-        "related_party_outflow: total outgoing to counterparties flagged as related/affiliated parties."
+        "related_party_outflow: total outgoing to counterparties flagged as "
+        "related/affiliated parties."
     )
     numerator_categories: list[str] = Field(
         description="Category slugs for the numerator: "

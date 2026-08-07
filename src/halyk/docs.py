@@ -18,7 +18,7 @@ from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
 
-import fitz
+import pymupdf
 
 
 class DocKind(StrEnum):
@@ -49,6 +49,15 @@ class Document:
     @property
     def name(self) -> str:
         return self.path.name
+
+
+@dataclass
+class DocumentLoadIssue:
+    """A PDF that PyMuPDF could not read, retained for diagnostics."""
+
+    path: Path
+    error_type: str
+    message: str
 
 
 SUPERSEDED = re.compile(r"НЕДЕЙСТВУЮЩАЯ\s+РЕДАКЦИЯ|Заменена и изложена", re.I)
@@ -84,17 +93,29 @@ def _classify(text: str) -> tuple[DocKind, Edition]:
     return DocKind.UNKNOWN, edition
 
 
-def load_documents(directory: Path) -> list[Document]:
+def load_documents(
+    directory: Path,
+    *,
+    issues: list[DocumentLoadIssue] | None = None,
+) -> list[Document]:
     """Read every PDF. Non-PDF files in the folder are skipped, not an error."""
     documents: list[Document] = []
     for path in sorted(directory.iterdir()):
         if path.suffix.lower() != ".pdf":
             continue
         try:
-            with fitz.open(path) as pdf:
+            with pymupdf.open(path) as pdf:
                 text = "\n".join(page.get_text() for page in pdf)
                 pages = len(pdf)
-        except Exception:
+        except Exception as exc:
+            if issues is not None:
+                issues.append(
+                    DocumentLoadIssue(
+                        path=path,
+                        error_type=type(exc).__name__,
+                        message=str(exc),
+                    )
+                )
             continue
         kind, edition = _classify(text)
         documents.append(

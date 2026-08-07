@@ -15,18 +15,36 @@ one.
 from __future__ import annotations
 
 import json
+from contextlib import nullcontext
 from dataclasses import dataclass, field
 from pathlib import Path
 
 from . import paths
 from .audit import apply_adjustments, extract_adjustments, extract_fx_rates
 from .categorize import categorize
-from .docs import DocKind, Document, Edition, load_documents, pick
-from .evaluate import Answer, evaluate, find_evidence
+from .docs import DocKind, Document, DocumentLoadIssue, Edition, load_documents, pick
+from .evaluate import Answer, EvaluationTrace, evaluate, find_evidence
 from .ledger import LedgerEntry, by_scenario, load_ledger
 from .llm_extract import FormulaSpec, extract_formulas
 from .parties import extract_related_parties, mark_related
-from .rules import Rule, RuleKind, extract_rules
+from .rules import Rule, extract_rules
+from .tracing import TraceWriter
+from .tracing.documents import trace_classified, trace_pymupdf
+from .tracing.evaluation import trace_evaluation
+from .tracing.formulas import trace_formulas
+from .tracing.ledger import trace_account_mapping, trace_categorized, trace_loaded
+from .tracing.scenario import (
+    trace_audit_input,
+    trace_audit_output,
+    trace_parties,
+    trace_rules,
+    trace_selected,
+)
+from .tracing.template import trace_template
+
+
+def _trace_stage(trace: TraceWriter | None, name: str):
+    return trace.stage(name) if trace is not None else nullcontext()
 
 
 @dataclass
@@ -73,90 +91,193 @@ def solve(
     data_dir: Path | None = None,
     documents: list[Document] | None = None,
     use_llm: bool = True,
+    trace: TraceWriter | None = None,
 ) -> RunReport:
     root = data_dir or paths.data_dir()
-    template = load_template(root / "submission_template.json")
-    report = RunReport(
-        scenarios=len(template),
-        cells_expected=sum(len(v) for v in template.values()),
-    )
+    with _trace_stage(trace, "01_template"):
+        template = load_template(root / "submission_template.json")
+        report = RunReport(
+            scenarios=len(template),
+            cells_expected=sum(len(v) for v in template.values()),
+        )
+        if trace is not None:
+            trace_template(trace, template)
 
-    entries = load_ledger(root / "master_ledger_2025.csv", set(template))
-    for entry in entries:
-        entry.category = categorize(entry.description, is_inflow=entry.is_inflow)
+    with _trace_stage(trace, "02_ledger_loaded"):
+        entries = load_ledger(root / "master_ledger_2025.csv", set(template))
+        if trace is not None:
+            trace_loaded(trace, entries)
 
-    docs = documents if documents is not None else load_documents(root / "documents")
-    accounts = account_map(entries)
-    grouped = by_scenario(entries)
+    with _trace_stage(trace, "03_ledger_categorized"):
+        for entry in entries:
+            entry.category = categorize(entry.description, is_inflow=entry.is_inflow)
+        if trace is not None:
+            trace_categorized(trace, entries)
+
+    with _trace_stage(trace, "04_pymupdf"):
+        document_issues: list[DocumentLoadIssue] = []
+        docs = (
+            documents
+            if documents is not None
+            else load_documents(root / "documents", issues=document_issues)
+        )
+        if trace is not None:
+            trace_pymupdf(trace, docs, document_issues)
+
+    with _trace_stage(trace, "05_documents_classified"):
+        if trace is not None:
+            trace_classified(trace, docs)
+
+    with _trace_stage(trace, "06_account_mapping"):
+        accounts = account_map(entries)
+        grouped = by_scenario(entries)
+        if trace is not None:
+            trace_account_mapping(trace, accounts)
 
     all_rules: dict[str, dict[str, Rule]] = {}
-    for scenario_id, clauses in template.items():
+    total_adjustments = 0
+    parties_resolved = 0
+    for scenario_id in template:
         account = accounts.get(scenario_id, "")
         scenario_entries = grouped.get(scenario_id, [])
 
-        audit_docs = [
-            d for d in docs
-            if d.kind in (DocKind.AUDIT_NOTES, DocKind.UNKNOWN)
-            and d.edition is Edition.CURRENT
-            and account in d.account_ids
-        ]
-        all_adjs = []
-        fx_rates: dict[str, object] = {}
-        for adoc in audit_docs:
-            all_adjs.extend(extract_adjustments(adoc.text))
-            fx_rates.update(extract_fx_rates(adoc.text))
-        if all_adjs:
-            scenario_entries = apply_adjustments(scenario_entries, all_adjs)
-            grouped[scenario_id] = scenario_entries
-        if fx_rates:
-            from decimal import Decimal
-            for entry in scenario_entries:
-                if entry.currency in fx_rates and entry.amount is not None:
-                    rate = fx_rates[entry.currency]
-                    entry.amount = (Decimal(str(entry.amount)) * rate).quantize(Decimal("0.01"))
-                    entry.currency = "USD"
+        with _trace_stage(trace, "07_documents_selected"):
+            audit_docs = [
+                document
+                for document in docs
+                if document.kind in (DocKind.AUDIT_NOTES, DocKind.UNKNOWN)
+                and document.edition is Edition.CURRENT
+                and account in document.account_ids
+            ]
+            kyc = pick(docs, DocKind.KYC, account)
+            agreement = pick(docs, DocKind.CREDIT_AGREEMENT, account)
+            if trace is not None:
+                trace_selected(
+                    trace,
+                    scenario_id,
+                    account,
+                    agreement=agreement,
+                    kyc=kyc,
+                    audit_documents=audit_docs,
+                )
 
-        kyc = pick(docs, DocKind.KYC, account)
-        if kyc is not None:
-            parties = extract_related_parties(scenario_id, kyc.text)
-            if parties.resolved:
-                mark_related(scenario_entries, parties)
+        with _trace_stage(trace, "08_audit_and_fx"):
+            if trace is not None:
+                trace_audit_input(trace, scenario_id, scenario_entries)
+            all_adjs = []
+            fx_rates: dict[str, object] = {}
+            for audit_document in audit_docs:
+                all_adjs.extend(extract_adjustments(audit_document.text))
+                fx_rates.update(extract_fx_rates(audit_document.text))
+            total_adjustments += len(all_adjs)
+            if all_adjs:
+                scenario_entries = apply_adjustments(scenario_entries, all_adjs)
+                grouped[scenario_id] = scenario_entries
+            if fx_rates:
+                from decimal import Decimal
+
+                for entry in scenario_entries:
+                    if entry.currency in fx_rates and entry.amount is not None:
+                        rate = fx_rates[entry.currency]
+                        entry.amount = (Decimal(str(entry.amount)) * rate).quantize(
+                            Decimal("0.01")
+                        )
+                        entry.currency = "USD"
+            if trace is not None:
+                trace_audit_output(trace, scenario_id, all_adjs, fx_rates, scenario_entries)
+
+        with _trace_stage(trace, "09_related_parties"):
+            parties = None
+            if kyc is not None:
+                parties = extract_related_parties(scenario_id, kyc.text)
+                if parties.resolved:
+                    parties_resolved += 1
+                    mark_related(scenario_entries, parties)
+                else:
+                    report.parties_unresolved.append(scenario_id)
             else:
                 report.parties_unresolved.append(scenario_id)
-        else:
-            report.parties_unresolved.append(scenario_id)
+            if trace is not None:
+                trace_parties(trace, scenario_id, parties, scenario_entries)
 
-        agreement = pick(docs, DocKind.CREDIT_AGREEMENT, account)
-        rules: dict[str, Rule] = (
-            extract_rules(scenario_id, agreement.text) if agreement else {}
-        )
-        if agreement is None:
-            report.agreements_missing.append(scenario_id)
-        report.rules_found += len(rules)
-        all_rules[scenario_id] = rules
-
-    formulas: dict[str, FormulaSpec] = {}
-    if use_llm:
-        formulas = extract_formulas(all_rules)
-        report.notes.append(f"LLM formulas extracted: {len(formulas)}")
-
-    for scenario_id, clauses in template.items():
-        scenario_entries = grouped.get(scenario_id, [])
-        rules = all_rules.get(scenario_id, {})
-
-        cells: dict[str, Answer] = {}
-        for clause in clauses:
-            rule = rules.get(clause)
-            if rule is None:
-                cells[clause] = _fallback(scenario_id, clause, "no rule extracted")
-                continue
-            formula = formulas.get(f"{scenario_id}/{clause}")
-            answer = evaluate(rule, scenario_entries, formula=formula)
-            answer.evidence_txn_id = find_evidence(
-                rule, scenario_entries, answer, formula=formula,
+        with _trace_stage(trace, "10_rules"):
+            rules: dict[str, Rule] = (
+                extract_rules(scenario_id, agreement.text) if agreement else {}
             )
-            cells[clause] = answer
-        report.answers[scenario_id] = cells
+            if agreement is None:
+                report.agreements_missing.append(scenario_id)
+            report.rules_found += len(rules)
+            all_rules[scenario_id] = rules
+            if trace is not None:
+                trace_rules(trace, scenario_id, rules)
+
+    if trace is not None:
+        trace.update_stage("07_documents_selected", scenarios=len(template))
+        trace.update_stage(
+            "08_audit_and_fx", scenarios=len(template), adjustments=total_adjustments
+        )
+        trace.update_stage(
+            "09_related_parties", scenarios=len(template), resolved=parties_resolved
+        )
+        trace.update_stage("10_rules", scenarios=len(template), rules=report.rules_found)
+
+    with _trace_stage(trace, "11_formulas"):
+        formulas: dict[str, FormulaSpec] = {}
+        if use_llm:
+            formulas = extract_formulas(all_rules)
+            report.notes.append(f"LLM formulas extracted: {len(formulas)}")
+        if trace is not None:
+            trace_formulas(trace, all_rules, formulas, enabled=use_llm)
+
+    with _trace_stage(trace, "12_evaluation"):
+        for scenario_id, clauses in template.items():
+            scenario_entries = grouped.get(scenario_id, [])
+            rules = all_rules.get(scenario_id, {})
+            cells: dict[str, Answer] = {}
+            for clause in clauses:
+                rule = rules.get(clause)
+                if rule is None:
+                    cells[clause] = _fallback(scenario_id, clause, "no rule extracted")
+                    if trace is not None:
+                        trace_evaluation(
+                            trace,
+                            scenario_id,
+                            clause,
+                            rule=None,
+                            formula=None,
+                            entries=scenario_entries,
+                            details=None,
+                            answer=cells[clause],
+                            evidence_trials={},
+                        )
+                    continue
+                formula = formulas.get(f"{scenario_id}/{clause}")
+                details = EvaluationTrace() if trace is not None else None
+                answer = evaluate(rule, scenario_entries, formula=formula, trace=details)
+                evidence_trials: dict[str, str] = {}
+                answer.evidence_txn_id = find_evidence(
+                    rule,
+                    scenario_entries,
+                    answer,
+                    formula=formula,
+                    trials=evidence_trials if trace is not None else None,
+                )
+                cells[clause] = answer
+                if trace is not None:
+                    trace_evaluation(
+                        trace,
+                        scenario_id,
+                        clause,
+                        rule=rule,
+                        formula=formula,
+                        entries=scenario_entries,
+                        details=details,
+                        answer=answer,
+                        evidence_trials=evidence_trials,
+                    )
+            report.answers[scenario_id] = cells
+        if trace is not None:
+            trace.update_stage("12_evaluation", cells=report.cells_expected)
 
     return report
 

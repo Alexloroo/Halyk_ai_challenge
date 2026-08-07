@@ -41,6 +41,41 @@ class Answer:
         return float(self.actual.quantize(CENTS, rounding=ROUND_HALF_UP))
 
 
+@dataclass
+class EvaluationTrace:
+    """Filesystem-independent explanation of one covenant calculation."""
+
+    scope_txn_ids: list[str] = field(default_factory=list)
+    branch: str = ""
+    aggregates: dict[str, Decimal] = field(default_factory=dict)
+    basis_txn_ids: list[str] = field(default_factory=list)
+    comparator: str = ""
+    threshold: Decimal | None = None
+    actual: Decimal | None = None
+    status: str = ""
+    note: str = ""
+
+
+def _complete_trace(
+    trace: EvaluationTrace | None,
+    rule: Rule,
+    answer: Answer,
+    *,
+    branch: str,
+    aggregates: dict[str, Decimal],
+) -> None:
+    if trace is None:
+        return
+    trace.branch = branch
+    trace.aggregates = aggregates
+    trace.basis_txn_ids = list(answer.basis)
+    trace.comparator = rule.comparator
+    trace.threshold = rule.threshold
+    trace.actual = answer.actual
+    trace.status = answer.status
+    trace.note = answer.note
+
+
 def in_period(entry: LedgerEntry, rule: Rule) -> bool:
     if rule.period is None:
         return True
@@ -167,6 +202,7 @@ def _evaluate_with_formula(
     rule: Rule,
     scope: list[LedgerEntry],
     formula: FormulaSpec,
+    trace: EvaluationTrace | None = None,
 ) -> Answer:
     from .llm_extract import OutputKind
 
@@ -178,7 +214,7 @@ def _evaluate_with_formula(
     if formula.is_conditional and formula.condition_threshold_dollars is not None:
         cond_val = abs(numerator)
         if cond_val <= Decimal(str(formula.condition_threshold_dollars)):
-            return Answer(
+            answer = Answer(
                 scenario_id=rule.scenario_id,
                 clause=rule.clause,
                 status="COMPLIANT",
@@ -186,10 +222,20 @@ def _evaluate_with_formula(
                 basis=[e.txn_id for e in num_entries],
                 note="conditional_not_triggered",
             )
+            _complete_trace(
+                trace,
+                rule,
+                answer,
+                branch="formula_conditional_not_triggered",
+                aggregates={"condition_value": cond_val, "numerator": numerator},
+            )
+            if trace is not None:
+                trace.comparator = formula.comparator
+            return answer
 
     if formula.output_kind == OutputKind.DOLLAR_AMOUNT:
         actual = abs(numerator)
-        return Answer(
+        answer = Answer(
             scenario_id=rule.scenario_id,
             clause=rule.clause,
             status=_verdict(actual, rule, comparator_override=formula.comparator),
@@ -197,12 +243,22 @@ def _evaluate_with_formula(
             basis=[e.txn_id for e in num_entries],
             note=f"llm_dollar:{formula.numerator_agg}",
         )
+        _complete_trace(
+            trace,
+            rule,
+            answer,
+            branch="formula_dollar_amount",
+            aggregates={"numerator": numerator},
+        )
+        if trace is not None:
+            trace.comparator = formula.comparator
+        return answer
 
     denominator, den_entries = _agg(scope, formula.denominator_agg, den_cats)
     actual = (numerator / denominator) if denominator else Decimal(0)
     chosen = list({e.txn_id: e for e in num_entries + den_entries}.values())
 
-    return Answer(
+    answer = Answer(
         scenario_id=rule.scenario_id,
         clause=rule.clause,
         status=_verdict(actual, rule, comparator_override=formula.comparator),
@@ -210,6 +266,16 @@ def _evaluate_with_formula(
         basis=[e.txn_id for e in chosen],
         note=f"llm_ratio:{formula.numerator_agg}/{formula.denominator_agg}",
     )
+    _complete_trace(
+        trace,
+        rule,
+        answer,
+        branch="formula_ratio",
+        aggregates={"numerator": numerator, "denominator": denominator},
+    )
+    if trace is not None:
+        trace.comparator = formula.comparator
+    return answer
 
 
 def evaluate(
@@ -217,28 +283,36 @@ def evaluate(
     entries: list[LedgerEntry],
     *,
     formula: FormulaSpec | None = None,
+    trace: EvaluationTrace | None = None,
 ) -> Answer:
     scope = _select(entries, rule)
+    if trace is not None:
+        trace.scope_txn_ids = [entry.txn_id for entry in scope]
 
     if formula is not None and rule.kind in (RuleKind.RATIO, RuleKind.UNKNOWN):
-        return _evaluate_with_formula(rule, scope, formula)
+        return _evaluate_with_formula(rule, scope, formula, trace)
 
     if rule.kind is RuleKind.MIN_REVENUE:
         chosen = _revenue(scope)
         actual = _sum(chosen)
+        aggregates = {"selected_total": actual}
 
     elif rule.kind is RuleKind.MAX_CATEGORY_SPEND:
         chosen = _spend(scope, rule.categories)
         actual = _sum(chosen)
+        aggregates = {"selected_total": actual}
 
     elif rule.kind is RuleKind.MAX_RELATED_PARTY:
         chosen = _related(scope)
         actual = _sum(chosen)
+        aggregates = {"selected_total": actual}
 
     elif rule.kind is RuleKind.RELATED_PARTY_SHARE:
         chosen = _related(scope)
         revenue = _sum(_revenue(scope))
-        actual = (_sum(chosen) / revenue) if revenue else Decimal(0)
+        related = _sum(chosen)
+        actual = (related / revenue) if revenue else Decimal(0)
+        aggregates = {"related_total": related, "revenue_total": revenue}
 
     elif rule.kind is RuleKind.RATIO:
         ordered = sorted(rule.categories, key=lambda c: c.value)
@@ -250,12 +324,14 @@ def evaluate(
             denominator = _sum(_revenue(scope))
         chosen = _spend(scope, rule.categories)
         actual = (numerator / denominator) if denominator else Decimal(0)
+        aggregates = {"numerator": numerator, "denominator": denominator}
 
     else:
         chosen = _spend(scope, rule.categories)
         actual = _sum(chosen)
+        aggregates = {"selected_total": actual}
 
-    return Answer(
+    answer = Answer(
         scenario_id=rule.scenario_id,
         clause=rule.clause,
         status=_verdict(actual, rule),
@@ -263,6 +339,14 @@ def evaluate(
         basis=[e.txn_id for e in chosen],
         note=rule.kind.value,
     )
+    _complete_trace(
+        trace,
+        rule,
+        answer,
+        branch=rule.kind.value,
+        aggregates=aggregates,
+    )
+    return answer
 
 
 def find_evidence(
@@ -271,18 +355,21 @@ def find_evidence(
     answer: Answer,
     *,
     formula: FormulaSpec | None = None,
+    trials: dict[str, str] | None = None,
 ) -> str | None:
     """The transaction whose removal flips the verdict."""
     if answer.status != "BREACH" or not answer.basis:
         return None
 
-    deciding = [
-        txn_id
-        for txn_id in answer.basis
-        if evaluate(
+    deciding: list[str] = []
+    for txn_id in answer.basis:
+        result = evaluate(
             rule,
             [e for e in entries if e.txn_id != txn_id],
             formula=formula,
-        ).status != "BREACH"
-    ]
+        )
+        if trials is not None:
+            trials[txn_id] = result.status
+        if result.status != "BREACH":
+            deciding.append(txn_id)
     return deciding[0] if len(deciding) == 1 else None
