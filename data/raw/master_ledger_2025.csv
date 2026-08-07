@@ -4,6 +4,7 @@ TXN-9529-0014,2025-01-01,ACC-9529,Bridgeport Consulting Group,"Electricity for p
 TXN-9569-0014,2025-01-01,ACC-9569,Hartley Property Solutions Service Centre,Rent for staff dormitory — February 2025,-11642179.90,USD
 TXN-9965-0014,2025-01-01,ACC-9965,Juniper Leasing Group (Ekibastuz block B),"Payroll for administrative staff — Kostanay centre, June",-3149550.08,USD
 TXN-9521-0049,2025-01-02,ACC-9521,Eastgate Facilities Trust,"Professional indemnity insurance — Ekibastuz block B, Q3",-282855.49,USD
+TXN-N9-0001,2025-01-02,ACC-9901,Random Vendor,Sales revenue - unrelated account,5500000.00,USD
 TXN-P1-0007,2025-01-02,ACC-7801,Hartley Building Services Holdings (Turkistan point),Plant and boiler insurance premium — Taraz site 2025,-11065870.19,USD
 TXN-P4-0056,2025-01-02,ACC-7804,Cedarville Payroll LP,Revolver interest — November,-2019970.78,USD
 TXN-P6-0016,2025-01-02,ACC-7806,Glenwood Facilities Holdings (Oskemen unit),Corporate income tax instalment — Kostanay centre,-440014.44,USD
@@ -17,11 +18,13 @@ TXN-9181-0001,2025-01-04,ACC-9181,Ironwood Security LP Service Centre,Payroll ov
 TXN-9595-0007,2025-01-04,ACC-9595,Foxridge Landscaping Corp Service Centre,Payroll for security detail — Taraz site 2025,-176035.65,USD
 TXN-B1-0019,2025-01-04,ACC-7201,Ashford Office Supplies LLC,Sponsorship marketing of regional sports club — Astana branch,-212472.44,USD
 TXN-B1-0034,2025-01-04,ACC-7201,Foxridge Stationery (Almaty office),Corporate income tax instalment — Kostanay centre,-7012825.84,USD
+TXN-X17-0001,2025-01-05,ACC-8817,Mobility Client A,Service revenue - fleet operations,900000.00,USD
 TXN-9079-0001,2025-01-06,ACC-9079,Glenwood Realty Solutions Holding,Sewer discharge levy — period 02 2025,-2443163.45,USD
 TXN-P7-0022,2025-01-06,ACC-7807,Ironwood Insurance LLC (Taraz site),"Insurance broker rebate — Semey base, H1",1516471.55,USD
 TXN-9851-0004,2025-01-07,ACC-9851,Summit Telecom Group Service Centre (Kostanay centre),"Ground lease instalment — Uralsk annex, period 01 2025",-1264853.78,USD
 TXN-B1-0048,2025-01-07,ACC-7201,Bridgeport Leasing LLC (Uralsk annex),"Equipment yard lease — Pavlodar block, Q4 2025",-5414655.83,USD
 TXN-P7-0044,2025-01-07,ACC-7807,Juniper Tax Advisory LLC Trading House,Printed marketing collateral run — Zhezkazgan compound,-9477411.59,USD
+TXN-X21-0001,2025-01-07,ACC-8821,Municipal Client A,Service revenue - water systems,1300000.00,USD
 TXN-9508-0020,2025-01-09,ACC-9508,Eastgate Power Inc (Shymkent depot),Rent for regional office — March,-455512.48,USD
 TXN-9598-0050,2025-01-09,ACC-9598,Eastgate Water Works Ltd (Pavlodar block),Interest on working capital line,-1402089.26,USD
 TXN-9907-0019,2025-01-09,ACC-9907,Hartley Uniforms LP (Zhezkazgan compound),"Standby generator electricity — Ekibastuz block B, Q3",-4384833.35,USD
@@ -31,6 +34,8 @@ TXN-P10-0062,2025-01-09,ACC-7810,Cedarville Tax Advisory Partners Trading House 
 TXN-P2-0006,2025-01-09,ACC-7802,Bridgeport Power Corp (Semey base),Property tax payment — Oskemen unit,-2125991.67,USD
 TXN-P2-0017,2025-01-09,ACC-7802,Dunmore Realty (Kyzylorda station),"Printed marketing collateral run — Uralsk annex, January 2025",-3249662.49,USD
 TXN-P3-0053,2025-01-09,ACC-7803,Dunmore Facilities Associates Trading House,"Rent free period credit — Turkistan point, June",1209157.56,USD
+TXN-X14-0001,2025-01-09,ACC-8814,Agro Buyer A,Sales revenue - tractors,1700000.00,USD
+TXN-X5-0001,2025-01-09,ACC-8805,GreenMart LLP,Sales revenue - grain products,1500000.00,USD
 TXN-9174-0034,2025-01-10,ACC-9174,Ironwood Security LP (Oskemen unit),Container yard lease 2025,-4551403.50,USD
 TXN-9324-0040,2025-01-10,ACC-9324,Foxridge Security Services Enterprise,"Default interest charge — Kostanay centre, instalment 1",-3416759.63,USD
 TXN-9599-0038,2025-01-10,ACC-9599,Initech Software Licenses Company,Outdoor marketing site hire — Kyzylorda station,-3446775.92,USD
@@ -38,28 +43,40 @@ TXN-B1-0056,2025-01-10,ACC-7201,Ironwood Realty Services (Karaganda yard),Rent f
 TXN-P10-0004,2025-01-10,ACC-7810,Eastgate Maintenance Solutions,Product launch ad campaign,-174400.39,USD
 TXN-P5-0033,2025-01-10,ACC-7805,Ashford Uniforms Associates (Shymkent depot),Marketing research panel subscription — Oskemen unit,-1870958.07,USD
 TXN-P9-0011,2025-01-10,ACC-7809,Bridgeport Courier Solutions (Ekibastuz block B),Office rent — instalment 3 2025,-238906.18,USD
+TXN-X22-0001,2025-01-10,ACC-8822,Marine Client A,Sales revenue - engineering services,2400000.00,USD
+TXN-X3-0001,2025-01-10,ACC-8803,Copper Ridge LLP,Sales revenue - mining equipment shipment,1400000.00,USD
 TXN-P1-0002,2025-01-11,ACC-7801,Foxridge Tax Advisory Corp (Semey base),"Telecom leased line — Kostanay centre, February 2025",-1474435.73,USD
+TXN-X20-0001,2025-01-11,ACC-8820,Metal Buyer A,Sales revenue - precision metals,1600000.00,USD
+TXN-X4-0001,2025-01-11,ACC-8804,Falcon Retail LLP,Customer settlement - component sales,1300000.00,USD
 TXN-9986-0018,2025-01-12,ACC-9986,Cedarville Logistics Co Group,"Industry exhibition stand marketing — Atyrau terminal, October",-3809024.41,USD
 TXN-P1-0032,2025-01-12,ACC-7801,Eastgate Janitorial Partners (Ekibastuz block B),"Default interest charge — Almaty office, instalment 1 2025",-654151.88,USD
 TXN-P5-0048,2025-01-12,ACC-7805,Cedarville Uniforms Solutions Service Centre (Oskemen unit),Antenna mast lease — Kostanay centre,-634250.84,USD
 TXN-P5-0054,2025-01-12,ACC-7805,Ashford Maintenance LLC (Zhezkazgan compound),Marketing volume rebate — March 2025,7045005.71,USD
+TXN-X18-0001,2025-01-12,ACC-8818,Timber Buyer,Sales revenue - timber products,2400000.00,USD
+TXN-X6-0001,2025-01-12,ACC-8806,Prime Buyers JSC,Customer payment - materials sales,2000000.00,USD
 TXN-9829-0011,2025-01-13,ACC-9829,Cedarville Realty LLC Works,"Quarterly estimated tax — Uralsk annex, period 04",-4735552.03,USD
 TXN-9991-0014,2025-01-13,ACC-9991,Ashford Payroll Partners (Astana branch),"Insurance broker rebate — Shymkent depot, April 2025",1623587.30,USD
 TXN-P10-0008,2025-01-13,ACC-7810,Bridgeport Office Supplies (Semey base),Marketing photography and artwork 2025,-266501.58,USD
 TXN-P3-0041,2025-01-13,ACC-7803,Dunmore Utility Inc,Group insurance experience refund — Oskemen unit,1064153.42,USD
+TXN-X10-0001,2025-01-13,ACC-8810,Robot Buyer EU,Sales revenue - assembly line,2500000.00,USD
 TXN-9738-0036,2025-01-14,ACC-9738,Juniper Telecom Inc Works,Rent for training centre — Semey base 2025,-302816.90,USD
 TXN-9821-0030,2025-01-14,ACC-9821,Foxridge Insurance Co (Ekibastuz block B),"Trade press marketing insertion — Taraz site, period 01",-8890257.46,USD
 TXN-P4-0013,2025-01-14,ACC-7804,Cedarville Uniforms Solutions,Outdoor marketing site hire — Kyzylorda station,-6073547.09,USD
+TXN-X12-0001,2025-01-14,ACC-8812,Retail Chain A,Sales revenue - packaging,1100000.00,USD
 TXN-9103-0036,2025-01-15,ACC-9103,Maple Grove Telecom,Office rent,-672085.61,USD
 TXN-9476-0011,2025-01-15,ACC-9476,Ironwood Tax Advisory Inc,"Tax audit assessment payment — Kostanay centre, August 2025",-1799029.68,USD
 TXN-9815-0005,2025-01-15,ACC-9815,Dunmore Consulting Corp,"Withholding tax reclaim received — Almaty office, H2",488355.60,USD
 TXN-9853-0017,2025-01-15,ACC-9853,Hartley Waste Systems Solutions Supply (Almaty office),"Interest recovery on overpayment — Atyrau terminal, August",7055927.49,USD
 TXN-9864-0011,2025-01-15,ACC-9864,Bridgeport Stationery Co,Capitalised interest charge — period 03,-6118004.75,USD
 TXN-9908-0036,2025-01-15,ACC-9908,Foxridge Realty Trust (Aktobe hub),Customs duty and tax payment 2025,-1029558.81,USD
+TXN-X1-0001,2025-01-15,ACC-8801,Northstar Mining Supplies LLP,"Customer settlement - industrial equipment sales, January",1500000.00,USD
+TXN-X16-0001,2025-01-15,ACC-8816,Energy Buyer A,Sales revenue - equipment,2200000.00,USD
+TXN-X7-0001,2025-01-15,ACC-8807,Industrial Client A,Sales revenue - control systems,1400000.00,USD
 TXN-9594-0016,2025-01-16,ACC-9594,Eastgate Supply Ltd Partners,Rent free period credit — Taraz site,4048616.38,USD
 TXN-9890-0035,2025-01-16,ACC-9890,Dunmore Property LLC (Aktobe hub),Electricity overbilling refund — January,11175806.15,USD
 TXN-9918-0028,2025-01-16,ACC-9918,Cedarville Security Trust,Insurance broker rebate — January 2025,1788574.66,USD
 TXN-P7-0026,2025-01-16,ACC-7807,Juniper Landscaping LLC (Aktobe hub),Vehicle livery marketing application — period 03,-824986.91,USD
+TXN-X8-0001,2025-01-16,ACC-8808,Frozen Foods Buyer,Sales revenue - storage services,1900000.00,USD
 TXN-9128-0020,2025-01-17,ACC-9128,Bridgeport Cleaning Partners (Turkistan point),Group insurance experience refund,345179.80,USD
 TXN-P3-0023,2025-01-17,ACC-7803,Ashford Cleaning Services LLP (Almaty office),"Seasonal payroll run — Taraz site, June 2025",-10504386.24,USD
 TXN-P8-0012,2025-01-17,ACC-7808,Sentinel Insurance Group (Aktobe hub),"Interest credited on current account — Semey base, February",2667830.89,USD
@@ -68,11 +85,15 @@ TXN-9217-0015,2025-01-18,ACC-9217,Cedarville Catering Solutions,Customs duty and
 TXN-9959-0031,2025-01-18,ACC-9959,Glenwood Building Services Solutions,Interest on working capital line — Karaganda yard 2025,-1093859.72,USD
 TXN-9979-0026,2025-01-18,ACC-9979,Hartley Uniforms LP (Kostanay centre),"Customs duty and tax payment — Karaganda yard, October 2025",-3740411.50,USD
 TXN-9985-0036,2025-01-18,ACC-9985,Eastgate Logistics Inc (Almaty office),"Payroll for drivers — Turkistan point, period 02 2025",-1212996.05,USD
+TXN-X13-0001,2025-01-18,ACC-8813,Telecom Client A,Service revenue - network maintenance,1200000.00,USD
+TXN-X19-0001,2025-01-18,ACC-8819,Freight Client,Service revenue - freight,2500000.00,USD
 TXN-9249-0047,2025-01-19,ACC-9249,Juniper Property Services (Aktobe hub),Telecom leased line — February 2025,-4452903.91,USD
 TXN-9412-0032,2025-01-19,ACC-9412,Cedarville Facilities (Oskemen unit),"Environmental liability insurance — Oskemen unit, H1",-131433.45,USD
 TXN-9030-0036,2025-01-20,ACC-9030,Bridgeport Insurance Partners Group,Land lease — period 02 2025,-2807109.35,USD
 TXN-9384-0018,2025-01-20,ACC-9384,Cedarville Insurance Group (Almaty office),Interest on bridge facility — Q3,-4807904.80,USD
 TXN-B4-0016,2025-01-20,ACC-7204,Ironwood Power Trust (Ekibastuz block B),"District heating utility charge — Shymkent depot, H2 2025",-10042101.92,USD
+TXN-X2-0001,2025-01-20,ACC-8802,Caspian Retail Network JSC,"Customer payment - logistics services, January",1200000.00,USD
+TXN-X9-0001,2025-01-20,ACC-8809,Eco Client,Service revenue - remediation,2100000.00,USD
 TXN-9295-0050,2025-01-21,ACC-9295,Eastgate Utility LLC (Kostanay centre),Telecom mobile fleet plan — Aktobe hub,-531428.16,USD
 TXN-9475-0046,2025-01-21,ACC-9475,Hartley Consulting LLC (Almaty office),Professional indemnity insurance — June,-7876181.52,USD
 TXN-9826-0039,2025-01-21,ACC-9826,Ashford Cleaning Services Trading House,"Retail unit rent — Turkistan point, May",-2130242.17,USD
@@ -84,6 +105,7 @@ TXN-9855-0008,2025-01-22,ACC-9855,Dunmore Waste Systems LLC JSC (Kostanay centre
 TXN-P4-0018,2025-01-22,ACC-7804,Juniper Uniforms Co LLP,"Warehouse lease — Semey base, June 2025",-2356896.70,USD
 TXN-P4-0038,2025-01-22,ACC-7804,Kingsley Water Works Solutions (Taraz site),Telecom service credit received — Taraz site 2025,459637.57,USD
 TXN-P5-0007,2025-01-22,ACC-7805,Bridgeport Janitorial Solutions (Ekibastuz block B),"Electricity metering correction credit — Taraz site, period 01",1571727.86,USD
+TXN-X15-0001,2025-01-22,ACC-8815,Industrial Client,Service revenue - annual maintenance,2800000.00,USD
 TXN-9610-0047,2025-01-23,ACC-9610,Bridgeport Printing Holdings,"Printed marketing collateral run — Kyzylorda station, December",-5514208.43,USD
 TXN-9907-0013,2025-01-24,ACC-9907,Ironwood Cleaning LLC (Aktobe hub),"Warehouse lease — Almaty office, January 2025",-6987306.79,USD
 TXN-9240-0046,2025-01-25,ACC-9240,Ashford Logistics LP (Karaganda yard),"Utility deposit returned — Almaty office, H2",4176832.78,USD
@@ -122,7 +144,9 @@ TXN-P8-0004,2025-02-02,ACC-7808,Trident Power Cooperative (Uralsk annex),"Teleco
 TXN-P9-0023,2025-02-02,ACC-7809,Ironwood Cleaning LLC Works (Karaganda yard),"Travel insurance for staff — Turkistan point, instalment 3",-7888458.51,USD
 TXN-9834-0042,2025-02-03,ACC-9834,Foxridge Janitorial Group,Land tax instalment — Q3 2025,-6668414.84,USD
 TXN-9956-0041,2025-02-03,ACC-9956,Foxridge Water Works Inc Holding (Almaty office),Electricity bill — Zhezkazgan compound 2025,-256625.02,USD
+TXN-N9-0002,2025-02-03,ACC-9901,Noise Insurer,Insurance premium,-850000.00,USD
 TXN-P7-0009,2025-02-03,ACC-7807,Juniper Building Services Partners (Kyzylorda station),Interest on escrow balance — period 03 2025,10314274.31,USD
+TXN-X11-0001,2025-02-03,ACC-8811,Buyer One,Sales revenue - alloy components,1200000.00,USD
 TXN-9237-0040,2025-02-04,ACC-9237,Foxridge Supply Inc Works,Land tax instalment 2025,-552269.36,USD
 TXN-9499-0016,2025-02-04,ACC-9499,Ironwood Landscaping Inc Partners,Product launch ad campaign — Shymkent depot,-251925.39,EUR
 TXN-P6-0009,2025-02-04,ACC-7806,Cascade Water Utility Works (Pavlodar block),Fidelity bond insurance — Karaganda yard,-667823.42,USD
@@ -146,8 +170,12 @@ TXN-P6-0052,2025-02-08,ACC-7806,Hartley Maintenance Partners,"Rent for archive p
 TXN-9390-0027,2025-02-09,ACC-9390,Ironwood Realty Services Group (Zhezkazgan compound),Severance payroll batch — H1,-3144366.21,USD
 TXN-9482-0042,2025-02-09,ACC-9482,Cedarville Uniforms Solutions (Oskemen unit),"Customs duty and tax payment — Semey base, Q1 2025",-14194834.98,USD
 TXN-P9-0022,2025-02-09,ACC-7809,Bridgeport Realty Inc Group (Karaganda yard),Business interruption insurance — instalment 3,-7594649.55,USD
+TXN-X9-0002,2025-02-09,ACC-8809,Safety Insurer,Workers comp insurance,-100000.00,USD
 TXN-9766-0012,2025-02-10,ACC-9766,Bridgeport Property Ltd (Uralsk annex),"Quarterly interest coupon — Zhezkazgan compound, October",-3208994.66,USD
 TXN-P5-0046,2025-02-10,ACC-7805,Ashford Tax Advisory Holdings Company,Vehicle livery marketing application — Taraz site 2025,-9119061.31,USD
+TXN-X13-0003,2025-02-10,ACC-8813,Development Finance LLP,Term loan facility drawdown,1000000.00,USD
+TXN-X15-0002,2025-02-10,ACC-8815,Insurer A,Equipment insurance,-200000.00,USD
+TXN-X16-0003,2025-02-10,ACC-8816,General Supplier,Routine operating costs,-300000.00,USD
 TXN-9090-0046,2025-02-11,ACC-9090,Ashford Catering Associates,"Tax penalty settlement charge — Uralsk annex, March 2025",-3042753.45,USD
 TXN-9115-0003,2025-02-11,ACC-9115,Lakeshore Insurance Brokers (Astana branch),Marketing research panel subscription — period 04 2025,-882369.88,USD
 TXN-9208-0044,2025-02-11,ACC-9208,Dunmore Stationery Inc (Kyzylorda station),"Sewer discharge levy — Oskemen unit, H2 2025",-173303.94,USD
@@ -157,12 +185,14 @@ TXN-P2-0030,2025-02-11,ACC-7802,Dunmore Uniforms Holdings,Office rent — period
 TXN-P4-0039,2025-02-11,ACC-7804,Glenwood Water Works LLC (Atyrau terminal),Interest on escrow balance 2025,2013671.07,USD
 TXN-P5-0016,2025-02-11,ACC-7805,Ural Turbine Works LLP,Purchase of switchyard equipment,-1703882.44,USD
 TXN-P6-0023,2025-02-11,ACC-7806,Foxridge Insurance Co (Zhezkazgan compound),"Customs duty and tax payment — Atyrau terminal, September",-4274468.38,USD
+TXN-X7-0003,2025-02-11,ACC-8807,MachineWorks LLP,Purchase of testing equipment,-200000.00,USD
 TXN-9109-0002,2025-02-12,ACC-9109,Juniper Tax Advisory LLC (Turkistan point),Customer newsletter marketing production — period 01,-1527956.04,USD
 TXN-9247-0015,2025-02-12,ACC-9247,Eastgate Catering Services (Ekibastuz block B),Marketing agency credit note — Zhezkazgan compound,3125562.27,USD
 TXN-9692-0037,2025-02-12,ACC-9692,Glenwood Realty Solutions,Marketing research panel subscription — period 04 2025,-12149962.77,USD
 TXN-9862-0032,2025-02-12,ACC-9862,Hartley Landscaping Ltd (Semey base),Water charge adjustment credit — Kostanay centre,110445.26,USD
 TXN-P10-0053,2025-02-12,ACC-7810,Juniper Landscaping LLC (Zhezkazgan compound),Overdraft interest — December 2025,-2801359.37,USD
 TXN-P2-0008,2025-02-12,ACC-7802,Bridgeport Tax Advisory Services Supply,Customer newsletter marketing production — Zhezkazgan compound 2025,-302754.71,EUR
+TXN-X1-0004,2025-02-12,ACC-8801,Vector Machinery LLC,Purchase of drilling equipment - fixed asset acquisition,-400000.00,USD
 TXN-9009-0023,2025-02-13,ACC-9009,Eastgate Utility LLC Enterprise (Pavlodar block),"Interest on trade facility — Kostanay centre, instalment 1 2025",-1445934.35,USD
 TXN-9032-0006,2025-02-13,ACC-9032,Ashford Insurance Services JSC,Electricity overbilling refund — period 04,810959.81,USD
 TXN-9396-0015,2025-02-13,ACC-9396,Cedarville Catering Solutions Ltd (Zhezkazgan compound),Land tax instalment — period 01,-870820.19,USD
@@ -175,11 +205,13 @@ TXN-9445-0026,2025-02-14,ACC-9445,Hartley Janitorial Corp Holding,Motor third-pa
 TXN-P5-0051,2025-02-14,ACC-7805,Eastgate Facilities Trust (Taraz site),Interest on subordinated notes — Semey base,-1072861.80,USD
 TXN-P6-0036,2025-02-14,ACC-7806,Hartley Printing Co,Vehicle tax payment — November,-1119866.56,USD
 TXN-P9-0021,2025-02-14,ACC-7809,Bridgeport Uniforms Trust Works,"Rent for spare parts store — Ekibastuz block B, May",-673095.49,USD
+TXN-X22-0003,2025-02-14,ACC-8822,Cobalt Holdings LLP,Group engineering support payment,-360000.00,USD
 TXN-9224-0014,2025-02-15,ACC-9224,Foxridge Courier Group Group (Oskemen unit),Printed marketing collateral run — period 04,-470027.55,USD
 TXN-9598-0020,2025-02-15,ACC-9598,Dunmore Consulting Corp (Zhezkazgan compound),"Interest on bilateral facility — Kyzylorda station, H1",-1293946.99,USD
 TXN-9898-0022,2025-02-15,ACC-9898,Ironwood Facilities Partners (Karaganda yard),Water charge adjustment credit — Pavlodar block 2025,8745309.34,USD
 TXN-B1-0031,2025-02-15,ACC-7201,Juniper Payroll Associates (Shymkent depot),Social tax remittance — Pavlodar block,-1463827.85,USD
 TXN-P8-0024,2025-02-15,ACC-7808,Granger Utilities Holding,District heating utility charge 2025,-5908411.58,USD
+TXN-X17-0003,2025-02-15,ACC-8817,Development Bank,Term loan facility drawdown,1400000.00,USD
 TXN-9046-0039,2025-02-16,ACC-9046,Cedarville Printing Services Ltd,"Retail unit rent — Zhezkazgan compound, January",-9021349.25,USD
 TXN-9500-0043,2025-02-16,ACC-9500,Hartley Tax Advisory Ltd (Taraz site),Outdoor marketing site hire — H1,-1548506.50,USD
 TXN-9952-0039,2025-02-16,ACC-9952,Glenwood Courier LP (Semey base),Quarterly interest coupon — Kostanay centre,-12951353.47,USD
@@ -205,6 +237,7 @@ TXN-P8-0002,2025-02-19,ACC-7808,Ashford Utility Corp (Aktobe hub),Advance profit
 TXN-B1-0002,2025-02-20,ACC-7201,Initech Software Licenses,Rent deposit returned 2025,7123935.64,USD
 TXN-P6-0027,2025-02-20,ACC-7806,Glenwood Catering Group (Semey base),Antenna mast lease — January,-7193523.88,USD
 TXN-P9-0031,2025-02-20,ACC-7809,Glenwood Janitorial LP,"Depot yard rent — Uralsk annex, July 2025",-7227726.32,USD
+TXN-X3-0003,2025-02-20,ACC-8803,Shield Insurance JSC,Plant insurance premium,-180000.00,USD
 TXN-9009-0007,2025-02-21,ACC-9009,Bridgeport Payroll Group Holding,"Unclaimed payroll returned — Zhezkazgan compound, period 01 2025",350122.50,USD
 TXN-9625-0029,2025-02-22,ACC-9625,Bridgeport Realty Inc,Utility rebate received — Taraz site,2781046.93,USD
 TXN-9903-0047,2025-02-22,ACC-9903,Dunmore Realty Service Centre,"Interest true-up charge — Shymkent depot, final call",-439795.58,USD
@@ -236,6 +269,8 @@ TXN-9025-0047,2025-02-28,ACC-9025,Granger Utilities Holding (Atyrau terminal),Pa
 TXN-9606-0025,2025-02-28,ACC-9606,Eastgate Leasing Trust Partners,"Term loan interest — Pavlodar block, December 2025",-516389.49,EUR
 TXN-B1-0006,2025-02-28,ACC-7201,Eastgate Cleaning Corp Enterprise,"Point-of-sale marketing materials — Semey base, June",-2819887.45,USD
 TXN-B1-0040,2025-02-28,ACC-7201,Ironwood Supply Associates (Turkistan point),Rent for regional office — instalment 1 2025,-274731.84,USD
+TXN-X2-0004,2025-02-28,ACC-8802,Steppe Payroll Centre,Payroll for drivers and dispatch staff - Q1,-700000.00,USD
+TXN-X4-0006,2025-02-28,ACC-8804,Ili Payroll,Payroll for production staff,-900000.00,USD
 TXN-9176-0039,2025-03-01,ACC-9176,Hartley Stationery Trust (Almaty office),"Interest on bilateral facility — Shymkent depot, August",-236616.03,USD
 TXN-9417-0002,2025-03-01,ACC-9417,Hartley Payroll LLC (Pavlodar block),"Broadband telecom invoice — Taraz site, instalment 1",-188817.55,USD
 TXN-9520-0040,2025-03-01,ACC-9520,Ironwood Property Holdings,Payroll for drivers — period 03,-925646.64,USD
@@ -246,6 +281,7 @@ TXN-B4-0022,2025-03-01,ACC-7204,Vanguard Payroll Co (Pavlodar block),Electricity
 TXN-B4-0029,2025-03-01,ACC-7204,Dunmore Waste Systems LLC Works (Zhezkazgan compound),Rent deposit returned — Almaty office 2025,177288.48,USD
 TXN-B4-0036,2025-03-01,ACC-7204,Hartley Courier Corp Ltd,Environmental liability insurance — period 02,-8526280.28,USD
 TXN-B4-0057,2025-03-01,ACC-7204,Juniper Office Supplies LP (Semey base),"Utility metering charge — Oskemen unit, August",-400286.74,USD
+TXN-X8-0002,2025-03-01,ACC-8808,North Depot LLP,Warehouse lease payment - 2025,-300000.00,USD
 TXN-9815-0042,2025-03-02,ACC-9815,Foxridge Cleaning Co (Pavlodar block),"Payroll for laboratory staff — Oskemen unit, period 04 2025",-3356876.84,USD
 TXN-9877-0048,2025-03-02,ACC-9877,Juniper Water Works Trust (Turkistan point),Group insurance experience refund — Atyrau terminal 2025,401040.50,USD
 TXN-9931-0044,2025-03-02,ACC-9931,Ironwood Water Works Associates (Pavlodar block),Payroll advance recovered from staff — Oskemen unit,835937.43,USD
@@ -259,6 +295,8 @@ TXN-B1-0036,2025-03-04,ACC-7201,Glenwood Consulting Inc,Excise tax credit receiv
 TXN-P4-0036,2025-03-04,ACC-7804,Dunmore Janitorial Services Service Centre,Interest on subordinated notes — May,-476301.74,USD
 TXN-P6-0003,2025-03-04,ACC-7806,Hartley Power Associates,"Franchise tax filing — Shymkent depot, H2 2025",-495164.18,USD
 TXN-P7-0028,2025-03-04,ACC-7807,Eastgate Facilities Trust Ltd,Credit facility interest — Kostanay centre 2025,-515506.87,USD
+TXN-R4-0001,2025-03-04,ACC-9902,Noise Media,Marketing campaign,-930000.00,USD
+TXN-X5-0003,2025-03-04,ACC-8805,Caspian Holdings LLP,Management services payment,-400000.00,USD
 TXN-9097-0023,2025-03-05,ACC-9097,Kingsley Payroll Trust (Semey base),Insurance claim reimbursement — August 2025,5039013.29,USD
 TXN-9365-0026,2025-03-05,ACC-9365,Hartley Printing Co (Turkistan point),Excise tax remittance — May 2025,-378321.22,USD
 TXN-9632-0048,2025-03-05,ACC-9632,Ashford Consulting Partners Trading House (Uralsk annex),Customer newsletter marketing production — instalment 3 2025,-8574403.27,USD
@@ -282,10 +320,12 @@ TXN-P2-0055,2025-03-08,ACC-7802,Bridgeport Office Supplies,Marketing co-operativ
 TXN-9434-0007,2025-03-09,ACC-9434,Bridgeport Power Corp Enterprise,"Contractor payroll batch — Shymkent depot, period 03",-1664501.46,USD
 TXN-9614-0029,2025-03-09,ACC-9614,Ironwood Leasing Partners (Turkistan point),"Interest on trade facility — Semey base, January",-241984.70,USD
 TXN-P3-0035,2025-03-09,ACC-7803,Foxridge Supply Inc Enterprise,"Environmental emissions tax — Uralsk annex, March",-193979.88,USD
+TXN-X20-0003,2025-03-09,ACC-8820,Altai Metals Holding LLP,Shared procurement payment,-500000.00,USD
 TXN-9518-0021,2025-03-10,ACC-9518,Dunmore Printing Partners,Business interruption insurance — Turkistan point 2025,-2004423.81,USD
 TXN-9805-0047,2025-03-10,ACC-9805,City Power & Light (Aktobe hub),"Telecom services — Zhezkazgan compound, Q3",-334248.55,USD
 TXN-9874-0028,2025-03-10,ACC-9874,Dunmore Facilities Associates (Semey base),Compressed air utility charge — Uralsk annex,-5236656.87,USD
 TXN-P2-0002,2025-03-10,ACC-7802,Bridgeport Security Associates Enterprise,Electricity network capacity charge — November,-421881.82,USD
+TXN-X16-0004,2025-03-10,ACC-8816,Power Grid,Electricity utility charge,-400000.00,USD
 TXN-9042-0025,2025-03-11,ACC-9042,Bridgeport Consulting Group (Karaganda yard),Business interruption insurance — period 04,-198595.76,USD
 TXN-9384-0041,2025-03-11,ACC-9384,Bridgeport Office Supplies (Turkistan point),Tax audit assessment payment 2025,-837271.36,USD
 TXN-9899-0042,2025-03-11,ACC-9899,Foxridge Security Services (Aktobe hub),Unclaimed payroll returned 2025,487190.08,USD
@@ -294,6 +334,11 @@ TXN-9362-0034,2025-03-12,ACC-9362,Ashford Janitorial Trust,Cyber insurance premi
 TXN-9666-0038,2025-03-12,ACC-9666,Foxridge Stationery (Kyzylorda station),"Accrued interest payment — Uralsk annex, March",-2752319.35,USD
 TXN-9929-0016,2025-03-12,ACC-9929,Dunmore Tax Advisory Group Ltd,"Excise tax remittance — Shymkent depot, final call",-1652717.79,USD
 TXN-P10-0021,2025-03-12,ACC-7810,Saryarka Terminal Properties LLP,Warehouse land lease payments 2025,-1204663.28,USD
+TXN-X15-0004,2025-03-12,ACC-8815,Ad Agency A,Advertising campaign,-350000.00,USD
+TXN-X17-0005,2025-03-12,ACC-8817,Lease Provider,Rent deposit returned,500000.00,USD
+TXN-X21-0003,2025-03-12,ACC-8821,City Power,Electricity utility charge,-450000.00,USD
+TXN-X3-0006,2025-03-12,ACC-8803,Atlas Machinery,Purchase of crushing equipment,-400000.00,USD
+TXN-X4-0008,2025-03-12,ACC-8804,Forge Machines,Equipment purchase - CNC unit,-600000.00,USD
 TXN-9141-0034,2025-03-13,ACC-9141,Glenwood Cleaning Ltd Holding,"Business interruption insurance — Kyzylorda station, period 01 2025",-1584475.83,USD
 TXN-9819-0023,2025-03-13,ACC-9819,Glenwood Utility Associates (Oskemen unit),Vehicle livery marketing application — instalment 2,-6062320.24,USD
 TXN-P1-0022,2025-03-13,ACC-7801,Juniper Printing Inc Supply (Turkistan point),Municipal tax levy — instalment 2 2025,-593594.68,USD
@@ -308,6 +353,7 @@ TXN-B1-0017,2025-03-14,ACC-7201,Juniper Power Solutions,Insurance premium refund
 TXN-B4-0011,2025-03-14,ACC-7204,Eastgate Consulting Co (Oskemen unit),Radio ad campaign schedule — Zhezkazgan compound 2025,-103731.12,USD
 TXN-P1-0038,2025-03-14,ACC-7801,Bridgeport Office Supplies (Uralsk annex),Water charge adjustment credit,7831364.09,USD
 TXN-P6-0012,2025-03-14,ACC-7806,Kingsley Insurance Associates Holding,"Directors and officers insurance — Kyzylorda station, Q2 2025",-574236.97,USD
+TXN-X18-0002,2025-03-14,ACC-8818,Forest Group LLP,Shared services payment,-350000.00,USD
 TXN-9244-0017,2025-03-15,ACC-9244,Foxridge Maintenance Holdings Supply,Marketing research panel subscription — period 01,-3233200.97,EUR
 TXN-9351-0009,2025-03-15,ACC-9351,Juniper Utility Holdings (Ekibastuz block B),Electricity network capacity charge — Atyrau terminal,-3360629.72,USD
 TXN-P7-0007,2025-03-15,ACC-7807,Lakeshore Insurance Brokers Company,"Workers comp insurance — Atyrau terminal, November",-483665.07,USD
@@ -316,9 +362,13 @@ TXN-9802-0050,2025-03-16,ACC-9802,Ashford Uniforms Associates Supply,"Marketing 
 TXN-9081-0010,2025-03-17,ACC-9081,Juniper Water Works Trust (Pavlodar block),"Interest on working capital line — Uralsk annex, February 2025",-2059196.46,USD
 TXN-9741-0031,2025-03-17,ACC-9741,Umbrella Facilities Mgmt Company,Trade press marketing insertion,-746973.76,USD
 TXN-P1-0020,2025-03-17,ACC-7801,Bridgeport Payroll Group (Almaty office),Payroll advance recovered from staff,3066637.42,USD
+TXN-X10-0002,2025-03-17,ACC-8810,Euro Machinery GmbH,Purchase of robotic arm equipment,-400000.00,EUR
 TXN-9882-0039,2025-03-18,ACC-9882,Cedarville Power Co Supply,Marketing co-operative funding received — H1 2025,2530433.29,USD
 TXN-P3-0002,2025-03-18,ACC-7803,Development Bank of Kazakhstan JSC,Term loan facility drawdown for turnaround works,5442118.93,USD
 TXN-P7-0048,2025-03-18,ACC-7807,Dunmore Insurance LP,Environmental liability insurance — May,-156386.63,USD
+TXN-X1-0005,2025-03-18,ACC-8801,Atlas Installation Services LLP,Installation of production line equipment,-200000.00,USD
+TXN-X22-0004,2025-03-18,ACC-8822,Cobalt Holdings Advisory LLC,Independent advisory services,-500000.00,USD
+TXN-X6-0002,2025-03-18,ACC-8806,Nova Holdings LLP,Group service payment,-300000.00,USD
 TXN-9016-0003,2025-03-19,ACC-9016,Glenwood Maintenance Services Partners (Ekibastuz block B),"Electricity for pumping station — Kostanay centre, H1 2025",-2289096.75,USD
 TXN-9254-0037,2025-03-19,ACC-9254,Bridgeport Office Supplies JSC,Franchise tax filing — November,-242694.31,USD
 TXN-P4-0053,2025-03-19,ACC-7804,Ural Conveyor Works LLP,Purchase of grain conveyor equipment,-1652704.31,USD
@@ -327,6 +377,7 @@ TXN-9212-0039,2025-03-20,ACC-9212,Hartley Leasing Services (Taraz site),Revolver
 TXN-B4-0030,2025-03-20,ACC-7204,Shymkent Fuel Distributors LLP,Refinery product sales settlement first quarter,2048994.35,USD
 TXN-P2-0039,2025-03-20,ACC-7802,Cedarville Courier Holdings Supply,"Rent overpayment refunded — Kyzylorda station, January 2025",803966.93,USD
 TXN-P6-0047,2025-03-20,ACC-7806,Glenwood Catering Group (Turkistan point),Insurance claim reimbursement — Uralsk annex,124433.76,USD
+TXN-X19-0002,2025-03-20,ACC-8819,Delta Cargo LLP,Group warehouse service,-350000.00,USD
 TXN-9873-0048,2025-03-21,ACC-9873,Dunmore Logistics Ltd Ltd,Unclaimed payroll returned — Pavlodar block 2025,10968119.30,USD
 TXN-P8-0020,2025-03-21,ACC-7808,Foxridge Realty Trust (Shymkent depot),Interest income on term deposit — Shymkent depot 2025,1885336.06,USD
 TXN-9394-0016,2025-03-22,ACC-9394,Hartley Power Associates Partners,"Payroll accrual funding — Astana branch, Q1",-2513380.22,USD
@@ -342,6 +393,7 @@ TXN-9268-0032,2025-03-25,ACC-9268,Foxridge Telecom LP (Aktobe hub),Electricity n
 TXN-9727-0023,2025-03-25,ACC-9727,Bridgeport Telecom Holdings (Ekibastuz block B),Cyber insurance premium — Uralsk annex 2025,-6260519.20,USD
 TXN-P2-0022,2025-03-25,ACC-7802,Dunmore Tax Advisory Group JSC (Karaganda yard),Interest credited on current account — Kostanay centre 2025,2083129.43,USD
 TXN-P8-0013,2025-03-25,ACC-7808,Bridgeport Uniforms Trust (Kostanay centre),Marketing overbilling refund — period 04,3031930.94,USD
+TXN-X2-0006,2025-03-25,ACC-8802,Union Finance Bank,Interest on revolving credit facility,-300000.00,USD
 TXN-9249-0008,2025-03-26,ACC-9249,Ashford Courier Trust Enterprise,Rent overpayment refunded — August,620429.09,USD
 TXN-9345-0037,2025-03-26,ACC-9345,Juniper Waste Systems Services (Pavlodar block),"Interest on bridge facility — Oskemen unit, Q4",-1227014.14,USD
 TXN-9792-0043,2025-03-26,ACC-9792,Sterling Office Solutions,Corporate brand marketing programme — H2 2025,-1699925.53,USD
@@ -358,6 +410,8 @@ TXN-9246-0020,2025-03-29,ACC-9246,Riverside Realty Trust LLP,"Franchise tax fili
 TXN-9541-0041,2025-03-30,ACC-9541,Dunmore Facilities Associates Works,Point-of-sale marketing materials — September,-1221753.21,USD
 TXN-9738-0006,2025-03-31,ACC-9738,Bridgeport Security Associates (Zhezkazgan compound),Advance profit tax instalment 2025,-109503.40,USD
 TXN-P7-0002,2025-03-31,ACC-7807,Oakmont Property Management (Ekibastuz block B),"Lease incentive received — Taraz site, final call",3450194.70,USD
+TXN-X11-0003,2025-03-31,ACC-8811,Pavlodar Payroll,Payroll for production staff,-850000.00,USD
+TXN-X14-0003,2025-03-31,ACC-8814,Kostanay Payroll,Payroll for manufacturing staff,-1200000.00,USD
 TXN-9988-0040,2025-04-01,ACC-9988,Eastgate Building Services Associates Trading House,Lease incentive received — Kostanay centre,798615.20,USD
 TXN-P10-0059,2025-04-01,ACC-7810,Glenwood Janitorial LP (Oskemen unit),Outdoor marketing site hire — instalment 2 2025,-7141284.38,USD
 TXN-P6-0008,2025-04-01,ACC-7806,Juniper Uniforms Co Company,"Lease incentive received — Kostanay centre, March 2025",168948.43,USD
@@ -379,6 +433,7 @@ TXN-9729-0025,2025-04-05,ACC-9729,Juniper Utility Holdings JSC (Shymkent depot),
 TXN-9888-0036,2025-04-05,ACC-9888,Eastgate Facilities Trust (Turkistan point),Payroll bonus disbursement,-1555385.95,USD
 TXN-P1-0034,2025-04-05,ACC-7801,Foxridge Catering Partners (Kostanay centre),Workers comp insurance — September 2025,-798220.24,USD
 TXN-P9-0018,2025-04-05,ACC-7809,Trident Power Cooperative JSC (Karaganda yard),"Rent overpayment refunded — Shymkent depot, H2",769698.08,USD
+TXN-R4-0002,2025-04-05,ACC-9902,Noise Client,Customer settlement,6200000.00,USD
 TXN-9573-0015,2025-04-06,ACC-9573,Ashford Janitorial Trust (Uralsk annex),Overdraft interest — Astana branch,-2763117.33,USD
 TXN-9961-0010,2025-04-06,ACC-9961,Glenwood Security Partners (Turkistan point),Warehouse lease — Karaganda yard 2025,-210692.81,USD
 TXN-P1-0009,2025-04-06,ACC-7801,Juniper Telecom Inc Trading House (Karaganda yard),Payroll clearing account sweep back — Ekibastuz block B 2025,5085393.95,USD
@@ -406,6 +461,7 @@ TXN-P3-0003,2025-04-08,ACC-7803,Ashford Leasing Inc Service Centre (Semey base),
 TXN-P3-0055,2025-04-08,ACC-7803,Cedarville Power Co,VAT instalment — March,-581776.66,USD
 TXN-P4-0054,2025-04-08,ACC-7804,Aktobe Elevator Services LLP,Terminal servicing and operating costs 2025,-4431662.19,USD
 TXN-P7-0038,2025-04-08,ACC-7807,Summit Telecom Group Company,"Executive payroll run — Astana branch, period 03",-6898199.03,USD
+TXN-X4-0002,2025-04-08,ACC-8804,Arman Distribution,Sales revenue - industrial components,1200000.00,USD
 TXN-9091-0020,2025-04-09,ACC-9091,Dunmore Cleaning LP (Kyzylorda station),"Sewer discharge levy — Oskemen unit, December 2025",-1631818.93,USD
 TXN-9173-0016,2025-04-09,ACC-9173,Juniper Building Services Partners (Uralsk annex),Insurance broker rebate — February 2025,3967301.74,USD
 TXN-P10-0020,2025-04-09,ACC-7810,Karaganda Terminal Personnel LLP,Terminal staff payroll disbursement 2025,-1204118.53,USD
@@ -416,6 +472,9 @@ TXN-9578-0031,2025-04-10,ACC-9578,Dunmore Building Services LLP,Payroll advance 
 TXN-9937-0036,2025-04-10,ACC-9937,Foxridge Supply Inc (Aktobe hub),Trade press marketing insertion — H2,-1833606.70,USD
 TXN-9968-0032,2025-04-10,ACC-9968,Bridgeport Maintenance Service Centre (Pavlodar block),Sewer discharge levy — period 01,-718992.84,USD
 TXN-9987-0028,2025-04-10,ACC-9987,Glenwood Water Works LLC Supply (Zhezkazgan compound),Marketing co-operative funding received — Oskemen unit 2025,1157480.32,USD
+TXN-X16-0005,2025-04-10,ACC-8816,Media Works,Marketing campaign,-300000.00,USD
+TXN-X2-0007,2025-04-10,ACC-8802,Astana Tax Office,Corporate income tax instalment - Q1,-200000.00,USD
+TXN-X22-0002,2025-04-10,ACC-8822,European Marine Buyer,Sales revenue - engineering contract,500000.00,EUR
 TXN-9565-0028,2025-04-11,ACC-9565,Hartley Catering LP,Accrued interest payment — instalment 2,-2685222.34,USD
 TXN-P1-0003,2025-04-11,ACC-7801,Ashford Supply Group Company,Default interest charge — Kyzylorda station,-237578.58,USD
 TXN-P1-0054,2025-04-11,ACC-7801,Ironwood Insurance LLC (Semey base),Vehicle tax payment — Ekibastuz block B,-9798966.39,USD
@@ -435,6 +494,7 @@ TXN-9505-0038,2025-04-14,ACC-9505,Ashford Stationery Corp Holding (Zhezkazgan co
 TXN-9554-0021,2025-04-14,ACC-9554,Maple Grove Telecom Supply,Water charge adjustment credit — Karaganda yard,459540.74,USD
 TXN-P9-0013,2025-04-14,ACC-7809,Foxridge Cleaning Co (Taraz site),Unearned insurance premium return — Semey base 2025,1159582.85,USD
 TXN-P1-0055,2025-04-15,ACC-7801,Ashford Supply Group Company,Trade press marketing insertion,-9623763.90,USD
+TXN-X14-0004,2025-04-15,ACC-8814,Tax Office,Corporate income tax instalment,-700000.00,USD
 TXN-9885-0039,2025-04-16,ACC-9885,Cedarville Office Supplies Associates,Warehouse contents insurance — Zhezkazgan compound 2025,-8243554.25,USD
 TXN-9909-0001,2025-04-16,ACC-9909,Glenwood Office Supplies Services Company (Oskemen unit),Corporate income tax instalment — Shymkent depot 2025,-5322079.69,USD
 TXN-9913-0034,2025-04-16,ACC-9913,Dunmore Supply Co (Taraz site),Rent for training centre — instalment 3 2025,-431471.21,USD
@@ -447,6 +507,7 @@ TXN-9763-0027,2025-04-17,ACC-9763,Ironwood Office Supplies Group Supply (Uralsk 
 TXN-9786-0021,2025-04-17,ACC-9786,Dunmore Security Solutions (Ekibastuz block B),Corporate income tax instalment — Kostanay centre,-416136.16,USD
 TXN-9857-0003,2025-04-17,ACC-9857,Cedarville Uniforms Solutions Holding (Kostanay centre),"Interest recovery on overpayment — Uralsk annex, May 2025",2049956.30,USD
 TXN-B1-0007,2025-04-17,ACC-7201,Glenwood Security Partners Group (Atyrau terminal),Regional marketing campaign production — Almaty office,-4274240.02,USD
+TXN-X7-0004,2025-04-17,ACC-8807,Launch Media LLP,Digital media campaign for new production line,-450000.00,USD
 TXN-9121-0038,2025-04-18,ACC-9121,Kingsley Facilities LP Service Centre,Insurance claim reimbursement — Shymkent depot 2025,154989.39,USD
 TXN-9173-0018,2025-04-18,ACC-9173,Bridgeport Power Corp (Karaganda yard),Utility metering charge,-655224.86,EUR
 TXN-P1-0023,2025-04-18,ACC-7801,Bridgeport Consulting Group (Kostanay centre),Quarterly estimated tax — Kyzylorda station 2025,-16437674.68,USD
@@ -456,6 +517,8 @@ TXN-P6-0014,2025-04-19,ACC-7806,Hartley Supply Service Centre (Atyrau terminal),
 TXN-9098-0043,2025-04-20,ACC-9098,Globex Telecom (Oskemen unit),"Warehouse lease — Oskemen unit, final call",-10401451.58,USD
 TXN-P7-0019,2025-04-20,ACC-7807,Riverside Realty Trust,Office rent — July,-250594.53,USD
 TXN-P7-0010,2025-04-21,ACC-7807,State Revenue Committee,Corporate income tax instalment 2025,-402118.64,USD
+TXN-X1-0002,2025-04-21,ACC-8801,Altair Engineering Ltd,Sales revenue - maintenance service contract settlement,900000.00,USD
+TXN-X12-0003,2025-04-21,ACC-8812,Creative Studio,Marketing campaign,-250000.00,USD
 TXN-P9-0024,2025-04-22,ACC-7809,Bridgeport Building Services Inc,"Professional indemnity insurance — Almaty office, period 01 2025",-2416937.23,USD
 TXN-9142-0015,2025-04-23,ACC-9142,Glenwood Supply LLC,"Professional indemnity insurance — Almaty office, period 01 2025",-1510378.90,USD
 TXN-9268-0004,2025-04-23,ACC-9268,Juniper Facilities Group (Zhezkazgan compound),Telecom leased line — Almaty office 2025,-5005498.08,USD
@@ -499,6 +562,7 @@ TXN-9617-0014,2025-05-03,ACC-9617,Kingsley Property Partners (Kyzylorda station)
 TXN-9762-0028,2025-05-03,ACC-9762,Eastgate Utility LLC Works (Oskemen unit),"Tax assessment reversal — Karaganda yard, instalment 3 2025",226169.76,USD
 TXN-P2-0025,2025-05-03,ACC-7802,Glenwood Office Supplies Services (Uralsk annex),"Sponsorship marketing of regional sports club — Kostanay centre, instalment 2",-2709060.20,USD
 TXN-P4-0033,2025-05-03,ACC-7804,Ashford Consulting Partners Company,Municipal tax levy — Q4,-534014.43,USD
+TXN-X15-0006,2025-05-03,ACC-8815,Audit Partners,External audit and consulting,-500000.00,USD
 TXN-9813-0015,2025-05-04,ACC-9813,Cascade Water Utility (Karaganda yard),Interest true-up charge — period 03 2025,-1391202.74,USD
 TXN-9927-0031,2025-05-04,ACC-9927,Bridgeport Telecom Holdings (Almaty office),Tax overpayment refunded — period 01,292291.65,USD
 TXN-B4-0038,2025-05-04,ACC-7204,Cedarville Supply Corp (Pavlodar block),Overdraft interest — Astana branch,-140831.96,USD
@@ -517,12 +581,16 @@ TXN-P10-0055,2025-05-08,ACC-7810,Karaganda Distribution Group JSC,Warehouse hand
 TXN-P9-0055,2025-05-08,ACC-7809,Dunmore Stationery Inc Supply (Oskemen unit),"Marketing overbilling refund — Kostanay centre, November",1579816.38,USD
 TXN-9479-0025,2025-05-09,ACC-9479,Ironwood Power Trust (Shymkent depot),VAT refund received — H1,315076.59,USD
 TXN-P3-0033,2025-05-09,ACC-7803,Initech Software Licenses (Zhezkazgan compound),Interest income on treasury bills — instalment 3 2025,10156687.58,USD
+TXN-X1-0003,2025-05-09,ACC-8801,Sentinel Insurance Group,Insurance premium refund received - annual policy adjustment,200000.00,USD
+TXN-X16-0006,2025-05-10,ACC-8816,Legal Partners,Legal consulting,-200000.00,USD
 TXN-9103-0020,2025-05-11,ACC-9103,Ironwood Realty Services Trading House,Revolver interest — Oskemen unit 2025,-8323972.98,USD
 TXN-9456-0035,2025-05-11,ACC-9456,Beacon Tax Advisors JSC,Electricity for pumping station — Almaty office 2025,-5647351.09,USD
 TXN-P6-0006,2025-05-11,ACC-7806,Foxridge Telecom LP Holding (Ekibastuz block B),"Default interest charge — Astana branch, January",-5793220.79,USD
+TXN-X13-0004,2025-05-11,ACC-8813,Signal Media LLP,Marketing campaign - fiber rollout,-650000.00,USD
 TXN-9014-0033,2025-05-12,ACC-9014,Eastgate Cleaning Corp (Astana branch),Environmental emissions tax — Oskemen unit 2025,-9833527.38,USD
 TXN-B1-0020,2025-05-12,ACC-7201,Irtysh Advisory Bureau,Advisory engagement on tariff structuring,-592296.10,USD
 TXN-P4-0041,2025-05-12,ACC-7804,Ashford Waste Systems Co Service Centre,"Contractor payroll batch — Semey base, instalment 2 2025",-282672.77,USD
+TXN-X22-0005,2025-05-12,ACC-8822,Marine Machinery LLP,Purchase of marine equipment,-200000.00,USD
 TXN-9309-0017,2025-05-13,ACC-9309,Foxridge Consulting Ltd (Turkistan point),Compressed air utility charge — Kyzylorda station,-529687.84,USD
 TXN-9447-0041,2025-05-13,ACC-9447,Eastgate Security Holdings LLP,Telecom mobile fleet plan,-4730681.17,USD
 TXN-9888-0014,2025-05-13,ACC-9888,Juniper Telecom Inc,Product launch ad campaign — Q1,-1026036.96,USD
@@ -532,6 +600,8 @@ TXN-B4-0021,2025-05-14,ACC-7204,Atyrau Pipeline Engineering LLP,Purchase of pipe
 TXN-P8-0015,2025-05-14,ACC-7808,KazMunayGas Exploration JSC,Drilling services sales settlement 2025,7884663.19,USD
 TXN-9499-0047,2025-05-15,ACC-9499,Sterling Office Solutions (Karaganda yard),Property insurance premium — instalment 2,-8697242.95,USD
 TXN-P3-0005,2025-05-15,ACC-7803,Juniper Supply Trust (Zhezkazgan compound),"Municipal water charge — Oskemen unit, period 03",-383631.48,USD
+TXN-X11-0004,2025-05-15,ACC-8811,Forge Equipment,Purchase of furnace control system,-550000.00,USD
+TXN-X3-0002,2025-05-15,ACC-8803,East Ore Services,Customer settlement - maintenance services,1100000.00,USD
 TXN-9324-0045,2025-05-16,ACC-9324,Ashford Leasing Inc Ltd (Turkistan point),Excise tax credit received — Astana branch,7487227.75,USD
 TXN-9449-0006,2025-05-16,ACC-9449,Glenwood Maintenance Services LLP,Environmental emissions tax — Pavlodar block 2025,-1045681.69,USD
 TXN-9797-0035,2025-05-16,ACC-9797,Foxridge Payroll Ltd,"Payroll bonus disbursement — Ekibastuz block B, June",-114736.30,USD
@@ -541,16 +611,20 @@ TXN-9349-0005,2025-05-17,ACC-9349,Dunmore Landscaping Group (Shymkent depot),Pro
 TXN-9755-0036,2025-05-17,ACC-9755,Juniper Office Supplies LP Supply,Industry exhibition stand marketing — H1 2025,-1368603.32,USD
 TXN-9784-0042,2025-05-17,ACC-9784,Glenwood Uniforms Group,"Rent for staff dormitory — Zhezkazgan compound, instalment 2",-3046635.98,USD
 TXN-B4-0028,2025-05-17,ACC-7204,Foxridge Payroll Ltd Group (Shymkent depot),Equipment yard lease — Pavlodar block 2025,-209971.26,USD
+TXN-X2-0002,2025-05-17,ACC-8802,Turan Distribution LLP,Sales settlement - warehousing services,800000.00,USD
 TXN-9764-0033,2025-05-18,ACC-9764,Globex Telecom (Semey base),"Professional indemnity insurance — Uralsk annex, period 01 2025",-339035.21,USD
 TXN-9255-0029,2025-05-19,ACC-9255,Hartley Cleaning Inc Service Centre,"Payroll for security detail — Kyzylorda station, H2",-485659.13,USD
 TXN-9022-0028,2025-05-20,ACC-9022,Eastgate Utility LLC Holding,Interest income on treasury bills — H1,7961047.34,USD
 TXN-9862-0050,2025-05-20,ACC-9862,Ironwood Security LP Partners,Container yard lease — Q1,-216801.49,USD
 TXN-B1-0008,2025-05-20,ACC-7201,Dunmore Janitorial Services Works,Withholding tax remittance 2025,-543539.55,USD
+TXN-X19-0003,2025-05-20,ACC-8819,Delta Cargo Advisory LLP,Independent consulting,-700000.00,USD
+TXN-X4-0003,2025-05-20,ACC-8804,Tax Authority,VAT refund received - Q1 overpayment,700000.00,USD
 TXN-P1-0010,2025-05-21,ACC-7801,Ural Crane Works LLP,Purchase of quayside crane equipment,-1842006.44,USD
 TXN-9123-0047,2025-05-22,ACC-9123,Hartley Supply LLP (Almaty office),Interest on senior notes — period 03,-2661795.30,USD
 TXN-9284-0001,2025-05-22,ACC-9284,Juniper Landscaping LLC (Almaty office),Payroll tranche for field crew — January,-369770.95,USD
 TXN-P6-0049,2025-05-22,ACC-7806,Hartley Courier Corp Works,Quarterly interest coupon — Semey base,-378905.34,USD
 TXN-P7-0051,2025-05-22,ACC-7807,Dunmore Power Ltd (Oskemen unit),Payroll advance recovered from staff — Uralsk annex 2025,11159559.34,EUR
+TXN-X6-0003,2025-05-22,ACC-8806,Nova Holdings Advisory LLC,External consulting retainer,-800000.00,USD
 TXN-9289-0010,2025-05-23,ACC-9289,Foxridge Tax Advisory Corp JSC,Retail unit rent — Q4,-1908075.66,USD
 TXN-P3-0052,2025-05-23,ACC-7803,Cedarville Uniforms Solutions Ltd,"Corporate brand marketing programme — Ekibastuz block B, March",-228635.30,USD
 TXN-P5-0047,2025-05-23,ACC-7805,Juniper Logistics Solutions (Kostanay centre),Utility metering charge — H1 2025,-4821170.88,EUR
@@ -614,8 +688,10 @@ TXN-9114-0041,2025-06-03,ACC-9114,Hartley Property Solutions,Travel insurance fo
 TXN-9686-0036,2025-06-03,ACC-9686,Cedarville Office Supplies Associates (Ekibastuz block B),Customer newsletter marketing production — Uralsk annex 2025,-1589575.69,USD
 TXN-P6-0011,2025-06-03,ACC-7806,Bridgeport Leasing LLC,Interest true-up charge — July,-6874501.52,USD
 TXN-P6-0055,2025-06-03,ACC-7806,Ironwood Maintenance Group Holding,Tax assessment reversal 2025,969224.15,USD
+TXN-X2-0003,2025-06-03,ACC-8802,Brightline Advertising,Marketing rebate received - campaign overbilling refund,250000.00,USD
 TXN-9423-0017,2025-06-04,ACC-9423,Bridgeport Printing Holdings (Ekibastuz block B),Office rent — Kostanay centre,-916989.95,USD
 TXN-P10-0017,2025-06-04,ACC-7810,Tengiz Risk Engineering Bureau,Warehouse risk survey servicing 2025,-142118.64,USD
+TXN-X10-0003,2025-06-05,ACC-8810,KazInstall LLP,Installation of robotic arm,-160000.00,USD
 TXN-9571-0006,2025-06-06,ACC-9571,Statewide Tax Authority (Ekibastuz block B),"Term loan interest — Pavlodar block, December 2025",-119669.28,USD
 TXN-9996-0028,2025-06-06,ACC-9996,Dunmore Janitorial Services (Taraz site),Marketing co-operative funding received — September,577258.69,USD
 TXN-P1-0021,2025-06-06,ACC-7801,Kingsley Property Partners,Payroll for administrative staff — Aktobe hub 2025,-715630.22,USD
@@ -627,6 +703,7 @@ TXN-9557-0014,2025-06-07,ACC-9557,Foxridge Consulting Ltd (Ekibastuz block B),"S
 TXN-9934-0008,2025-06-07,ACC-9934,Eastgate Janitorial Partners Holding (Ekibastuz block B),Auto fleet insurance — Pavlodar block,-3397475.03,USD
 TXN-P10-0031,2025-06-07,ACC-7810,Glenwood Power,"Corporate brand marketing programme — Zhezkazgan compound, Q4 2025",-6519514.97,USD
 TXN-P5-0014,2025-06-07,ACC-7805,Ashford Maintenance LLC (Zhezkazgan compound),"Interest rebate on early repayment — Uralsk annex, December",235761.83,USD
+TXN-X21-0002,2025-06-07,ACC-8821,Municipal Client B,Customer settlement - water services,1000000.00,USD
 TXN-9145-0003,2025-06-08,ACC-9145,Ashford Printing Solutions,"Corporate income tax instalment — Pavlodar block, March",-14487426.69,USD
 TXN-9862-0012,2025-06-08,ACC-9862,Hartley Payroll LLC JSC,"Insurance deductible recovery — Kostanay centre, February",11223779.37,USD
 TXN-9926-0049,2025-06-08,ACC-9926,Eastgate Property Trading House,Payroll agency rebate 2025,2302820.82,USD
@@ -634,6 +711,7 @@ TXN-P1-0024,2025-06-08,ACC-7801,Cedarville Payroll LP Enterprise (Turkistan poin
 TXN-P6-0039,2025-06-08,ACC-7806,Foxridge Insurance Co,Corporate brand marketing programme — June,-7250114.44,USD
 TXN-B4-0005,2025-06-09,ACC-7204,Foxridge Cleaning Co,Fidelity bond insurance — August,-2649671.17,USD
 TXN-P2-0054,2025-06-09,ACC-7802,Hartley Power Associates Company,Auto fleet insurance — Almaty office 2025,-248898.41,USD
+TXN-X14-0002,2025-06-09,ACC-8814,Agro Buyer B,Customer settlement - machinery,1300000.00,USD
 TXN-9656-0048,2025-06-10,ACC-9656,Kingsley Water Works Solutions LLP (Semey base),"Excise tax remittance — Almaty office, November",-274051.20,USD
 TXN-9998-0039,2025-06-10,ACC-9998,Ashford Realty Ltd,Lease deposit released — May,1520786.80,USD
 TXN-P8-0048,2025-06-10,ACC-7808,Ashford Tax Advisory Holdings (Almaty office),"Trade press marketing insertion — Almaty office, Q2 2025",-337300.48,USD
@@ -646,6 +724,7 @@ TXN-P10-0003,2025-06-11,ACC-7810,Hartley Realty Holdings Company,Media buy rate 
 TXN-P7-0032,2025-06-11,ACC-7807,KazTransOil Trunk Systems JSC,Pipeline transit sales settlement 2025,9146882.53,USD
 TXN-9469-0033,2025-06-12,ACC-9469,Oakmont Property Management (Karaganda yard),"Rent free period credit — Shymkent depot, March 2025",1394793.60,USD
 TXN-9854-0047,2025-06-12,ACC-9854,Ashford Building Services Ltd (Shymkent depot),"Marketing co-operative funding received — Taraz site, final call",8667296.01,USD
+TXN-X22-0006,2025-06-12,ACC-8822,Brand Ocean LLP,Marketing campaign for equipment line,-300000.00,USD
 TXN-9816-0020,2025-06-13,ACC-9816,Cedarville Insurance Group (Turkistan point),Marketing co-operative funding received — instalment 3 2025,10805214.31,USD
 TXN-P3-0014,2025-06-13,ACC-7803,Hartley Utility Trust (Aktobe hub),Tax audit assessment payment — Ekibastuz block B 2025,-786416.28,USD
 TXN-9647-0043,2025-06-14,ACC-9647,Foxridge Building Services Trust (Kostanay centre),"Unclaimed payroll returned — Almaty office, instalment 1",3951575.69,USD
@@ -653,10 +732,13 @@ TXN-9748-0026,2025-06-14,ACC-9748,Bridgeport Office Supplies Company,Antenna mas
 TXN-B4-0047,2025-06-14,ACC-7204,Foxridge Insurance Co (Zhezkazgan compound),"Environmental emissions tax — Oskemen unit, June 2025",-7575422.84,USD
 TXN-P1-0036,2025-06-14,ACC-7801,Glenwood Facilities Holdings Works (Karaganda yard),"Trade press marketing insertion — Semey base, Q1",-428818.65,USD
 TXN-P9-0004,2025-06-14,ACC-7809,Foxridge Waste Systems Associates (Atyrau terminal),"Electricity network capacity charge — Kostanay centre, February",-1171613.50,USD
+TXN-X18-0003,2025-06-14,ACC-8818,Forest Group Advisory LLC,External legal advisory,-650000.00,USD
 TXN-9491-0005,2025-06-15,ACC-9491,Ashford Power LP (Astana branch),Equipment yard lease — instalment 2,-970713.25,USD
 TXN-9707-0011,2025-06-15,ACC-9707,Foxridge Maintenance Holdings,"Sponsorship marketing of regional sports club — Astana branch, instalment 1",-12726193.95,USD
 TXN-P2-0014,2025-06-15,ACC-7802,Eastgate Office Supplies Solutions,"Equipment yard lease — Kyzylorda station, instalment 2 2025",-2708057.37,USD
 TXN-P5-0005,2025-06-15,ACC-7805,Ashford Tax Advisory Holdings Company,Telecom leased line — Oskemen unit 2025,-492990.46,USD
+TXN-X16-0002,2025-06-15,ACC-8816,Energy Buyer B,Customer settlement - service revenue,1800000.00,USD
+TXN-X7-0002,2025-06-15,ACC-8807,Industrial Client B,Customer settlement - service contract,1000000.00,USD
 TXN-9112-0020,2025-06-16,ACC-9112,Bridgeport Tax Advisory Services (Kostanay centre),Unclaimed payroll returned — H1 2025,341658.26,USD
 TXN-P2-0023,2025-06-16,ACC-7802,Fairfield Leasing Partners (Uralsk annex),"Rooftop lease — Almaty office, October 2025",-211784.77,USD
 TXN-P3-0029,2025-06-16,ACC-7803,Cedarville Leasing (Karaganda yard),Digital media buy — search — September,-3728972.76,USD
@@ -664,12 +746,14 @@ TXN-9881-0034,2025-06-17,ACC-9881,Ironwood Waste Systems Holdings Group,Sewer di
 TXN-9916-0022,2025-06-17,ACC-9916,Ashford Office Supplies LLC JSC,"Payroll for night shift — Almaty office, Q4",-73132.63,USD
 TXN-B1-0016,2025-06-17,ACC-7201,Foxridge Cleaning Co (Almaty office),Excise tax remittance — Q1,-1950365.39,USD
 TXN-P1-0042,2025-06-17,ACC-7801,Mangystau Berth Services LLP,Berth servicing and operating costs 2025,-3104882.61,USD
+TXN-X4-0004,2025-06-17,ACC-8804,Guardian Insurance,Insurance premium refund received,300000.00,USD
 TXN-9364-0014,2025-06-18,ACC-9364,Juniper Cleaning (Aktobe hub),"Industry exhibition stand marketing — Semey base, Q3",-279916.53,USD
 TXN-B4-0046,2025-06-18,ACC-7204,Juniper Payroll Associates JSC,"Municipal water charge — Turkistan point, H2",-1891463.60,USD
 TXN-P10-0056,2025-06-18,ACC-7810,Ironwood Stationery Solutions,"Interest on subordinated notes — Shymkent depot, February",-4902905.23,USD
 TXN-9625-0047,2025-06-19,ACC-9625,Dunmore Office Supplies Trust (Pavlodar block),Payroll overfunding returned — Pavlodar block,2585019.08,USD
 TXN-B1-0044,2025-06-19,ACC-7201,Ashford Power LP (Shymkent depot),"Lease incentive received — Astana branch, September 2025",208288.37,USD
 TXN-B4-0049,2025-06-19,ACC-7204,Cedarville Office Supplies Associates (Oskemen unit),"Rent deposit returned — Pavlodar block, Q2 2025",3677627.81,EUR
+TXN-X5-0002,2025-06-19,ACC-8805,Steppe Foods,Customer settlement - processed grain,1300000.00,USD
 TXN-9468-0023,2025-06-20,ACC-9468,Cedarville Waste Systems Inc LLP (Ekibastuz block B),Interest income on treasury bills — Q3,10447204.59,USD
 TXN-P5-0017,2025-06-20,ACC-7805,Cedarville Waste Systems Inc,"Equipment yard lease — Ekibastuz block B, instalment 3",-1820587.83,USD
 TXN-9335-0016,2025-06-21,ACC-9335,Kingsley Building Services Group (Kostanay centre),Interest income on term deposit 2025,410201.42,USD
@@ -710,6 +794,7 @@ TXN-B1-0045,2025-06-30,ACC-7201,Eastgate Property Service Centre,Marketing overb
 TXN-P2-0009,2025-06-30,ACC-7802,Almaty Chill Logistics LLP,Cold store servicing and operating costs 2025,-5918004.37,USD
 TXN-P2-0038,2025-06-30,ACC-7802,Eastgate Office Supplies Solutions,Payroll advance recovered from staff — October 2025,1406628.57,USD
 TXN-P4-0024,2025-06-30,ACC-7804,Ashford Maintenance LLC Service Centre,"VAT instalment — Uralsk annex, Q4 2025",-329065.77,USD
+TXN-X1-0006,2025-06-30,ACC-8801,Orion Payroll Services,Payroll for field engineers - H1 true-up,-300000.00,USD
 TXN-9453-0037,2025-07-01,ACC-9453,Foxridge Uniforms Partners Enterprise (Taraz site),Interest on bridge facility — Turkistan point 2025,-5659514.01,USD
 TXN-9739-0046,2025-07-01,ACC-9739,Juniper Office Supplies LP (Astana branch),Unearned insurance premium return — Ekibastuz block B 2025,7074004.88,USD
 TXN-P10-0058,2025-07-01,ACC-7810,Dunmore Utility Inc Group,Industry exhibition stand marketing — instalment 3 2025,-353541.29,USD
@@ -723,6 +808,7 @@ TXN-9799-0034,2025-07-03,ACC-9799,Eastgate Uniforms Services (Karaganda yard),Sp
 TXN-P3-0011,2025-07-03,ACC-7803,Bridgeport Payroll Group,"Corporate income tax instalment — Oskemen unit, May 2025",-4276964.85,USD
 TXN-P4-0003,2025-07-03,ACC-7804,Ironwood Consulting,"Telecom mobile fleet plan — Taraz site, January 2025",-1197501.59,USD
 TXN-P6-0031,2025-07-03,ACC-7806,Zhambyl Construction Supply JSC,Cement despatch sales settlement 2025,6918204.37,USD
+TXN-X11-0002,2025-07-03,ACC-8811,Buyer Two,Customer settlement - alloy components,1000000.00,USD
 TXN-9911-0001,2025-07-04,ACC-9911,Cedarville Utility Ltd Group,Product launch ad campaign,-12129000.57,USD
 TXN-B4-0051,2025-07-04,ACC-7204,Dunmore Printing Partners (Ekibastuz block B),"Default interest charge — Pavlodar block, H1 2025",-10662291.32,USD
 TXN-P4-0035,2025-07-04,ACC-7804,Dunmore Realty (Uralsk annex),Insurance broker rebate — Atyrau terminal,9095881.90,USD
@@ -731,12 +817,14 @@ TXN-9779-0030,2025-07-05,ACC-9779,Trident Power Cooperative Enterprise,Environme
 TXN-B4-0002,2025-07-05,ACC-7204,Glenwood Power (Almaty office),Rent for archive premises 2025,-10554084.92,USD
 TXN-P10-0045,2025-07-05,ACC-7810,Ashford Power LP (Turkistan point),"Quarterly interest coupon — Zhezkazgan compound, October",-1692135.44,USD
 TXN-P5-0018,2025-07-05,ACC-7805,Kingsley Tax Advisory Service Centre,Business interruption insurance — Kyzylorda station,-481847.14,USD
+TXN-X17-0002,2025-07-05,ACC-8817,Mobility Client B,Customer settlement - transport services,700000.00,USD
 TXN-9553-0013,2025-07-06,ACC-9553,Bridgeport Security Associates JSC (Aktobe hub),Natural gas utility — March,-606222.88,EUR
 TXN-9749-0003,2025-07-06,ACC-9749,Juniper Supply Trust,Advance profit tax instalment — period 04 2025,-2270766.89,USD
 TXN-9813-0044,2025-07-06,ACC-9813,Eastgate Property (Pavlodar block),Insurance claim reimbursement — Q1,265431.88,EUR
 TXN-9101-0013,2025-07-07,ACC-9101,Hartley Power Associates (Kyzylorda station),Insurance premium refund — instalment 3,1290851.98,USD
 TXN-9811-0007,2025-07-07,ACC-9811,Glenwood Telecom Corp Supply (Karaganda yard),Unclaimed payroll returned — Semey base,3133961.07,USD
 TXN-P9-0019,2025-07-07,ACC-7809,Eastgate Payroll Co (Turkistan point),Cyber insurance premium,-2546037.24,USD
+TXN-X9-0003,2025-07-07,ACC-8809,Environmental Shield JSC,Environmental liability insurance premium,,USD
 TXN-9559-0041,2025-07-08,ACC-9559,Juniper Janitorial Ltd (Almaty office),"Construction all-risk insurance — Karaganda yard, October 2025",-3038683.27,USD
 TXN-9781-0003,2025-07-08,ACC-9781,Eastgate Property,Payroll funding transfer — Q2 2025,-2334154.92,USD
 TXN-9973-0011,2025-07-08,ACC-9973,Dunmore Water Works Co,Radio ad campaign schedule — Uralsk annex 2025,-1602239.58,USD
@@ -752,6 +840,7 @@ TXN-9830-0043,2025-07-10,ACC-9830,Globex Telecom,Tax audit assessment payment �
 TXN-9943-0021,2025-07-10,ACC-9943,Glenwood Leasing Holdings Supply,"Interest on bridge facility — Uralsk annex, period 03 2025",-1372564.76,USD
 TXN-9150-0014,2025-07-11,ACC-9150,Juniper Waste Systems Services,Retail unit rent — Q1,-341837.48,USD
 TXN-9692-0025,2025-07-11,ACC-9692,Hartley Stationery Trust (Shymkent depot),Accrued interest payment — August,-12221939.48,USD
+TXN-X20-0002,2025-07-11,ACC-8820,Metal Buyer B,Customer settlement - precision metals,1400000.00,USD
 TXN-9083-0033,2025-07-12,ACC-9083,Kingsley Property Partners Trading House,"Insurance broker rebate — Karaganda yard, April 2025",12127864.91,EUR
 TXN-9637-0028,2025-07-12,ACC-9637,Ironwood Leasing Partners Supply (Almaty office),Payroll advance recovered from staff — Uralsk annex 2025,394429.26,USD
 TXN-P5-0027,2025-07-12,ACC-7805,Glenwood Water Works LLC (Aktobe hub),"Standby generator electricity — Uralsk annex, final call",-473767.96,USD
@@ -762,6 +851,9 @@ TXN-9118-0013,2025-07-14,ACC-9118,Glenwood Insurance Ltd Partners,Product launch
 TXN-9192-0040,2025-07-14,ACC-9192,Dunmore Facilities Associates (Karaganda yard),"Interest on working capital line — Kyzylorda station, July",-3654126.35,USD
 TXN-9897-0045,2025-07-14,ACC-9897,Bridgeport Building Services Inc Service Centre,Capitalised interest charge — period 03,-768715.82,USD
 TXN-P6-0035,2025-07-14,ACC-7806,Foxridge Telecom LP (Turkistan point),Point-of-sale marketing materials — Kyzylorda station 2025,-659026.99,USD
+TXN-X1-0007,2025-07-14,ACC-8801,City Energy Network,Electricity network capacity charge - July,-120000.00,USD
+TXN-X12-0002,2025-07-14,ACC-8812,Retail Chain B,Customer settlement - packaging,1000000.00,USD
+TXN-X5-0004,2025-07-14,ACC-8805,Agro Assets LLP,Equipment rental payment,-300000.00,USD
 TXN-9530-0044,2025-07-15,ACC-9530,Kingsley Property Partners Enterprise,"Telecom mobile fleet plan — Astana branch, November 2025",-1651909.40,USD
 TXN-B1-0033,2025-07-15,ACC-7201,Halyk Bank of Kazakhstan JSC,Loan interest payment second quarter,-1540833.29,USD
 TXN-B4-0037,2025-07-15,ACC-7204,Hartley Tax Advisory Ltd,"Depot yard rent — Atyrau terminal, June",-3884663.27,USD
@@ -785,12 +877,14 @@ TXN-P7-0004,2025-07-19,ACC-7807,Glenwood Stationery Associates (Shymkent depot),
 TXN-P9-0040,2025-07-19,ACC-7809,Ulytau Capital LLP,Management advisory retainer,-268447.19,USD
 TXN-P9-0052,2025-07-19,ACC-7809,Ashford Tax Advisory Holdings Trading House (Ekibastuz block B),Capitalised interest charge — Astana branch,-2020740.39,USD
 TXN-9815-0040,2025-07-20,ACC-9815,Globex Telecom JSC,"Credit facility interest — Kostanay centre, March",-2260885.54,USD
+TXN-X3-0004,2025-07-20,ACC-8803,Shield Insurance JSC,Environmental liability insurance premium,-310000.00,USD
 TXN-9027-0001,2025-07-21,ACC-9027,Ashford Leasing Inc (Pavlodar block),Utility deposit returned,287288.71,USD
 TXN-9608-0017,2025-07-21,ACC-9608,Foxridge Printing LP Company (Semey base),Advance profit tax instalment — H2 2025,-11382934.42,USD
 TXN-P5-0045,2025-07-21,ACC-7805,Ironwood Realty Services (Uralsk annex),Customer newsletter marketing production — Turkistan point,-253926.10,USD
 TXN-P9-0006,2025-07-21,ACC-7809,Ashford Facilities Inc Group,Ground lease instalment — January,-995146.56,USD
 TXN-P9-0009,2025-07-21,ACC-7809,Juniper Janitorial Ltd Company,Office rent — Taraz site 2025,-4454367.27,USD
 TXN-P9-0047,2025-07-21,ACC-7809,Eastgate Security Holdings,"Interest on bilateral facility — Uralsk annex, H2 2025",-2950277.64,USD
+TXN-X4-0005,2025-07-21,ACC-8804,Bright Ads,Marketing rebate received - rate adjustment,200000.00,USD
 TXN-P10-0051,2025-07-22,ACC-7810,Bridgeport Waste Systems Ltd LLP,"Radio ad campaign schedule — Ekibastuz block B, H2",-1931018.29,USD
 TXN-P4-0001,2025-07-22,ACC-7804,Zhaiyk Dredging LLP,Berth silt cleaning and clearance works,-251338.94,USD
 TXN-P4-0027,2025-07-22,ACC-7804,Ashford Facilities Inc (Ekibastuz block B),Rent for training centre — December,-175317.45,USD
@@ -829,11 +923,13 @@ TXN-P6-0042,2025-07-30,ACC-7806,Cedarville Utility Ltd (Astana branch),Franchise
 TXN-P8-0030,2025-07-30,ACC-7808,Ural Rig Manufacturing LLP,Purchase of drilling rig equipment,-1918204.36,USD
 TXN-9328-0023,2025-07-31,ACC-9328,Hartley Stationery Trust Group (Kyzylorda station),"Municipal tax levy — Kyzylorda station, period 02",-7072605.25,USD
 TXN-B4-0013,2025-07-31,ACC-7204,Hartley Utility Trust (Almaty office),"Digital media buy — search — Kyzylorda station, February",-4256600.29,USD
+TXN-X16-0007,2025-07-31,ACC-8816,Shu Payroll,Payroll for production staff,-800000.00,USD
 TXN-9139-0048,2025-08-01,ACC-9139,Eastgate Stationery LLC (Almaty office),Radio ad campaign schedule — Zhezkazgan compound 2025,-2691530.35,USD
 TXN-9601-0007,2025-08-01,ACC-9601,Glenwood Stationery Associates (Almaty office),Contractor payroll batch — Turkistan point 2025,-11477965.41,USD
 TXN-9659-0033,2025-08-01,ACC-9659,Eastgate Waste Systems (Aktobe hub),"Sewer discharge levy — Oskemen unit, December",-1059091.17,USD
 TXN-P3-0038,2025-08-01,ACC-7803,Eastgate Landscaping LP,"Payroll accrual funding — Uralsk annex, June 2025",-4413158.15,USD
 TXN-P6-0037,2025-08-01,ACC-7806,Hartley Power Associates (Aktobe hub),"Environmental liability insurance — Oskemen unit, H1",-630356.25,USD
+TXN-X22-0008,2025-08-01,ACC-8822,Euro Dock Systems,Purchase of fixed asset equipment,-250000.00,EUR
 TXN-9577-0043,2025-08-02,ACC-9577,Dunmore Insurance LP Service Centre (Semey base),Interest on senior notes,-817908.06,USD
 TXN-P4-0057,2025-08-02,ACC-7804,Foxridge Janitorial Group Company,"Interest on trade facility — Kostanay centre, instalment 1 2025",-451994.51,USD
 TXN-9340-0011,2025-08-03,ACC-9340,Initech Software Licenses LLP,Standby generator electricity — July,-1000224.06,USD
@@ -850,6 +946,7 @@ TXN-B1-0053,2025-08-05,ACC-7201,Eastgate Utility LLC,"Lease deposit released —
 TXN-B4-0041,2025-08-05,ACC-7204,Foxridge Payroll Ltd (Pavlodar block),Rent for training centre — Ekibastuz block B 2025,-2884401.48,USD
 TXN-P3-0001,2025-08-05,ACC-7803,Turan Capital LLP,Management advisory retainer,-264117.82,USD
 TXN-P7-0001,2025-08-05,ACC-7807,Eastgate Catering Services Works,Interest income on treasury bills — Zhezkazgan compound 2025,2044034.58,USD
+TXN-X1-0008,2025-08-05,ACC-8801,Central Credit Partners,Interest on term facility - Q3,-90000.00,USD
 TXN-9086-0029,2025-08-06,ACC-9086,Juniper Office Supplies LP Ltd,Unused ad campaign budget returned — Kostanay centre 2025,1902422.23,USD
 TXN-9202-0014,2025-08-06,ACC-9202,Ashford Utility Corp,"Rent for archive premises — Kostanay centre, period 04 2025",-302645.04,USD
 TXN-9203-0036,2025-08-06,ACC-9203,Ashford Logistics LP Works,"Political risk insurance — Atyrau terminal, instalment 1",-396930.68,EUR
@@ -878,9 +975,11 @@ TXN-9283-0027,2025-08-09,ACC-9283,Glenwood Facilities Holdings,"Professional ind
 TXN-9749-0032,2025-08-09,ACC-9749,Umbrella Facilities Mgmt,"Interest on export credit line — Semey base, December",-6057270.24,USD
 TXN-B1-0052,2025-08-09,ACC-7201,Ashford Cleaning Services Partners,Rent overpayment refunded — February,317985.30,USD
 TXN-P1-0040,2025-08-09,ACC-7801,Hartley Building Services Holdings (Turkistan point),Motor third-party insurance 2025,-4159259.63,USD
+TXN-X20-0004,2025-08-09,ACC-8820,Altai Service LLP,External maintenance,-600000.00,USD
 TXN-9699-0046,2025-08-10,ACC-9699,Bridgeport Property Ltd Supply,Payroll for night shift — H2,-4286400.35,USD
 TXN-9817-0028,2025-08-10,ACC-9817,Juniper Realty Partners Works,Excise tax credit received — Pavlodar block,2990826.24,USD
 TXN-P2-0027,2025-08-10,ACC-7802,Bridgeport Building Services Inc Partners,Marketing research panel subscription — December 2025,-3128248.17,USD
+TXN-X15-0003,2025-08-10,ACC-8815,Insurer B,Liability insurance,-200000.00,USD
 TXN-9764-0024,2025-08-11,ACC-9764,Bridgeport Supply LP (Kostanay centre),Interest on escrow balance — Uralsk annex,1137535.81,USD
 TXN-9293-0004,2025-08-12,ACC-9293,Ironwood Catering Corp (Semey base),"Industry exhibition stand marketing — Shymkent depot, period 03 2025",-836946.40,USD
 TXN-P1-0045,2025-08-12,ACC-7801,Kaspi Marine Engineering LLP,Quay wall inspection and survey servicing contract,-612884.19,USD
@@ -897,6 +996,9 @@ TXN-9083-0050,2025-08-15,ACC-9083,Bridgeport Telecom Holdings (Atyrau terminal),
 TXN-9179-0047,2025-08-15,ACC-9179,Globex Telecom Supply,Motor third-party insurance — instalment 3,-243128.26,USD
 TXN-9641-0039,2025-08-15,ACC-9641,Juniper Realty Partners (Atyrau terminal),Electricity bill — April 2025,-1811239.43,USD
 TXN-B4-0052,2025-08-15,ACC-7204,Ironwood Tax Advisory Inc (Aktobe hub),Electricity overbilling refund — Q3 2025,623285.69,USD
+TXN-X16-0008,2025-08-15,ACC-8816,Union Bank,Interest on working capital line,-600000.00,USD
+TXN-X17-0004,2025-08-15,ACC-8817,Regional Bank,Revolver facility proceeds,1000000.00,USD
+TXN-X8-0004,2025-08-15,ACC-8808,Power Grid,Electricity for cold storage,-250000.00,USD
 TXN-9046-0041,2025-08-16,ACC-9046,Cedarville Consulting LP,Environmental liability insurance — instalment 1 2025,-2574524.82,USD
 TXN-9114-0032,2025-08-16,ACC-9114,Hartley Leasing Services,Storage unit rent — Ekibastuz block B,-581290.63,USD
 TXN-9255-0028,2025-08-16,ACC-9255,Glenwood Facilities Holdings Service Centre,"Payroll funding transfer — Oskemen unit, May 2025",-695862.97,USD
@@ -911,6 +1013,8 @@ TXN-P4-0026,2025-08-17,ACC-7804,Hartley Power Associates LLP,Environmental emiss
 TXN-9160-0050,2025-08-18,ACC-9160,Ashford Realty Ltd (Semey base),Office rent — H1 2025,-993357.92,USD
 TXN-9394-0024,2025-08-18,ACC-9394,Cedarville Janitorial Holdings Trading House,Outdoor marketing site hire — Atyrau terminal,-10233484.26,USD
 TXN-9420-0025,2025-08-18,ACC-9420,Ironwood Courier Co (Aktobe hub),"Interest true-up charge — Almaty office, February 2025",-216400.21,USD
+TXN-X13-0002,2025-08-18,ACC-8813,Telecom Client B,Customer payment - infrastructure service,1000000.00,USD
+TXN-X5-0005,2025-08-18,ACC-8805,Local Storage LLP,Warehouse lease,-500000.00,USD
 TXN-9046-0033,2025-08-19,ACC-9046,Dunmore Cleaning LP (Almaty office),"Payroll for administrative staff — Almaty office, H2 2025",-193210.49,USD
 TXN-9108-0040,2025-08-19,ACC-9108,Glenwood Maintenance Services (Astana branch),"Interest on export credit line — Atyrau terminal, Q3 2025",-904689.53,USD
 TXN-9216-0042,2025-08-19,ACC-9216,Ironclad Security Services Ltd (Astana branch),Office rent — Ekibastuz block B,-1760904.94,USD
@@ -981,7 +1085,11 @@ TXN-B4-0010,2025-08-30,ACC-7204,Ashford Realty Ltd Enterprise (Ekibastuz block B
 TXN-B4-0055,2025-08-30,ACC-7204,Juniper Consulting Associates (Oskemen unit),"Rent for spare parts store — Aktobe hub, May 2025",-6987897.37,USD
 TXN-9138-0009,2025-08-31,ACC-9138,Glenwood Consulting Inc Holding,"Interest on export credit line — Atyrau terminal, instalment 3 2025",-1316940.32,USD
 TXN-P4-0051,2025-08-31,ACC-7804,Eastgate Catering Services (Uralsk annex),"Insurance claim reimbursement — Zhezkazgan compound, March",103086.37,USD
+TXN-X2-0005,2025-08-31,ACC-8802,Steppe Payroll Centre,Payroll for operations team - Q3,-650000.00,USD
+TXN-X4-0007,2025-08-31,ACC-8804,Ili Payroll,Payroll for production staff - H2,-600000.00,USD
 TXN-9386-0019,2025-09-01,ACC-9386,Ironwood Utility Solutions Works,Cold store lease — July 2025,-7896099.88,USD
+TXN-X17-0006,2025-09-01,ACC-8817,Savings Bank,Interest credited on current account,200000.00,USD
+TXN-X3-0005,2025-09-01,ACC-8803,Peak Media LLP,Digital media campaign - autumn expo,-90000.00,USD
 TXN-9021-0030,2025-09-02,ACC-9021,Bridgeport Insurance Partners,"Warehouse lease — Oskemen unit, May",-2038678.70,USD
 TXN-9432-0012,2025-09-02,ACC-9432,Bridgeport Consulting Group Enterprise,Marketing agency credit note — Oskemen unit,6900618.23,USD
 TXN-9865-0022,2025-09-02,ACC-9865,Ironwood Office Supplies Group (Semey base),Depot yard rent — Taraz site,-642933.80,USD
@@ -1018,12 +1126,16 @@ TXN-B1-0032,2025-09-10,ACC-7201,Hartley Catering LP Supply,Industry exhibition s
 TXN-B4-0018,2025-09-10,ACC-7204,Dunmore Landscaping Group,"Printed marketing collateral run — Kyzylorda station, December",-2434137.65,USD
 TXN-P1-0016,2025-09-10,ACC-7801,Dunmore Realty,Payroll bonus disbursement — Almaty office 2025,-5004933.43,USD
 TXN-P9-0003,2025-09-10,ACC-7809,Acme Office Supplies,Printed marketing collateral run — H2 2025,-11973391.14,USD
+TXN-X6-0004,2025-09-10,ACC-8806,City Energy,Electricity charge,-120000.00,USD
 TXN-9084-0004,2025-09-11,ACC-9084,Ashford Leasing Inc Service Centre (Ekibastuz block B),"Printed marketing collateral run — Taraz site, H2 2025",-658272.64,USD
 TXN-9379-0003,2025-09-11,ACC-9379,Cedarville Building Services LLC (Aktobe hub),Marketing agency credit note — May 2025,455305.72,USD
 TXN-9515-0042,2025-09-11,ACC-9515,Bridgeport Water Works LP (Almaty office),Marketing agency creative fees,-243250.81,USD
 TXN-P3-0010,2025-09-11,ACC-7803,KazMunayGas Refining JSC,Refinery turnaround services sales settlement 2025,8104772.36,USD
+TXN-X1-0009,2025-09-11,ACC-8801,Pixel Media House,Digital media campaign - autumn product launch,-50000.00,USD
 TXN-9568-0023,2025-09-12,ACC-9568,Ironwood Leasing Partners Group,Regional marketing campaign production — Turkistan point 2025,-510871.86,USD
 TXN-P7-0020,2025-09-12,ACC-7807,Ironwood Courier Co,Payroll agency rebate — Aktobe hub,4981367.79,USD
+TXN-X10-0004,2025-09-12,ACC-8810,PowerNet,Electricity charge,-180000.00,USD
+TXN-X15-0005,2025-09-12,ACC-8815,Ad Agency B,Trade exhibition campaign,-300000.00,USD
 TXN-9543-0017,2025-09-13,ACC-9543,Bridgeport Power Corp,VAT instalment,-733984.34,USD
 TXN-P8-0054,2025-09-13,ACC-7808,Juniper Landscaping LLC Service Centre,Marketing volume rebate — Uralsk annex 2025,834559.44,USD
 TXN-9413-0046,2025-09-14,ACC-9413,Glenwood Maintenance Services,Digital media buy — display 2025,-9785526.83,USD
@@ -1034,6 +1146,7 @@ TXN-9233-0044,2025-09-15,ACC-9233,Foxridge Payroll Ltd (Semey base),Water charge
 TXN-9552-0026,2025-09-15,ACC-9552,Dunmore Power Ltd Enterprise (Kostanay centre),"Payroll for security detail — Pavlodar block, H2",-11383172.42,USD
 TXN-9999-0039,2025-09-15,ACC-9999,Halcyon Facilities Group,Unearned insurance premium return 2025,7864015.10,USD
 TXN-P10-0063,2025-09-15,ACC-7810,State Revenue Committee,Corporate income tax instalment 2025,-882447.19,USD
+TXN-X16-0009,2025-09-15,ACC-8816,Machine Vendor,Purchase of test equipment,-800000.00,USD
 TXN-B1-0012,2025-09-16,ACC-7201,Ironwood Maintenance Group,Customer newsletter marketing production,-421686.32,USD
 TXN-B4-0024,2025-09-16,ACC-7204,Dunmore Security Solutions Partners (Almaty office),"Tax overpayment refunded — Semey base, period 01",1801311.03,USD
 TXN-P6-0056,2025-09-16,ACC-7806,Eastgate Supply Ltd (Almaty office),Corporate brand marketing programme — H2 2025,-192438.20,USD
@@ -1050,9 +1163,11 @@ TXN-B4-0050,2025-09-19,ACC-7204,Ironwood Uniforms Corp,Waste water charge — Q2
 TXN-P2-0031,2025-09-19,ACC-7802,Bridgeport Cleaning Partners,"Excise tax payment — Shymkent depot, final call 2025",-6057047.46,USD
 TXN-P5-0052,2025-09-19,ACC-7805,Ashford Landscaping Holdings Enterprise,Group insurance experience refund — Semey base,163904.34,USD
 TXN-P9-0026,2025-09-19,ACC-7809,Ironwood Uniforms Corp Service Centre (Karaganda yard),Corporate brand marketing programme — period 04,-936660.21,USD
+TXN-X2-0008,2025-09-19,ACC-8802,Nomad Digital Agency LLP,Digital media campaign - nationwide logistics brand launch,-320000.00,USD
 TXN-9490-0015,2025-09-20,ACC-9490,Ironwood Building Services Services,Corporate brand marketing programme — period 02,-1232101.42,USD
 TXN-9692-0027,2025-09-20,ACC-9692,Cedarville Logistics Co LLP,"Utility deposit returned — Pavlodar block, Q1 2025",2237085.32,USD
 TXN-P6-0018,2025-09-20,ACC-7806,Dunmore Utility Inc Enterprise,Capitalised interest charge — Kostanay centre 2025,-1140952.33,USD
+TXN-X7-0005,2025-09-20,ACC-8807,Regional Expo,Trade press marketing insertion,-100000.00,USD
 TXN-9011-0021,2025-09-21,ACC-9011,Kingsley Tax Advisory (Taraz site),"Rent for training centre — Karaganda yard, Q2",-12431033.04,USD
 TXN-9738-0008,2025-09-21,ACC-9738,Glenwood Consulting Inc (Ekibastuz block B),"Sewer discharge levy — Karaganda yard, period 03",-145002.77,USD
 TXN-9805-0031,2025-09-21,ACC-9805,Cedarville Utility Ltd (Zhezkazgan compound),"Waste water charge — Taraz site, March 2025",-959810.44,USD
@@ -1113,6 +1228,7 @@ TXN-9787-0049,2025-09-30,ACC-9787,Juniper Waste Systems Services (Almaty office)
 TXN-9893-0008,2025-09-30,ACC-9893,Northwind Catering Ltd,"Payroll for night shift — Pavlodar block, May",-1786933.17,USD
 TXN-B1-0026,2025-09-30,ACC-7201,KEGOC National Grid JSC,Generation capacity sales settlement 2025,9741934.78,USD
 TXN-P6-0007,2025-09-30,ACC-7806,Bridgeport Stationery Co (Kyzylorda station),Interest on overdraft sweep — Q1,-5978181.15,USD
+TXN-X22-0009,2025-09-30,ACC-8822,Marine Payroll,Payroll for engineering team,-700000.00,USD
 TXN-9314-0001,2025-10-01,ACC-9314,Dunmore Power Ltd (Karaganda yard),"Interest on subordinated notes — Almaty office, H1 2025",-4812992.78,USD
 TXN-P2-0020,2025-10-01,ACC-7802,Glenwood Tax Advisory Co,"Digital media buy — search — Pavlodar block, December",-7734227.11,USD
 TXN-P7-0023,2025-10-01,ACC-7807,Hartley Security Group,"Payroll accrual reversal — Turkistan point, May",9251557.75,USD
@@ -1121,6 +1237,7 @@ TXN-9035-0046,2025-10-02,ACC-9035,Bridgeport Property Ltd (Semey base),"Director
 TXN-9361-0034,2025-10-02,ACC-9361,Cedarville Courier Holdings (Uralsk annex),Excise tax remittance — period 02,-361087.56,USD
 TXN-P4-0016,2025-10-02,ACC-7804,Foxridge Supply Inc LLP (Taraz site),Social tax remittance — instalment 2 2025,-1401514.80,USD
 TXN-P5-0004,2025-10-02,ACC-7805,Sarybel Capital LLP,Management advisory retainer,-273418.66,USD
+TXN-X18-0004,2025-10-02,ACC-8818,Power Utility,Electricity for plant,-180000.00,USD
 TXN-9435-0026,2025-10-03,ACC-9435,Hartley Cleaning Inc (Almaty office),Interest on finance sublease — October 2025,-413287.32,USD
 TXN-P1-0017,2025-10-03,ACC-7801,Glenwood Leasing Holdings Ltd,Telecom service credit received 2025,577364.91,USD
 TXN-P10-0043,2025-10-03,ACC-7810,Bridgeport Waste Systems Ltd LLP,Overdraft interest — Q2,-604362.55,USD
@@ -1128,6 +1245,7 @@ TXN-P10-0044,2025-10-03,ACC-7810,Juniper Consulting Associates,Marketing co-oper
 TXN-P5-0044,2025-10-03,ACC-7805,Cedarville Stationery Ltd LLP (Aktobe hub),Quarterly estimated tax — April 2025,-471193.18,USD
 TXN-P7-0050,2025-10-03,ACC-7807,Eastgate Supply Ltd Company,"Customer newsletter marketing production — Almaty office, Q1 2025",-12884795.90,USD
 TXN-P8-0027,2025-10-03,ACC-7808,Ashford Payroll Partners (Taraz site),"Antenna mast lease — Almaty office, period 04 2025",-597868.57,USD
+TXN-X2-0009,2025-10-03,ACC-8802,Northern Warehouses JSC,Warehouse lease payment - October,-400000.00,USD
 TXN-9002-0016,2025-10-04,ACC-9002,Eastgate Facilities Trust Partners (Aktobe hub),"Customer newsletter marketing production — Karaganda yard, H1 2025",-2169557.43,USD
 TXN-9239-0046,2025-10-04,ACC-9239,Foxridge Uniforms Partners,Broadband telecom invoice — July 2025,-1120170.40,USD
 TXN-P3-0006,2025-10-04,ACC-7803,Eastgate Uniforms Services (Astana branch),Excise tax credit received — instalment 1,5618786.64,USD
@@ -1189,6 +1307,7 @@ TXN-P2-0018,2025-10-18,ACC-7802,Kingsley Property Partners (Semey base),Compress
 TXN-9608-0006,2025-10-19,ACC-9608,Sterling Office Solutions (Oskemen unit),"Severance payroll batch — Turkistan point, Q3",-11213091.81,USD
 TXN-P5-0025,2025-10-19,ACC-7805,Cedarville Utility Ltd (Almaty office),Liability insurance — November 2025,-608672.57,USD
 TXN-P8-0052,2025-10-19,ACC-7808,Vanguard Payroll Co Enterprise,"Unearned insurance premium return — Almaty office, December",238324.18,USD
+TXN-X9-0004,2025-10-19,ACC-8809,City Office,Office lease,-150000.00,USD
 TXN-9081-0028,2025-10-20,ACC-9081,Acme Office Supplies (Ekibastuz block B),Land tax instalment 2025,-3691513.13,USD
 TXN-9903-0039,2025-10-20,ACC-9903,Cedarville Telecom Services (Pavlodar block),"Interest income on term deposit — Shymkent depot, March 2025",120691.10,USD
 TXN-9224-0002,2025-10-22,ACC-9224,Ironwood Janitorial Co (Semey base),"Capitalised interest charge — Pavlodar block, September 2025",-1420004.22,EUR
@@ -1235,6 +1354,7 @@ TXN-P6-0021,2025-10-31,ACC-7806,Halcyon Facilities Group (Uralsk annex),"Warehou
 TXN-P7-0008,2025-10-31,ACC-7807,Ashford Power LP,"Rent deposit returned — Aktobe hub, Q3 2025",676445.14,USD
 TXN-P1-0004,2025-11-01,ACC-7801,Bridgeport Telecom Holdings Supply,"Quarterly interest coupon — Semey base, Q3",-9801187.71,USD
 TXN-P5-0039,2025-11-01,ACC-7805,Dunmore Logistics Ltd Trading House,Interest on finance sublease — Pavlodar block,-5109787.19,USD
+TXN-X1-0010,2025-11-01,ACC-8801,East Yard Property LLP,Warehouse lease payment - November,-110000.00,USD
 TXN-9208-0017,2025-11-02,ACC-9208,Foxridge Office Supplies Holdings,Social tax remittance — Q1 2025,-733891.65,USD
 TXN-9606-0026,2025-11-02,ACC-9606,Hartley Realty Holdings (Astana branch),"Electricity for pumping station — Zhezkazgan compound, instalment 3 2025",-166781.75,USD
 TXN-P2-0005,2025-11-02,ACC-7802,Bridgeport Printing Holdings (Kyzylorda station),"Interest recovery on overpayment — Atyrau terminal, December 2025",12986601.59,USD
@@ -1423,6 +1543,7 @@ TXN-9998-0005,2025-12-19,ACC-9998,Cedarville Cleaning Group Group,"Cold store le
 TXN-B1-0043,2025-12-19,ACC-7201,Cedarville Consulting LP Partners (Pavlodar block),Tax audit assessment payment — period 03,-602698.98,USD
 TXN-P1-0051,2025-12-19,ACC-7801,Ashford Utility Corp Trading House,"Waste water charge — Aktobe hub, October 2025",-1507081.12,USD
 TXN-P2-0044,2025-12-19,ACC-7802,Dunmore Maintenance Trust Service Centre (Almaty office),"Interest true-up charge — Almaty office, February 2025",-1333221.39,USD
+TXN-X22-0007,2025-12-20,ACC-8822,Future Expo,Prepaid marketing services for 2026,-450000.00,USD
 TXN-9564-0036,2025-12-21,ACC-9564,Bridgeport Consulting Group Company (Taraz site),Interest on senior notes — Ekibastuz block B,-6329354.36,USD
 TXN-9897-0023,2025-12-21,ACC-9897,Foxridge Telecom LP Supply (Almaty office),"Revolver interest — Zhezkazgan compound, August 2025",-355975.83,USD
 TXN-9963-0047,2025-12-21,ACC-9963,Ironwood Stationery Solutions (Almaty office),Auto fleet insurance — Pavlodar block 2025,-1778650.99,USD
@@ -1461,6 +1582,7 @@ TXN-9195-0041,2025-12-28,ACC-9195,Juniper Printing Inc Trading House (Turkistan 
 TXN-9379-0037,2025-12-28,ACC-9379,Juniper Cleaning (Almaty office),Tax penalty settlement charge — June,-1787565.68,USD
 TXN-9814-0045,2025-12-28,ACC-9814,Ironwood Security LP,Marketing research panel subscription — December,-547692.09,USD
 TXN-P10-0015,2025-12-28,ACC-7810,Beacon Tax Advisors,"Interest on export credit line — Semey base, December",-920041.07,USD
+TXN-X8-0003,2025-12-28,ACC-8808,Future Depot LLP,Warehouse lease prepaid for services in 2026,-600000.00,USD
 TXN-9920-0038,2025-12-29,ACC-9920,Bridgeport Courier Solutions Supply,Executive payroll run — Turkistan point 2025,-398047.79,USD
 TXN-P6-0010,2025-12-29,ACC-7806,Dunmore Property LLC Holding,Corporate income tax instalment — Semey base,-2100935.52,USD
 TXN-P7-0016,2025-12-29,ACC-7807,Dunmore Payroll Corp (Pavlodar block),Cold store lease — August 2025,-4160796.31,USD

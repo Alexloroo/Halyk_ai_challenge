@@ -1,0 +1,319 @@
+{
+  "note": "X1/X2 PDFs are not included because they are already in the target system. Copy documents_new_X3_X22 into the existing documents folder, then replace ledger/template/ground_truth.",
+  "previous_comparison": {
+    "cells": 6,
+    "status_matches": 6,
+    "actual_exact_matches": 6,
+    "evidence_matches": 5,
+    "note": "X2/6.3 evidence was corrected to null in v2 because it is an aggregate marketing-limit test."
+  },
+  "scenarios": [
+    {
+      "scenario_id": "X1",
+      "account_id": "ACC-8801",
+      "borrower": "Orion Industrial Systems JSC",
+      "difficulty": "baseline",
+      "focus": [
+        "revenue vs contra",
+        "capex aggregate",
+        "simple ratio"
+      ],
+      "pdf_files": []
+    },
+    {
+      "scenario_id": "X2",
+      "account_id": "ACC-8802",
+      "borrower": "Steppe Logistics & Services JSC",
+      "difficulty": "baseline",
+      "focus": [
+        "personnel aggregate",
+        "revenue with rebate",
+        "marketing aggregate"
+      ],
+      "pdf_files": []
+    },
+    {
+      "scenario_id": "X3",
+      "account_id": "ACC-8803",
+      "borrower": "Aurora Mining Equipment JSC",
+      "difficulty": "easy-medium",
+      "focus": [
+        "single-transaction evidence",
+        "basic revenue"
+      ],
+      "pdf_files": [
+        "d229750eb492.pdf"
+      ]
+    },
+    {
+      "scenario_id": "X4",
+      "account_id": "ACC-8804",
+      "borrower": "Ili Valley Manufacturing JSC",
+      "difficulty": "medium",
+      "focus": [
+        "contra inflows",
+        "ratio denominator"
+      ],
+      "pdf_files": [
+        "554e6259a5fd.pdf",
+        "ca7db3472623.pdf"
+      ]
+    },
+    {
+      "scenario_id": "X5",
+      "account_id": "ACC-8805",
+      "borrower": "Caspian Agri Processing JSC",
+      "difficulty": "medium",
+      "focus": [
+        "KYC threshold",
+        "related-party absolute/share"
+      ],
+      "pdf_files": [
+        "d9bb8ddca5f8.pdf",
+        "8d2b6b09e328.pdf"
+      ]
+    },
+    {
+      "scenario_id": "X6",
+      "account_id": "ACC-8806",
+      "borrower": "Nova Materials JSC",
+      "difficulty": "hard",
+      "focus": [
+        "fuzzy related-party names",
+        "KYC threshold 40%"
+      ],
+      "pdf_files": [
+        "eae353d27746.pdf",
+        "3ed71b26db5f.pdf"
+      ]
+    },
+    {
+      "scenario_id": "X7",
+      "account_id": "ACC-8807",
+      "borrower": "Atyrau Process Controls JSC",
+      "difficulty": "hard",
+      "focus": [
+        "final audit reclassification",
+        "draft conflicting audit",
+        "evidence by correction"
+      ],
+      "pdf_files": [
+        "509f23df9f26.pdf",
+        "b0ba8d01fdfa.pdf",
+        "8cf44dabf01a.pdf"
+      ]
+    },
+    {
+      "scenario_id": "X8",
+      "account_id": "ACC-8808",
+      "borrower": "Semey Cold Storage JSC",
+      "difficulty": "hard",
+      "focus": [
+        "audit cutoff exclusion",
+        "single transaction"
+      ],
+      "pdf_files": [
+        "c6df9d7feef2.pdf",
+        "aaafb06b8ea1.pdf",
+        "edcf83808461.pdf"
+      ]
+    },
+    {
+      "scenario_id": "X9",
+      "account_id": "ACC-8809",
+      "borrower": "Karatau Environmental Services JSC",
+      "difficulty": "hard",
+      "focus": [
+        "missing amount",
+        "audit correction evidence"
+      ],
+      "pdf_files": [
+        "bb7cbd54967d.pdf",
+        "805f5a2a166f.pdf"
+      ]
+    },
+    {
+      "scenario_id": "X10",
+      "account_id": "ACC-8810",
+      "borrower": "Aktobe Robotics Assembly JSC",
+      "difficulty": "hard",
+      "focus": [
+        "EUR->USD audit FX",
+        "status flips without FX"
+      ],
+      "pdf_files": [
+        "faf594ea8434.pdf",
+        "13f3b54acf1e.pdf",
+        "254be7802714.pdf"
+      ]
+    },
+    {
+      "scenario_id": "X11",
+      "account_id": "ACC-8811",
+      "borrower": "Pavlodar Alloy Components JSC",
+      "difficulty": "medium-hard",
+      "focus": [
+        "current vs superseded agreement"
+      ],
+      "pdf_files": [
+        "c94749c0c634.pdf",
+        "98a05fb00a41.pdf"
+      ]
+    },
+    {
+      "scenario_id": "X12",
+      "account_id": "ACC-8812",
+      "borrower": "Turkistan Packaging JSC",
+      "difficulty": "adversarial",
+      "focus": [
+        "long false agreement-like distractor",
+        "document selection by length"
+      ],
+      "pdf_files": [
+        "ea0ce55123b1.pdf",
+        "c146ccfb37c2.pdf"
+      ]
+    },
+    {
+      "scenario_id": "X13",
+      "account_id": "ACC-8813",
+      "borrower": "Saryarka Telecom Infrastructure JSC",
+      "difficulty": "adversarial",
+      "focus": [
+        "springing covenant",
+        "actual must not become zero",
+        "financing"
+      ],
+      "pdf_files": [
+        "ad29f501cf49.pdf",
+        "cfeb4e361ea1.pdf"
+      ]
+    },
+    {
+      "scenario_id": "X14",
+      "account_id": "ACC-8814",
+      "borrower": "Kostanay Farm Machinery JSC",
+      "difficulty": "hard",
+      "focus": [
+        "revenue-minus-max-category",
+        "LLM formula"
+      ],
+      "pdf_files": [
+        "8ba268a93843.pdf"
+      ]
+    },
+    {
+      "scenario_id": "X15",
+      "account_id": "ACC-8815",
+      "borrower": "Zhezkazgan Industrial Maintenance JSC",
+      "difficulty": "hard",
+      "focus": [
+        "max of category aggregates"
+      ],
+      "pdf_files": [
+        "7d34b653bb2c.pdf"
+      ]
+    },
+    {
+      "scenario_id": "X16",
+      "account_id": "ACC-8816",
+      "borrower": "Shu Energy Equipment JSC",
+      "difficulty": "adversarial",
+      "focus": [
+        "EBITDA includes multiple OPEX-like categories",
+        "ratio denominator"
+      ],
+      "pdf_files": [
+        "4f73cee42322.pdf",
+        "4e2632819221.pdf"
+      ]
+    },
+    {
+      "scenario_id": "X17",
+      "account_id": "ACC-8817",
+      "borrower": "Almaty Urban Mobility JSC",
+      "difficulty": "hard",
+      "focus": [
+        "financing vs revenue vs contra vs interest income"
+      ],
+      "pdf_files": [
+        "37e737a27b90.pdf"
+      ]
+    },
+    {
+      "scenario_id": "X18",
+      "account_id": "ACC-8818",
+      "borrower": "Kokshetau Timber Products JSC",
+      "difficulty": "adversarial",
+      "focus": [
+        "substring entity matching false positive"
+      ],
+      "pdf_files": [
+        "2cfc28d4a4eb.pdf",
+        "960553d31f2c.pdf"
+      ]
+    },
+    {
+      "scenario_id": "X19",
+      "account_id": "ACC-8819",
+      "borrower": "Taraz Freight Solutions JSC",
+      "difficulty": "adversarial",
+      "focus": [
+        "ACC-8819 vs ACC-8819-02 KYC collision",
+        "longer auxiliary KYC"
+      ],
+      "pdf_files": [
+        "47cab5f9af04.pdf",
+        "d5a92aa572b1.pdf",
+        "7e861ae8d127.pdf"
+      ]
+    },
+    {
+      "scenario_id": "X20",
+      "account_id": "ACC-8820",
+      "borrower": "Oskemen Precision Metals JSC",
+      "difficulty": "adversarial",
+      "focus": [
+        "image-only KYC",
+        "OCR requirement"
+      ],
+      "pdf_files": [
+        "78b6e4c8f822.pdf",
+        "e2aee47c17f2.pdf",
+        "7d52f73b5b34.pdf"
+      ]
+    },
+    {
+      "scenario_id": "X21",
+      "account_id": "ACC-8821",
+      "borrower": "Kyzylorda Water Systems JSC",
+      "difficulty": "adversarial",
+      "focus": [
+        "image-only current agreement",
+        "OCR requirement"
+      ],
+      "pdf_files": [
+        "9b0a7d7d0196.pdf"
+      ]
+    },
+    {
+      "scenario_id": "X22",
+      "account_id": "ACC-8822",
+      "borrower": "Mangystau Marine Engineering JSC",
+      "difficulty": "extreme",
+      "focus": [
+        "stale/current",
+        "KYC fuzzy names",
+        "audit reclass+exclude",
+        "EUR FX",
+        "complex formula"
+      ],
+      "pdf_files": [
+        "26d0f2a144b4.pdf",
+        "39d868809d99.pdf",
+        "15ed00fb939a.pdf",
+        "692ce359a2f0.pdf"
+      ]
+    }
+  ]
+}
