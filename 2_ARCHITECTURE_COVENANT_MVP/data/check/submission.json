@@ -1,7 +1,7 @@
 {
   "team": "cloud1",
-  "contact_email": "aantonov21@gmail.com",
-  "model": "deepseek-chat",
+  "contact_email": "team@example.com",
+  "model": "deterministic-v1",
   "answers": {
     "P1": {
       "6.1": {
