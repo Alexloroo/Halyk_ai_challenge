@@ -71,6 +71,9 @@ def trace_parties(
         {
             "result": parties,
             "flagged_txn_ids": [entry.txn_id for entry in entries if entry.is_related_party],
+            "unrestricted_txn_ids": [
+                entry.txn_id for entry in entries if entry.is_unrestricted_transfer
+            ],
         },
     )
 

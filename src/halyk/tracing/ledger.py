@@ -20,6 +20,8 @@ FIELDS = [
     "currency",
     "category",
     "is_related_party",
+    "is_unrestricted_transfer",
+    "audit_reclassified",
     "defects",
 ]
 
@@ -36,6 +38,8 @@ def entry_row(entry: LedgerEntry) -> dict[str, object]:
         "currency": entry.currency,
         "category": entry.category,
         "is_related_party": entry.is_related_party,
+        "is_unrestricted_transfer": entry.is_unrestricted_transfer,
+        "audit_reclassified": entry.audit_reclassified,
         "defects": ";".join(entry.defects),
     }
 

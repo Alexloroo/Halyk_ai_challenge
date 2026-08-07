@@ -39,6 +39,7 @@ def test_evaluation_trace_explains_scope_aggregate_and_evidence_trials() -> None
         _entry("TXN-P1-1", date(2025, 2, 1), "-60"),
         _entry("TXN-P1-2", date(2025, 4, 1), "-100"),
     ]
+    entries[0].audit_reclassified = True
     details = EvaluationTrace()
 
     answer = evaluate(rule, entries, trace=details)
@@ -56,3 +57,22 @@ def test_evaluation_trace_explains_scope_aggregate_and_evidence_trials() -> None
     assert details.status == "BREACH"
     assert evidence == "TXN-P1-1"
     assert trials == {"TXN-P1-1": "COMPLIANT"}
+
+
+def test_ordinary_aggregate_line_is_not_evidence() -> None:
+    rule = Rule(
+        scenario_id="P1",
+        clause="6.1",
+        heading="Maximum capex",
+        text="Capex must not exceed $50",
+        kind=RuleKind.MAX_CATEGORY_SPEND,
+        comparator="<=",
+        threshold=Decimal("50"),
+        period=None,
+        categories=frozenset({Category.CAPEX}),
+    )
+    entries = [_entry("TXN-P1-1", date(2025, 2, 1), "-60")]
+
+    answer = evaluate(rule, entries)
+
+    assert find_evidence(rule, entries, answer) is None

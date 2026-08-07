@@ -189,6 +189,9 @@ def _agg(
     if agg == AggKind.RELATED_PARTY_OUTFLOW:
         chosen = _related(entries)
         return _sum(chosen), chosen
+    if agg == AggKind.UNRESTRICTED_TRANSFER:
+        chosen = [e for e in entries if e.is_outflow and e.is_unrestricted_transfer]
+        return _sum(chosen), chosen
     chosen = _spend(entries, cats)
     return _sum(chosen), chosen
 
@@ -203,13 +206,19 @@ def _evaluate_with_formula(
     scope: list[LedgerEntry],
     formula: FormulaSpec,
     trace: EvaluationTrace | None = None,
+    numerator_constant: Decimal | None = None,
 ) -> Answer:
     from .llm_extract import OutputKind
 
     num_cats = _cats_from_slugs(formula.numerator_categories)
     den_cats = _cats_from_slugs(formula.denominator_categories)
 
-    numerator, num_entries = _agg(scope, formula.numerator_agg, num_cats)
+    if numerator_constant is None:
+        numerator, num_entries = _agg(scope, formula.numerator_agg, num_cats)
+    else:
+        # Some group-level values come from audited statements rather than
+        # the borrower's transaction ledger.
+        numerator, num_entries = numerator_constant, []
 
     if formula.is_conditional and formula.condition_threshold_dollars is not None:
         cond_val = abs(numerator)
@@ -284,13 +293,20 @@ def evaluate(
     *,
     formula: FormulaSpec | None = None,
     trace: EvaluationTrace | None = None,
+    numerator_constant: Decimal | None = None,
 ) -> Answer:
     scope = _select(entries, rule)
     if trace is not None:
         trace.scope_txn_ids = [entry.txn_id for entry in scope]
 
     if formula is not None and rule.kind in (RuleKind.RATIO, RuleKind.UNKNOWN):
-        return _evaluate_with_formula(rule, scope, formula, trace)
+        return _evaluate_with_formula(
+            rule,
+            scope,
+            formula,
+            trace,
+            numerator_constant=numerator_constant,
+        )
 
     if rule.kind is RuleKind.MIN_REVENUE:
         chosen = _revenue(scope)
@@ -309,10 +325,15 @@ def evaluate(
 
     elif rule.kind is RuleKind.RELATED_PARTY_SHARE:
         chosen = _related(scope)
-        revenue = _sum(_revenue(scope))
         related = _sum(chosen)
-        actual = (related / revenue) if revenue else Decimal(0)
-        aggregates = {"related_total": related, "revenue_total": revenue}
+        if Category.OPEX in rule.categories:
+            base = _sum(_spend(scope, frozenset({Category.OPEX})))
+            base_name = "opex_total"
+        else:
+            base = _sum(_revenue(scope))
+            base_name = "revenue_total"
+        actual = (related / base) if base else Decimal(0)
+        aggregates = {"related_total": related, base_name: base}
 
     elif rule.kind is RuleKind.RATIO:
         ordered = sorted(rule.categories, key=lambda c: c.value)
@@ -356,17 +377,31 @@ def find_evidence(
     *,
     formula: FormulaSpec | None = None,
     trials: dict[str, str] | None = None,
+    numerator_constant: Decimal | None = None,
 ) -> str | None:
     """The transaction whose removal flips the verdict."""
     if answer.status != "BREACH" or not answer.basis:
         return None
 
+    by_id = {entry.txn_id: entry for entry in entries}
+    candidates = [
+        txn_id
+        for txn_id in answer.basis
+        if (entry := by_id.get(txn_id)) is not None
+        and (
+            entry.audit_reclassified
+            or entry.is_related_party
+            or entry.is_unrestricted_transfer
+        )
+    ]
+
     deciding: list[str] = []
-    for txn_id in answer.basis:
+    for txn_id in candidates:
         result = evaluate(
             rule,
             [e for e in entries if e.txn_id != txn_id],
             formula=formula,
+            numerator_constant=numerator_constant,
         )
         if trials is not None:
             trials[txn_id] = result.status

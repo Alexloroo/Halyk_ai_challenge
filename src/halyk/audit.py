@@ -120,6 +120,34 @@ def extract_fx_rates(text: str) -> dict[str, Decimal]:
     return rates
 
 
+#: Group-level capex is not in any ledger: it is derived from the PP&E note of
+#: the ultimate parent's consolidated statements. With no disposals in the
+#: year, additions = closing NBV - opening NBV + depreciation charge.
+NBV_BEGIN = re.compile(
+    r"Net book value at the beginning of the year\s*\n?\$\s*([\d,]+(?:\.\d{2})?)", re.I,
+)
+NBV_END = re.compile(
+    r"Net book value at the end of the year\s*\n?\$\s*([\d,]+(?:\.\d{2})?)", re.I,
+)
+DEPRECIATION_CHARGE = re.compile(
+    r"Depreciation charge for the year\s*\n?\$\s*([\d,]+(?:\.\d{2})?)", re.I,
+)
+
+
+def extract_group_capex(text: str) -> Decimal | None:
+    """Capex additions from a consolidated PP&E movement note."""
+    begin = NBV_BEGIN.search(text)
+    end = NBV_END.search(text)
+    dep = DEPRECIATION_CHARGE.search(text)
+    if not (begin and end and dep):
+        return None
+
+    def _num(m: re.Match[str]) -> Decimal:
+        return Decimal(m.group(1).replace(",", ""))
+
+    return _num(end) - _num(begin) + _num(dep)
+
+
 DISCLOSED_OBLIGATION = re.compile(
     r"(?:совокупное\s+)?обязательств\w+\s+по\s+программе\s+(.{3,80}?)"
     r"\s+в\s+размере\s+\$\s*([\d,]+(?:\.\d{2})?)"
@@ -250,6 +278,7 @@ def apply_adjustments(
 
             if target and adj.new_category:
                 target.category = adj.new_category
+                target.audit_reclassified = True
 
         elif adj.kind == AdjustmentKind.EXCLUDE:
             for e in result:

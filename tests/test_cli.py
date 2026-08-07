@@ -72,6 +72,49 @@ def test_cli_only_recreates_trace_when_fulltrace_is_enabled(tmp_path: Path) -> N
     assert unavailable["status"] == "not_available"
 
 
+def test_ground_truth_is_post_run_only_and_cannot_change_submission(tmp_path: Path) -> None:
+    data_dir = tmp_path / "raw"
+    _dataset(data_dir)
+    without_truth = tmp_path / "without-truth.json"
+    with_poisoned_truth = tmp_path / "with-poisoned-truth.json"
+
+    assert main(["--data-dir", str(data_dir), "--output", str(without_truth), "--no-llm"]) == 0
+    (data_dir / "ground_truth.json").write_text(
+        json.dumps(
+            {
+                "scenarios": {
+                    "P1": {
+                        "covenants": {
+                            "6.1": {
+                                "status": "BREACH",
+                                "actual": 999999999,
+                                "evidence_txn_id": "POISON",
+                            }
+                        }
+                    }
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+    assert main(
+        [
+            "--data-dir",
+            str(data_dir),
+            "--output",
+            str(with_poisoned_truth),
+            "--trace-dir",
+            str(tmp_path / "poison-trace"),
+            "--no-llm",
+            "--fulltrace",
+        ]
+    ) == 0
+
+    assert json.loads(with_poisoned_truth.read_text(encoding="utf-8")) == json.loads(
+        without_truth.read_text(encoding="utf-8")
+    )
+
+
 def test_makefile_run_and_fulltrace_targets_execute_the_pipeline(tmp_path: Path) -> None:
     data_dir = tmp_path / "raw"
     _dataset(data_dir)

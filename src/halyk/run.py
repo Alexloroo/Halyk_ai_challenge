@@ -15,18 +15,25 @@ one.
 from __future__ import annotations
 
 import json
+import re
 from contextlib import nullcontext
 from dataclasses import dataclass, field
+from decimal import Decimal
 from pathlib import Path
 
 from . import paths
-from .audit import apply_adjustments, extract_adjustments, extract_fx_rates
+from .audit import (
+    apply_adjustments,
+    extract_adjustments,
+    extract_fx_rates,
+    extract_group_capex,
+)
 from .categorize import categorize
 from .docs import DocKind, Document, DocumentLoadIssue, Edition, load_documents, pick
 from .evaluate import Answer, EvaluationTrace, evaluate, find_evidence
 from .ledger import LedgerEntry, by_scenario, load_ledger
 from .llm_extract import FormulaSpec, extract_formulas
-from .parties import extract_related_parties, mark_related
+from .parties import extract_related_parties, mark_related, mark_unrestricted
 from .rules import Rule, extract_rules
 from .tracing import TraceWriter
 from .tracing.documents import trace_classified, trace_pymupdf
@@ -84,6 +91,26 @@ def _fallback(scenario_id: str, clause: str, note: str) -> Answer:
         actual=Decimal(0),
         note=note,
     )
+
+
+_GROUP_CAPEX_CLAUSE = re.compile(r"капитальн\w+\s+затрат\w*\s+Группы", re.I)
+_BORROWER_NAME = re.compile(r"([A-Z][A-Za-z\- ]+?(?:JSC|LLP))")
+
+
+def _group_capex_for(rule_text: str, documents: list[Document]) -> Decimal | None:
+    """Read group capex from the matching consolidated PP&E movement note."""
+    name_match = _BORROWER_NAME.search(rule_text)
+    if not name_match:
+        return None
+    borrower = name_match.group(1)
+    for document in documents:
+        flat_text = " ".join(document.text.split())
+        if borrower not in flat_text or "Consolidated Financial Statements" not in flat_text:
+            continue
+        capex = extract_group_capex(document.text)
+        if capex is not None:
+            return capex
+    return None
 
 
 def solve(
@@ -195,6 +222,7 @@ def solve(
                     mark_related(scenario_entries, parties)
                 else:
                     report.parties_unresolved.append(scenario_id)
+                mark_unrestricted(scenario_entries, parties)
             else:
                 report.parties_unresolved.append(scenario_id)
             if trace is not None:
@@ -252,8 +280,19 @@ def solve(
                         )
                     continue
                 formula = formulas.get(f"{scenario_id}/{clause}")
+                numerator_constant = (
+                    _group_capex_for(rule.text, docs)
+                    if _GROUP_CAPEX_CLAUSE.search(rule.text)
+                    else None
+                )
                 details = EvaluationTrace() if trace is not None else None
-                answer = evaluate(rule, scenario_entries, formula=formula, trace=details)
+                answer = evaluate(
+                    rule,
+                    scenario_entries,
+                    formula=formula,
+                    trace=details,
+                    numerator_constant=numerator_constant,
+                )
                 evidence_trials: dict[str, str] = {}
                 answer.evidence_txn_id = find_evidence(
                     rule,
@@ -261,6 +300,7 @@ def solve(
                     answer,
                     formula=formula,
                     trials=evidence_trials if trace is not None else None,
+                    numerator_constant=numerator_constant,
                 )
                 cells[clause] = answer
                 if trace is not None:

@@ -30,6 +30,8 @@ class LedgerEntry:
     currency: str
     category: Category = Category.UNKNOWN
     is_related_party: bool = False
+    is_unrestricted_transfer: bool = False
+    audit_reclassified: bool = False
     defects: list[str] = field(default_factory=list)
 
     @property

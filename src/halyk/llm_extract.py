@@ -10,6 +10,7 @@ One short call per clause, structured output via Pydantic, retry on errors.
 from __future__ import annotations
 
 import os
+import re
 import time
 from enum import StrEnum
 from typing import TYPE_CHECKING
@@ -38,6 +39,7 @@ class AggKind(StrEnum):
     MAX_SINGLE_CATEGORY = "max_single_category"
     REVENUE_MINUS_MAX_CATEGORY = "revenue_minus_max_category"
     RELATED_PARTY_OUTFLOW = "related_party_outflow"
+    UNRESTRICTED_TRANSFER = "unrestricted_transfer"
 
 
 class FormulaSpec(BaseModel):
@@ -132,9 +134,8 @@ numerator_agg = "revenue_minus_max_category" and list the categories \
 (e.g. ["personnel", "tax"]). output_kind = "dollar_amount".
 8. If the covenant tests "assets transferred to unrestricted subsidiaries" \
 ("активов, переданных неограниченным дочерним организациям") as a fraction \
-of something — the numerator is payments to related/affiliated parties \
-(those subsidiaries are identified in KYC as related parties). \
-Use numerator_agg = "related_party_outflow" with empty numerator_categories.
+of something — use numerator_agg = "unrestricted_transfer". Those subsidiaries \
+are identified from the KYC security-coverage table, not from ownership.
 9. If the covenant tests "financing receipts" / "поступления по финансированию" \
 (loan drawdowns, facility proceeds), use numerator_agg = "financing_inflow". \
 These are NOT revenue — they are borrowing proceeds.
@@ -183,14 +184,20 @@ def extract_formula(clause_text: str, *, max_retries: int = 3) -> FormulaSpec | 
     return None
 
 
-_REVENUE_FINANCING_RE = __import__("re").compile(
-    r"выручк\w*\s+и\s+поступлен\w+\s+по\s+финансирован", __import__("re").I,
+_REVENUE_FINANCING_RE = re.compile(
+    r"выручк\w*\s+и\s+поступлен\w+\s+по\s+финансирован", re.I,
 )
+_UNRESTRICTED_RE = re.compile(r"неограниченн\w+\s+дочерн", re.I)
 
 
 def _fixup(spec: FormulaSpec, rule_text: str) -> FormulaSpec:
     if _REVENUE_FINANCING_RE.search(rule_text):
         spec.numerator_agg = AggKind.REVENUE_PLUS_FINANCING
+        spec.numerator_categories = []
+    if _UNRESTRICTED_RE.search(rule_text):
+        # Transfers to unrestricted subsidiaries are identified via the KYC
+        # pledge-coverage table, not via the related-party ownership table.
+        spec.numerator_agg = AggKind.UNRESTRICTED_TRANSFER
         spec.numerator_categories = []
     return spec
 
