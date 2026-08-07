@@ -1,0 +1,129 @@
+{
+  "generated_at": "2026-08-07T08:55:31Z",
+  "score": {
+    "current": 31.6,
+    "maximum": 36.0,
+    "percent": 87.7778,
+    "recoverable_gap": 4.4,
+    "penalized_cells": 7,
+    "non_penalized_exact_mismatches": 2
+  },
+  "issues": [
+    {
+      "scenario_clause": "P6 / 6.1",
+      "loss": 1.0,
+      "submitted": "0.06 COMPLIANT, evidence null",
+      "expected": "0.10 BREACH, TXN-P6-0040",
+      "first_bad_stage": "12_evaluation",
+      "root_cause": "RELATED_PARTY_SHARE always divides by revenue even though this covenant explicitly requires operating expenses",
+      "confidence": "high",
+      "priority": 1,
+      "evidence": {
+        "related_total": 418662.44,
+        "wrong_revenue_denominator": 6918204.37,
+        "correct_opex_denominator": 4204663.19,
+        "correct_raw_ratio": 0.0995709813
+      },
+      "sources": [
+        "trace/12_evaluation/P6/6_1.json",
+        "trace/08_audit_and_fx/P6/ledger_after.csv"
+      ]
+    },
+    {
+      "scenario_clause": "P9 / 6.1 and 6.3",
+      "loss": 1.0,
+      "submitted": "0.30 and 570565.83",
+      "expected": "0.22 / TXN-P9-0025 and 268447.19 / TXN-P9-0040",
+      "first_bad_stage": "09_related_parties and 11_formulas",
+      "root_cause": "KYC ownership and collateral sections are collapsed into one holdings list; the formula vocabulary has no unrestricted-subsidiary aggregate",
+      "confidence": "high",
+      "priority": 2,
+      "evidence": {
+        "correct_related_party_payment": 268447.19,
+        "correct_unrestricted_subsidiary_transfer": 418204.37,
+        "capex_denominator": 1924986.29,
+        "correct_raw_ratio": 0.2172505707
+      },
+      "sources": [
+        "trace/04_pymupdf/aaf665cbc612.txt",
+        "trace/09_related_parties/P9.json",
+        "trace/11_formulas/formulas.json",
+        "trace/12_evaluation/P9/6_1.json",
+        "trace/12_evaluation/P9/6_3.json"
+      ]
+    },
+    {
+      "scenario_clause": "P5 / 6.1",
+      "loss": 1.0,
+      "submitted": "0.74 COMPLIANT",
+      "expected": "9.45 BREACH",
+      "first_bad_stage": "05_documents_classified and 07_documents_selected",
+      "root_cause": "The consolidated parent report is classified as unknown, has no account id, is not linked to P5, and borrower-ledger capex is used instead of group capex",
+      "confidence": "high",
+      "priority": 3,
+      "evidence": {
+        "group_capex_from_ppe_rollforward": 21847362.55,
+        "borrower_ebitda": 2312216.15,
+        "correct_raw_ratio": 9.4486679154
+      },
+      "sources": [
+        "trace/04_pymupdf/a5cc1400b640.txt",
+        "trace/05_documents_classified/documents.json",
+        "trace/07_documents_selected/P5.json",
+        "trace/12_evaluation/P5/6_1.json"
+      ]
+    },
+    {
+      "scenario_clause": "B1 / 6.1 and P2 / 6.1",
+      "loss": 0.4,
+      "submitted": "correct status and actual, evidence null",
+      "expected": "TXN-B1-0020 and TXN-P2-0040",
+      "first_bad_stage": "08_audit_and_fx and 12_evaluation",
+      "root_cause": "Amount-based audit reclassifications are applied but their matched transaction ids are not retained; generic counterfactual search then finds several flipping transactions and returns null",
+      "confidence": "high",
+      "priority": 4,
+      "evidence": {
+        "loss_per_cell": 0.2,
+        "audit_targets": [
+          "TXN-B1-0020",
+          "TXN-P2-0040"
+        ]
+      },
+      "sources": [
+        "trace/08_audit_and_fx/B1/transformations.json",
+        "trace/08_audit_and_fx/P2/transformations.json",
+        "trace/12_evaluation/B1/6_1.json",
+        "trace/12_evaluation/P2/6_1.json"
+      ]
+    },
+    {
+      "scenario_clause": "P4 / 6.3",
+      "loss": 1.0,
+      "submitted": "0.04 BREACH, TXN-P4-0048",
+      "expected": "0.04 COMPLIANT, evidence null",
+      "first_bad_stage": "unresolved ground-truth boundary",
+      "root_cause": "The trace calculation is internally consistent: 288417.52 / 7004318.47 = 0.0411771, which exceeds 0.04. The public ground truth nevertheless marks it compliant; no upstream extraction error was found",
+      "confidence": "low",
+      "priority": 5,
+      "evidence": {
+        "related_total": 288417.52,
+        "revenue_total": 7004318.47,
+        "raw_ratio": 0.0411770997,
+        "threshold": 0.04
+      },
+      "sources": [
+        "trace/12_evaluation/P4/6_3.json",
+        "trace/04_pymupdf/3a4aa2dbd6c4.txt",
+        "data/raw/ground_truth.json"
+      ]
+    }
+  ],
+  "score_path": [
+    {"after": "current", "score": 31.6, "percent": 87.7778},
+    {"after": "P6 denominator", "score": 32.6, "percent": 90.5556},
+    {"after": "P9 KYC roles", "score": 33.6, "percent": 93.3333},
+    {"after": "P5 consolidated report", "score": 34.6, "percent": 96.1111},
+    {"after": "audit evidence lineage", "score": 35.0, "percent": 97.2222},
+    {"after": "P4 boundary convention", "score": 36.0, "percent": 100.0}
+  ]
+}

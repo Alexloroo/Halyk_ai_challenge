@@ -1,0 +1,223 @@
+{
+  "surface": "report",
+  "manifest": {
+    "version": 1,
+    "surface": "report",
+    "title": "Где теряется score в fulltrace",
+    "description": "Техническая диагностика расхождений submission с ground truth.",
+    "generatedAt": "2026-08-07T08:55:31Z",
+    "filters": [],
+    "cards": [],
+    "charts": [
+      {
+        "id": "score_recovery_chart",
+        "title": "Потенциальный прирост score по механизму",
+        "subtitle": "Локальные невзвешенные баллы; P4 имеет низкую уверенность",
+        "type": "bar",
+        "dataset": "score_recovery",
+        "sourceId": "score_recovery_sql",
+        "intent": "comparison",
+        "question": "Какие механизмы возвращают больше всего локального score?",
+        "rationale": "Пять категорий и одна общая единица измерения лучше всего сравниваются ранжированными столбцами.",
+        "valueFormat": "number",
+        "layout": "full",
+        "encodings": {
+          "x": {"field": "mechanism", "type": "nominal", "label": "Механизм"},
+          "y": {"field": "gain", "type": "quantitative", "label": "Возвращаемые баллы"},
+          "tooltip": [
+            {"field": "confidence", "type": "text", "label": "Уверенность"},
+            {"field": "cells", "type": "text", "label": "Ячейки"}
+          ]
+        }
+      }
+    ],
+    "tables": [
+      {
+        "id": "score_gaps_table",
+        "title": "Штрафуемые ячейки",
+        "subtitle": "Семь ячеек, отсортированные по потере локального невзвешенного score",
+        "dataset": "score_gaps",
+        "sourceId": "score_gaps_sql",
+        "defaultSort": {"field": "loss", "direction": "desc"},
+        "density": "spacious",
+        "layout": "full",
+        "columns": [
+          {"field": "cell", "label": "Ячейка", "type": "text"},
+          {"field": "loss", "label": "Потеря", "format": "number"},
+          {"field": "submitted", "label": "Отправлено", "type": "text"},
+          {"field": "expected", "label": "Ожидалось", "type": "text"},
+          {"field": "first_bad_stage", "label": "Первый проблемный этап", "type": "text"},
+          {"field": "confidence", "label": "Уверенность", "type": "text"}
+        ]
+      }
+    ],
+    "sources": [
+      {"id": "comparison", "label": "Ground-truth comparison", "path": "trace/14_ground_truth/comparison.json"},
+      {"id": "diagnostic", "label": "Verified trace diagnosis", "path": "reports/trace-score-analysis/diagnostic.json"},
+      {
+        "id": "score_recovery_sql",
+        "label": "Score recovery chart rows",
+        "path": "reports/trace-score-analysis/diagnostic.json",
+        "query": {
+          "engine": "sqlite",
+          "language": "sql",
+          "description": "Reproduces the reviewed score-recovery rows from the trace diagnosis.",
+          "executed_at": "2026-08-07T08:55:31Z",
+          "tables_used": ["reports/trace-score-analysis/diagnostic.json"],
+          "sql": "WITH score_recovery(mechanism, gain, confidence, cells) AS (VALUES ('P6 denominator', 1.0, 'high', 'P6 / 6.1'), ('P9 KYC roles', 1.0, 'high', 'P9 / 6.1, 6.3'), ('P5 group report', 1.0, 'high', 'P5 / 6.1'), ('P4 boundary', 1.0, 'low', 'P4 / 6.3'), ('Audit evidence', 0.4, 'high', 'B1 / 6.1, P2 / 6.1')) SELECT mechanism, gain, confidence, cells FROM score_recovery ORDER BY gain DESC, mechanism"
+        }
+      },
+      {
+        "id": "score_gaps_sql",
+        "label": "Penalized-cell audit rows",
+        "path": "trace/14_ground_truth/comparison.json",
+        "query": {
+          "engine": "sqlite",
+          "language": "sql",
+          "description": "Reproduces the seven reviewed penalized-cell rows from comparison.json.",
+          "executed_at": "2026-08-07T08:55:31Z",
+          "tables_used": ["trace/14_ground_truth/comparison.json"],
+          "sql": "WITH score_gaps(cell, loss, submitted, expected, first_bad_stage, confidence) AS (VALUES ('P4 / 6.3', 1.0, '0.04 BREACH', '0.04 COMPLIANT', 'unresolved boundary', 'low'), ('P5 / 6.1', 1.0, '0.74 COMPLIANT', '9.45 BREACH', '05/07 documents', 'high'), ('P6 / 6.1', 1.0, '0.06 COMPLIANT', '0.10 BREACH', '12 evaluation', 'high'), ('P9 / 6.1', 0.5, '0.30 BREACH / null', '0.22 BREACH / TXN-P9-0025', '09/11 KYC + formula', 'high'), ('P9 / 6.3', 0.5, '570565.83 / null', '268447.19 / TXN-P9-0040', '09 related parties', 'high'), ('B1 / 6.1', 0.2, '1.68 BREACH / null', '1.68 BREACH / TXN-B1-0020', '08/12 audit lineage', 'high'), ('P2 / 6.1', 0.2, '1.18 BREACH / null', '1.18 BREACH / TXN-P2-0040', '08/12 audit lineage', 'high')) SELECT cell, loss, submitted, expected, first_bad_stage, confidence FROM score_gaps ORDER BY loss DESC, cell"
+        }
+      },
+      {"id": "p5_consolidated", "label": "Sarybel consolidated annual report", "path": "trace/04_pymupdf/a5cc1400b640.txt"},
+      {"id": "p9_kyc", "label": "P9 KYC dossier", "path": "trace/04_pymupdf/aaf665cbc612.txt"},
+      {"id": "case_rules", "label": "Challenge scoring rules", "path": "data/raw/CASE.ru.md"}
+    ],
+    "blocks": [
+      {
+        "id": "title",
+        "type": "markdown",
+        "body": "# Где теряется score в fulltrace"
+      },
+      {
+        "id": "technical_summary",
+        "type": "markdown",
+        "sourceId": "comparison",
+        "body": "## Технический итог\n\n- Текущий локальный результат — **31.6 из 36, или 87.78%**.\n- Реально штрафуются **7 ячеек** на **4.4 балла**. Ещё две ячейки отличаются только лишним evidence при эталонном `null` и score не снижают.\n- Основная потеря находится не в LLM как таковой: она распределена между детерминированным знаменателем P6, семантикой KYC P9, выбором внешней отчётности P5, lineage аудиторских корректировок и одним противоречивым boundary-case P4.\n- Четыре высокоуверенных исправления поднимают невзвешенный локальный score до **35.0/36 (97.22%)**. Последний балл зависит от воспроизведения неоднозначного эталона P4."
+      },
+      {
+        "id": "gap_table_intro",
+        "type": "markdown",
+        "body": "## Потеря сконцентрирована в пяти механизмах\n\nТаблица показывает только ячейки, которые действительно уменьшают score. P9 занимает две строки, но имеет общий источник ошибки."
+      },
+      {
+        "id": "chart_intro",
+        "type": "markdown",
+        "sourceId": "diagnostic",
+        "body": "Четыре подтверждённых механизма возвращают **3.4 балла** без зависимости от спорного P4. Диаграмма сравнивает их потенциал с последним низкоуверенным boundary-case."
+      },
+      {"id": "recovery_chart", "type": "chart", "chartId": "score_recovery_chart"},
+      {"id": "gap_table", "type": "table", "tableId": "score_gaps_table"},
+      {
+        "id": "p6",
+        "type": "markdown",
+        "sourceId": "diagnostic",
+        "body": "## P6 можно вернуть одним исправлением знаменателя\n\nВ `P6/6.1` правило требует делить платежи связанным сторонам на **операционные расходы**, но ветка `related_party_share` всегда использует выручку. Сейчас получается `418,662.44 / 6,918,204.37 = 0.0605`, то есть `0.06 COMPLIANT`. Правильный знаменатель — OPEX `4,204,663.19`; результат `0.09957` сериализуется как `0.10 BREACH`, а единственный related-party платёж даёт `TXN-P6-0040`.\n\n**Потенциал: +1.0 балл. Уверенность: высокая.**"
+      },
+      {
+        "id": "p9",
+        "type": "markdown",
+        "sourceId": "diagnostic",
+        "body": "## P9 требует разделить роли организаций из KYC\n\nПарсер складывает в один `holdings` две разные таблицы: доли голосов и обеспечительное покрытие дочерних компаний. Поэтому `Zhezkazgan Conveyor Assets LLP` ошибочно становится связанной стороной. Для `6.3` связанной является только `Ulytau Capital LLP`, поэтому правильная сумма — `268,447.19` и evidence `TXN-P9-0040`.\n\nДля `6.1` нужна другая роль — **неограниченная дочерняя организация**, то есть залог ниже 50%. Это `Zhezkazgan Processing Holdings LLP` с переводом `418,204.37`; деление на capex `1,924,986.29` даёт `0.21725`, или `0.22`, с evidence `TXN-P9-0025`. Текущий LLM-словарь агрегатов не умеет выразить эту роль и подставляет `related_party_outflow`.\n\n**Потенциал: +1.0 балл суммарно по двум ячейкам. Уверенность: высокая.**"
+      },
+      {
+        "id": "p5",
+        "type": "markdown",
+        "sourceId": "diagnostic",
+        "body": "## P5 теряет консолидированную отчётность материнской группы\n\nКовенант требует capex всей группы, но `a5cc1400b640.pdf` классифицирован как `unknown`, не имеет `ACC-7805` и не попадает в выбранные документы P5. В итоге формула берёт capex заёмщика из ledger — `1,703,882.44`.\n\nВ консолидированном отчёте группы capex восстанавливается по движению PPE при отсутствии выбытий: `154,050,122.81 − 148,028,989.69 + 15,826,229.43 = 21,847,362.55`. EBITDA заёмщика равна `8,214,663.28 − 5,902,447.13 = 2,312,216.15`; отношение равно `9.44867`, то есть ожидаемые `9.45 BREACH`.\n\n**Потенциал: +1.0 балл. Уверенность: высокая.**"
+      },
+      {
+        "id": "audit_evidence",
+        "type": "markdown",
+        "sourceId": "diagnostic",
+        "body": "## B1 и P2 теряют evidence после корректной аудиторской переклассификации\n\nОбе суммы и verdict рассчитаны правильно, но корректировки, найденные по сумме и контрагенту, остаются с `txn_id: null`. После применения pipeline забывает, какую строку реально изменил. Общий counterfactual-поиск видит несколько транзакций, удаление которых меняет verdict, и возвращает `null`.\n\nНужно сохранять matched transaction id при `apply_adjustments` и считать аудиторскую переклассификацию причинным evidence: `TXN-B1-0020` и `TXN-P2-0040`.\n\n**Потенциал: +0.4 балла. Уверенность: высокая.**"
+      },
+      {
+        "id": "p4",
+        "type": "markdown",
+        "sourceId": "diagnostic",
+        "body": "## P4 — противоречивый boundary-case, а не подтверждённая ошибка извлечения\n\nTrace даёт `288,417.52 / 7,004,318.47 = 0.0411771`; договор ограничивает показатель значением `0.04`, поэтому текущий `BREACH` арифметически последователен. Ground truth при этом ожидает `0.04 COMPLIANT`. Ошибки выбора договора, KYC-контрагента или исходных сумм не обнаружено.\n\nГлобально сравнивать только округлённый `actual` нельзя: P8 имеет `0.0433904` при том же лимите `0.04` и эталонно считается `BREACH`. Поэтому P4 следует исправлять последним: либо документировать отдельное правило материальности, если оно найдётся, либо осознанно делать узкое dataset-specific исключение.\n\n**Потенциал: +1.0 балл. Уверенность в общем исправлении: низкая.**"
+      },
+      {
+        "id": "method",
+        "type": "markdown",
+        "sourceId": "case_rules",
+        "body": "## Область анализа и метод\n\nСравнение выполнено по 36 ячейкам текущего LLM-run. Для каждой штрафуемой ячейки проверены финальный submission, правило, формула, расчёт, evidence trials, связанные стороны, аудиторские преобразования, выбранные документы и распознанный текст. Проценты выше относятся к локальному **невзвешенному** score: веса сложности организатора в предоставленных данных отсутствуют."
+      },
+      {
+        "id": "limitations",
+        "type": "markdown",
+        "body": "## Ограничения и устойчивость вывода\n\nВысокоуверенные выводы воспроизводятся непосредственно из чисел trace и первичных текстов. P4 не имеет подтверждённого upstream-дефекта и отделён от остальных рекомендаций. Анализ не запускал pipeline повторно и не проверяет вариативность следующего LLM-вызова."
+      },
+      {
+        "id": "next_steps",
+        "type": "markdown",
+        "sourceId": "diagnostic",
+        "body": "## Рекомендуемый порядок исправлений\n\n1. Исправить denominator selection для `related_party_share` в P6: ожидаемый score **32.6/36**.\n2. Ввести типизированные KYC-роли и агрегат unrestricted-subsidiary для P9: **33.6/36**.\n3. Добавить связь borrower → parent consolidated report и извлечение PPE rollforward для P5: **34.6/36**.\n4. Сохранить audit-adjustment lineage для evidence B1/P2: **35.0/36**.\n5. Только затем определить dataset convention для P4: потенциально **36.0/36**."
+      },
+      {
+        "id": "further_questions",
+        "type": "markdown",
+        "body": "## Открытый вопрос\n\nЕдинственный вопрос, способный изменить приоритеты: существует ли вне trace правило материальности для коэффициентов около порога, которое объясняет P4, но при этом оставляет P8 нарушением. Без такого источника узкая поправка P4 будет оптимизацией под публичный ground truth, а не обобщаемой логикой."
+      }
+    ]
+  },
+  "snapshot": {
+    "version": 1,
+    "generatedAt": "2026-08-07T08:55:31Z",
+    "status": "ready",
+    "datasets": {
+      "score_recovery": [
+        {"mechanism": "P6 denominator", "gain": 1.0, "confidence": "high", "cells": "P6 / 6.1"},
+        {"mechanism": "P9 KYC roles", "gain": 1.0, "confidence": "high", "cells": "P9 / 6.1, 6.3"},
+        {"mechanism": "P5 group report", "gain": 1.0, "confidence": "high", "cells": "P5 / 6.1"},
+        {"mechanism": "P4 boundary", "gain": 1.0, "confidence": "low", "cells": "P4 / 6.3"},
+        {"mechanism": "Audit evidence", "gain": 0.4, "confidence": "high", "cells": "B1 / 6.1, P2 / 6.1"}
+      ],
+      "score_gaps": [
+        {"cell": "P4 / 6.3", "loss": 1.0, "submitted": "0.04 BREACH", "expected": "0.04 COMPLIANT", "first_bad_stage": "unresolved boundary", "confidence": "low"},
+        {"cell": "P5 / 6.1", "loss": 1.0, "submitted": "0.74 COMPLIANT", "expected": "9.45 BREACH", "first_bad_stage": "05/07 documents", "confidence": "high"},
+        {"cell": "P6 / 6.1", "loss": 1.0, "submitted": "0.06 COMPLIANT", "expected": "0.10 BREACH", "first_bad_stage": "12 evaluation", "confidence": "high"},
+        {"cell": "P9 / 6.1", "loss": 0.5, "submitted": "0.30 BREACH / null", "expected": "0.22 BREACH / TXN-P9-0025", "first_bad_stage": "09/11 KYC + formula", "confidence": "high"},
+        {"cell": "P9 / 6.3", "loss": 0.5, "submitted": "570565.83 / null", "expected": "268447.19 / TXN-P9-0040", "first_bad_stage": "09 related parties", "confidence": "high"},
+        {"cell": "B1 / 6.1", "loss": 0.2, "submitted": "1.68 BREACH / null", "expected": "1.68 BREACH / TXN-B1-0020", "first_bad_stage": "08/12 audit lineage", "confidence": "high"},
+        {"cell": "P2 / 6.1", "loss": 0.2, "submitted": "1.18 BREACH / null", "expected": "1.18 BREACH / TXN-P2-0040", "first_bad_stage": "08/12 audit lineage", "confidence": "high"}
+      ]
+    },
+    "accessIssues": []
+  },
+  "sources": [
+    {"id": "comparison", "label": "Ground-truth comparison", "path": "trace/14_ground_truth/comparison.json"},
+    {"id": "diagnostic", "label": "Verified trace diagnosis", "path": "reports/trace-score-analysis/diagnostic.json"},
+    {
+      "id": "score_recovery_sql",
+      "label": "Score recovery chart rows",
+      "path": "reports/trace-score-analysis/diagnostic.json",
+      "query": {
+        "engine": "sqlite",
+        "language": "sql",
+        "description": "Reproduces the reviewed score-recovery rows from the trace diagnosis.",
+        "executed_at": "2026-08-07T08:55:31Z",
+        "tables_used": ["reports/trace-score-analysis/diagnostic.json"],
+        "sql": "WITH score_recovery(mechanism, gain, confidence, cells) AS (VALUES ('P6 denominator', 1.0, 'high', 'P6 / 6.1'), ('P9 KYC roles', 1.0, 'high', 'P9 / 6.1, 6.3'), ('P5 group report', 1.0, 'high', 'P5 / 6.1'), ('P4 boundary', 1.0, 'low', 'P4 / 6.3'), ('Audit evidence', 0.4, 'high', 'B1 / 6.1, P2 / 6.1')) SELECT mechanism, gain, confidence, cells FROM score_recovery ORDER BY gain DESC, mechanism"
+      }
+    },
+    {
+      "id": "score_gaps_sql",
+      "label": "Penalized-cell audit rows",
+      "path": "trace/14_ground_truth/comparison.json",
+      "query": {
+        "engine": "sqlite",
+        "language": "sql",
+        "description": "Reproduces the seven reviewed penalized-cell rows from comparison.json.",
+        "executed_at": "2026-08-07T08:55:31Z",
+        "tables_used": ["trace/14_ground_truth/comparison.json"],
+        "sql": "WITH score_gaps(cell, loss, submitted, expected, first_bad_stage, confidence) AS (VALUES ('P4 / 6.3', 1.0, '0.04 BREACH', '0.04 COMPLIANT', 'unresolved boundary', 'low'), ('P5 / 6.1', 1.0, '0.74 COMPLIANT', '9.45 BREACH', '05/07 documents', 'high'), ('P6 / 6.1', 1.0, '0.06 COMPLIANT', '0.10 BREACH', '12 evaluation', 'high'), ('P9 / 6.1', 0.5, '0.30 BREACH / null', '0.22 BREACH / TXN-P9-0025', '09/11 KYC + formula', 'high'), ('P9 / 6.3', 0.5, '570565.83 / null', '268447.19 / TXN-P9-0040', '09 related parties', 'high'), ('B1 / 6.1', 0.2, '1.68 BREACH / null', '1.68 BREACH / TXN-B1-0020', '08/12 audit lineage', 'high'), ('P2 / 6.1', 0.2, '1.18 BREACH / null', '1.18 BREACH / TXN-P2-0040', '08/12 audit lineage', 'high')) SELECT cell, loss, submitted, expected, first_bad_stage, confidence FROM score_gaps ORDER BY loss DESC, cell"
+      }
+    },
+    {"id": "p5_consolidated", "label": "Sarybel consolidated annual report", "path": "trace/04_pymupdf/a5cc1400b640.txt"},
+    {"id": "p9_kyc", "label": "P9 KYC dossier", "path": "trace/04_pymupdf/aaf665cbc612.txt"},
+    {"id": "case_rules", "label": "Challenge scoring rules", "path": "data/raw/CASE.ru.md"}
+  ]
+}
