@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import time
 from datetime import date
 from decimal import Decimal
 from pathlib import Path
@@ -86,14 +87,24 @@ def test_stage_context_records_the_actual_failed_stage(tmp_path: Path) -> None:
         raise RuntimeError("ledger broke")
 
     manifest = json.loads((writer.root / "manifest.json").read_text(encoding="utf-8"))
-    assert manifest["stages"] == [
-        {
-            "name": "02_ledger_loaded",
-            "status": "failed",
-            "artifacts": ["02_ledger_loaded/partial.json"],
-            "error": {"type": "RuntimeError", "message": "ledger broke"},
-        }
-    ]
+    assert manifest["stages"][0]["name"] == "02_ledger_loaded"
+    assert manifest["stages"][0]["status"] == "failed"
+    assert manifest["stages"][0]["artifacts"] == ["02_ledger_loaded/partial.json"]
+    assert manifest["stages"][0]["error"] == {
+        "type": "RuntimeError", "message": "ledger broke"
+    }
+    assert manifest["stages"][0]["duration_seconds"] > 0
+
+
+def test_successful_stage_records_duration(tmp_path: Path) -> None:
+    writer = TraceWriter.create(tmp_path / "trace")
+
+    with writer.stage("01_template"):
+        time.sleep(0.001)
+
+    manifest = json.loads((writer.root / "manifest.json").read_text(encoding="utf-8"))
+    assert manifest["stages"][0]["status"] == "completed"
+    assert manifest["stages"][0]["duration_seconds"] > 0
 
 
 def test_json_csv_and_manifest_are_human_readable_and_lossless(tmp_path: Path) -> None:

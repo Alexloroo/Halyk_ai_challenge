@@ -15,8 +15,10 @@ from __future__ import annotations
 
 import os
 import re
+from concurrent.futures import ProcessPoolExecutor
 from dataclasses import dataclass, field
 from enum import StrEnum
+from itertools import repeat
 from pathlib import Path
 
 import pymupdf
@@ -161,6 +163,83 @@ def _normalize_ocr_text(text: str) -> str:
     return OCR_ACCOUNT.sub(lambda match: f"ACC-{match.group(1)}", text)
 
 
+def _pdf_worker_count() -> int:
+    default = min(4, os.cpu_count() or 1)
+    try:
+        configured = int(os.getenv("HALYK_PDF_WORKERS", str(default)))
+    except ValueError:
+        return default
+    return configured if configured > 0 else default
+
+
+def _load_document(
+    path: Path, config: OCRConfig
+) -> tuple[Document | None, list[DocumentLoadIssue]]:
+    """Load one PDF independently, including optional page-level OCR."""
+    document_issues: list[DocumentLoadIssue] = []
+    try:
+        with pymupdf.open(path) as pdf:
+            page_texts: list[str] = []
+            native_pages: list[int] = []
+            ocr_pages: list[int] = []
+            ocr_failed_pages: list[int] = []
+            for page_number, page in enumerate(pdf, start=1):
+                native_text = page.get_text()
+                if len(native_text.strip()) >= config.min_native_chars:
+                    native_pages.append(page_number)
+                    page_texts.append(native_text)
+                    continue
+                if not config.enabled:
+                    if native_text.strip():
+                        native_pages.append(page_number)
+                    page_texts.append(native_text)
+                    continue
+                try:
+                    page_texts.append(_normalize_ocr_text(_ocr_page(page, config)))
+                    ocr_pages.append(page_number)
+                except Exception as exc:
+                    page_texts.append(native_text)
+                    ocr_failed_pages.append(page_number)
+                    document_issues.append(
+                        DocumentLoadIssue(
+                            path=path,
+                            error_type=type(exc).__name__,
+                            message=str(exc),
+                            operation="ocr",
+                            page=page_number,
+                        )
+                    )
+            text = "\n".join(page_texts)
+            pages = len(pdf)
+    except Exception as exc:
+        document_issues.append(
+            DocumentLoadIssue(
+                path=path,
+                error_type=type(exc).__name__,
+                message=str(exc),
+            )
+        )
+        return None, document_issues
+
+    kind, edition = _classify(text)
+    return (
+        Document(
+            path=path,
+            text=text,
+            kind=kind,
+            edition=edition,
+            account_ids=sorted(set(ACCOUNT.findall(text))),
+            pages=pages,
+            native_pages=native_pages,
+            ocr_pages=ocr_pages,
+            ocr_failed_pages=ocr_failed_pages,
+            ocr_language=config.language if ocr_pages or ocr_failed_pages else "",
+            ocr_dpi=config.dpi if ocr_pages or ocr_failed_pages else None,
+        ),
+        document_issues,
+    )
+
+
 def load_documents(
     directory: Path,
     *,
@@ -169,71 +248,23 @@ def load_documents(
 ) -> list[Document]:
     """Read every PDF. Non-PDF files in the folder are skipped, not an error."""
     config = ocr_config or OCRConfig.from_environment()
+    paths = sorted(path for path in directory.iterdir() if path.suffix.lower() == ".pdf")
+    if not paths:
+        return []
+
+    workers = _pdf_worker_count()
+    if workers == 1:
+        loaded = [_load_document(path, config) for path in paths]
+    else:
+        with ProcessPoolExecutor(max_workers=min(workers, len(paths))) as executor:
+            loaded = list(executor.map(_load_document, paths, repeat(config)))
+
     documents: list[Document] = []
-    for path in sorted(directory.iterdir()):
-        if path.suffix.lower() != ".pdf":
-            continue
-        try:
-            with pymupdf.open(path) as pdf:
-                page_texts: list[str] = []
-                native_pages: list[int] = []
-                ocr_pages: list[int] = []
-                ocr_failed_pages: list[int] = []
-                for page_number, page in enumerate(pdf, start=1):
-                    native_text = page.get_text()
-                    if len(native_text.strip()) >= config.min_native_chars:
-                        native_pages.append(page_number)
-                        page_texts.append(native_text)
-                        continue
-                    if not config.enabled:
-                        if native_text.strip():
-                            native_pages.append(page_number)
-                        page_texts.append(native_text)
-                        continue
-                    try:
-                        page_texts.append(_normalize_ocr_text(_ocr_page(page, config)))
-                        ocr_pages.append(page_number)
-                    except Exception as exc:
-                        page_texts.append(native_text)
-                        ocr_failed_pages.append(page_number)
-                        if issues is not None:
-                            issues.append(
-                                DocumentLoadIssue(
-                                    path=path,
-                                    error_type=type(exc).__name__,
-                                    message=str(exc),
-                                    operation="ocr",
-                                    page=page_number,
-                                )
-                            )
-                text = "\n".join(page_texts)
-                pages = len(pdf)
-        except Exception as exc:
-            if issues is not None:
-                issues.append(
-                    DocumentLoadIssue(
-                        path=path,
-                        error_type=type(exc).__name__,
-                        message=str(exc),
-                    )
-                )
-            continue
-        kind, edition = _classify(text)
-        documents.append(
-            Document(
-                path=path,
-                text=text,
-                kind=kind,
-                edition=edition,
-                account_ids=sorted(set(ACCOUNT.findall(text))),
-                pages=pages,
-                native_pages=native_pages,
-                ocr_pages=ocr_pages,
-                ocr_failed_pages=ocr_failed_pages,
-                ocr_language=config.language if ocr_pages or ocr_failed_pages else "",
-                ocr_dpi=config.dpi if ocr_pages or ocr_failed_pages else None,
-            )
-        )
+    for document, document_issues in loaded:
+        if issues is not None:
+            issues.extend(document_issues)
+        if document is not None:
+            documents.append(document)
     return documents
 
 

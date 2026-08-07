@@ -327,8 +327,8 @@ def to_submission(
     report: RunReport,
     template_path: Path,
     *,
-    team: str = "cloud1",
-    contact_email: str = "team@example.com",
+    team: str = "ML Empire",
+    contact_email: str = "voronkoleha00@gmail.com",
     model: str = "deterministic-v1",
 ) -> dict:
     """Fill the template in place: never add, rename or drop a key."""

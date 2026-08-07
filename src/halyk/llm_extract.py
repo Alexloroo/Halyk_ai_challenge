@@ -9,6 +9,7 @@ One short call per clause, structured output via Pydantic, retry on errors.
 
 from __future__ import annotations
 
+import asyncio
 import os
 import re
 import time
@@ -271,24 +272,82 @@ def apply_formula_context(
     return formulas
 
 
-def extract_formulas(
+def _llm_concurrency() -> int:
+    value = int(os.getenv("HALYK_LLM_CONCURRENCY", "50"))
+    if value < 1:
+        raise ValueError("HALYK_LLM_CONCURRENCY must be at least 1")
+    return value
+
+
+async def _extract_formula_async(
+    structured,
+    clause_text: str,
+    semaphore: asyncio.Semaphore,
+    *,
+    max_retries: int = 3,
+) -> FormulaSpec | None:
+    messages = [
+        {"role": "system", "content": SYSTEM_PROMPT},
+        {"role": "user", "content": clause_text},
+    ]
+    for attempt in range(max_retries):
+        try:
+            async with semaphore:
+                result = await structured.ainvoke(messages)
+            if isinstance(result, FormulaSpec):
+                return result
+            return FormulaSpec.model_validate(result)
+        except Exception as exc:
+            if attempt < max_retries - 1:
+                print(f"  [retry {attempt+1}/{max_retries}] {exc.__class__.__name__}: {exc}")
+                await asyncio.sleep(2 ** attempt)
+            else:
+                print(f"  [FAILED after {max_retries} attempts] {exc}")
+                return None
+    return None
+
+
+async def extract_formulas_async(
     rules: dict[str, dict[str, Rule]],
 ) -> dict[str, FormulaSpec]:
     from .rules import RuleKind
 
-    results: dict[str, FormulaSpec] = {}
+    pending: list[tuple[str, Rule]] = []
     for scenario_id, clauses in rules.items():
         for clause_id, rule in clauses.items():
             if rule.kind not in (RuleKind.RATIO, RuleKind.UNKNOWN):
                 continue
             key = f"{scenario_id}/{clause_id}"
-            print(f"LLM: parsing {key} ({rule.heading[:60]})")
-            spec = extract_formula(rule.text)
-            if spec:
-                spec = _fixup(spec, rule.text)
-                results[key] = spec
-                print(f"  -> {spec.output_kind} {spec.numerator_agg}/{spec.numerator_categories} "
-                      f"/ {spec.denominator_agg}/{spec.denominator_categories} "
-                      f"{spec.comparator}"
-                      f"{' CONDITIONAL' if spec.is_conditional else ''}")
+            pending.append((key, rule))
+            print(f"LLM: queued {key} ({rule.heading[:60]})")
+
+    if not pending:
+        return apply_formula_context(rules, {})
+
+    llm = _build_llm()
+    structured = llm.with_structured_output(FormulaSpec)
+    semaphore = asyncio.Semaphore(_llm_concurrency())
+
+    async def parse_one(key: str, rule: Rule) -> tuple[str, FormulaSpec | None]:
+        spec = await _extract_formula_async(structured, rule.text, semaphore)
+        if spec is None:
+            return key, None
+        spec = _fixup(spec, rule.text)
+        print(
+            f"LLM: completed {key} -> {spec.output_kind} "
+            f"{spec.numerator_agg}/{spec.numerator_categories} "
+            f"/ {spec.denominator_agg}/{spec.denominator_categories} "
+            f"{spec.comparator}"
+            f"{' CONDITIONAL' if spec.is_conditional else ''}"
+        )
+        return key, spec
+
+    completed = await asyncio.gather(*(parse_one(key, rule) for key, rule in pending))
+    results = {key: spec for key, spec in completed if spec is not None}
     return apply_formula_context(rules, results)
+
+
+def extract_formulas(
+    rules: dict[str, dict[str, Rule]],
+) -> dict[str, FormulaSpec]:
+    return asyncio.run(extract_formulas_async(rules))

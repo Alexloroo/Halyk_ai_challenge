@@ -29,6 +29,7 @@ def test_image_only_page_uses_ocr_and_records_provenance(tmp_path: Path, monkeyp
     documents_dir = tmp_path / "documents"
     documents_dir.mkdir()
     _image_only_pdf(documents_dir / "scan.pdf")
+    monkeypatch.setenv("HALYK_PDF_WORKERS", "1")
     calls: list[tuple[str, int]] = []
 
     def fake_ocr(page, config: OCRConfig) -> str:
@@ -56,6 +57,7 @@ def test_native_text_page_bypasses_ocr(tmp_path: Path, monkeypatch) -> None:
     documents_dir = tmp_path / "documents"
     documents_dir.mkdir()
     _native_pdf(documents_dir / "native.pdf")
+    monkeypatch.setenv("HALYK_PDF_WORKERS", "1")
 
     def fail_if_called(page, config: OCRConfig) -> str:
         raise AssertionError("OCR must not run for a readable native page")
@@ -73,6 +75,7 @@ def test_ocr_failure_keeps_document_and_records_page_issue(tmp_path: Path, monke
     documents_dir = tmp_path / "documents"
     documents_dir.mkdir()
     _image_only_pdf(documents_dir / "broken-ocr.pdf")
+    monkeypatch.setenv("HALYK_PDF_WORKERS", "1")
 
     def failing_ocr(page, config: OCRConfig) -> str:
         raise RuntimeError("tessdata missing")

@@ -5,6 +5,7 @@ from __future__ import annotations
 import csv
 import json
 import shutil
+import time
 from collections.abc import Iterable, Iterator, Mapping
 from contextlib import contextmanager
 from dataclasses import asdict, is_dataclass
@@ -142,14 +143,19 @@ class TraceWriter:
         record.pop("error", None)
         self.active_stage = name
         self._flush_manifest()
+        started = time.perf_counter()
         try:
             yield
         except Exception as exc:
+            duration = round(time.perf_counter() - started, 6)
             self.fail_stage(name, exc)
+            self.update_stage(name, duration_seconds=duration)
             raise
         else:
+            duration = round(time.perf_counter() - started, 6)
             if record["status"] == "in_progress":
                 record["status"] = "completed"
+            record["duration_seconds"] = duration
             self.active_stage = None
             self._flush_manifest()
 
