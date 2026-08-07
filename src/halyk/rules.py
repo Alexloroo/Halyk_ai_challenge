@@ -22,10 +22,18 @@ from enum import StrEnum
 from .categorize import Category
 
 CLAUSE_BLOCK = re.compile(
-    r"Пункт\s+(6\.\d)\s*(.{0,120}?)[.\n](.*?)(?=Пункт\s+6\.\d|Статья\s+7|\Z)",
-    re.S,
+    r"^\s*(?:Пункт\s+)?(6\.\d)(?:\s*[-–—]?\s*тарма(?:қ|ғы))?\s*"
+    r"(.{0,120}?)[.\n](.*?)"
+    r"(?=^\s*(?:Пункт\s+)?6\.\d(?:\s*[-–—]?\s*тарма(?:қ|ғы))?|"
+    r"^\s*(?:Статья\s+7|7\s*[-–—]?\s*бап)|\Z)",
+    re.S | re.M | re.I,
 )
 PERIOD = re.compile(r"с\s*(\d{4}-\d{2}-\d{2})\s*по\s*(\d{4}-\d{2}-\d{2})")
+KZ_PERIOD = re.compile(
+    r"(\d{4}-\d{2}-\d{2})(?:\s*[-–—]?(?:ден|нан|тен)|\s+бастап)\s*"
+    r"(\d{4}-\d{2}-\d{2})(?:\s*[-–—]?(?:ге|ға|ке|қа))?\s+дейін",
+    re.I,
+)
 QUARTER = re.compile(
     r"(?:за|в)\s+(?:(\w+)\s+)?(?:финансов\w+\s+)?квартал\w*"
     r".*?оканчивающ\w+\s+(\d{4})-(\d{2})-(\d{2})",
@@ -33,7 +41,7 @@ QUARTER = re.compile(
 )
 QUARTER_WORDS = {"первый": 1, "второй": 2, "третий": 3, "четвёртый": 4, "четвертый": 4}
 MONEY = re.compile(r"\$\s*([\d,]+(?:\.\d{2})?)")
-RATIO = re.compile(r"(\d+(?:\.\d+)?)\s*x", re.I)
+RATIO = re.compile(r"(\d+(?:\.\d+)?)\s*[xх×]", re.I)
 PERCENT = re.compile(r"(\d+(?:\.\d+)?)\s*%")
 
 
@@ -76,20 +84,49 @@ HEADING_RULES: list[tuple[re.Pattern[str], RuleKind, str, frozenset[Category]]] 
      RuleKind.MAX_CATEGORY_SPEND, "<=", frozenset()),
     (re.compile(r"ratio|коэффициент|отношени|рентабельност|покрыти|leverage|intensity", re.I),
      RuleKind.RATIO, "<=", frozenset()),
+    (re.compile(r"коэффициент|арақатынас|қатынас|рентабельділік|өтімділік|жабу", re.I),
+     RuleKind.RATIO, "<=", frozenset()),
+    (re.compile(r"ең\s+төменгі.*(?:түсім|кіріс)|минималды.*(?:түсім|кіріс)", re.I),
+     RuleKind.MIN_REVENUE, ">=", frozenset({Category.REVENUE})),
+    (re.compile(r"байланысты\s+тарап.*(?:ең\s+жоғары|максималды)", re.I),
+     RuleKind.MAX_RELATED_PARTY, "<=", frozenset()),
+    (re.compile(r"санат\s+бойынша.*(?:ең\s+жоғары|максималды).*шығын", re.I),
+     RuleKind.MAX_CATEGORY_SPEND, "<=", frozenset()),
 ]
 
 #: Category words as they appear inside clause text.
 CATEGORY_WORDS: list[tuple[re.Pattern[str], Category]] = [
-    (re.compile(r"страхов", re.I), Category.INSURANCE),
-    (re.compile(r"аренд|лизинг", re.I), Category.LEASE),
-    (re.compile(r"персонал|оплат\w*\s+труда|фонд оплаты", re.I), Category.PERSONNEL),
-    (re.compile(r"коммунальн", re.I), Category.UTILITIES),
-    (re.compile(r"налог", re.I), Category.TAX),
-    (re.compile(r"процент|купон", re.I), Category.INTEREST),
-    (re.compile(r"маркетинг|реклам", re.I), Category.MARKETING),
-    (re.compile(r"капитальн\w*\s+затрат", re.I), Category.CAPEX),
-    (re.compile(r"операционн\w*\s+расход", re.I), Category.OPEX),
+    (re.compile(r"страхов|\binsurance\b", re.I), Category.INSURANCE),
+    (re.compile(r"аренд|лизинг|\blease\b", re.I), Category.LEASE),
+    (re.compile(r"персонал|оплат\w*\s+труда|фонд оплаты|\bpersonnel\b|\bpayroll\b", re.I),
+     Category.PERSONNEL),
+    (re.compile(r"коммунальн|\butilit(?:y|ies)\b", re.I), Category.UTILITIES),
+    (re.compile(r"налог|\btax(?:es)?\b", re.I), Category.TAX),
+    (re.compile(r"процент|купон|\binterest\b", re.I), Category.INTEREST),
+    (re.compile(r"маркетинг|реклам|\bmarketing\b", re.I), Category.MARKETING),
+    (re.compile(r"капитальн\w*\s+затрат|\bcapex\b|\bcapital expenditure", re.I),
+     Category.CAPEX),
+    (re.compile(r"операционн\w*\s+расход|\bopex\b|\boperating expense", re.I),
+     Category.OPEX),
+    (re.compile(r"консультац|профессиональн|\bprofessional(?: services?)?\b|"
+                r"\bconsult(?:ing|ancy)?\b|\badvisory\b", re.I), Category.PROFESSIONAL),
+    (re.compile(r"выручк|\brevenue\b", re.I), Category.REVENUE),
+    (re.compile(r"сақтандыру", re.I), Category.INSURANCE),
+    (re.compile(r"жалдау|лизинг", re.I), Category.LEASE),
+    (re.compile(r"персонал|еңбекақы|жалақы|қызметкер", re.I), Category.PERSONNEL),
+    (re.compile(r"коммуналдық", re.I), Category.UTILITIES),
+    (re.compile(r"салық", re.I), Category.TAX),
+    (re.compile(r"пайыздық|сыйақы\s+бойынша", re.I), Category.INTEREST),
+    (re.compile(r"маркетинг|жарнама", re.I), Category.MARKETING),
+    (re.compile(r"күрделі\s+шығын|капиталдық\s+шығын", re.I), Category.CAPEX),
+    (re.compile(r"операциялық\s+шығын", re.I), Category.OPEX),
+    (re.compile(r"кәсіби|консультациялық|аудиторлық|заңгерлік", re.I),
+     Category.PROFESSIONAL),
+    (re.compile(r"түсім|кіріс", re.I), Category.REVENUE),
 ]
+
+MINIMUM_WORDS = re.compile(r"не\s+менее|кем\s+емес|төмен\s+емес", re.I)
+MAXIMUM_WORDS = re.compile(r"не\s+выше|не\s+более|аспау|артық\s+емес|жоғары\s+емес", re.I)
 
 
 def _quarter_period(text: str) -> tuple[date, date] | None:
@@ -155,31 +192,31 @@ def _categories(text: str) -> frozenset[Category]:
     return frozenset(found)
 
 
+def _period(text: str) -> tuple[date, date] | None:
+    match = PERIOD.search(text) or KZ_PERIOD.search(text)
+    if not match:
+        return None
+    return date.fromisoformat(match.group(1)), date.fromisoformat(match.group(2))
+
+
 def extract_rules(scenario_id: str, agreement_text: str) -> dict[str, Rule]:
     """Pull 6.1-6.3 out of one credit agreement."""
-    period_match = PERIOD.search(agreement_text)
-    period = (
-        (date.fromisoformat(period_match.group(1)), date.fromisoformat(period_match.group(2)))
-        if period_match
-        else None
-    )
+    period = _period(agreement_text)
 
     rules: dict[str, Rule] = {}
     for clause, heading, body in CLAUSE_BLOCK.findall(agreement_text):
         heading = " ".join(heading.split())
         kind, comparator, categories = _kind(heading, body)
-        if not categories:
-            categories = _categories(body)
         clause_text = heading + " " + body
+        if MINIMUM_WORDS.search(clause_text):
+            comparator = ">="
+        elif MAXIMUM_WORDS.search(clause_text):
+            comparator = "<="
+        if not categories:
+            categories = _categories(clause_text)
         clause_period = _quarter_period(clause_text)
         if clause_period is None:
-            local_period = PERIOD.search(body)
-            clause_period = (
-                (date.fromisoformat(local_period.group(1)),
-                 date.fromisoformat(local_period.group(2)))
-                if local_period
-                else period
-            )
+            clause_period = _period(body) or period
         rules[clause] = Rule(
             scenario_id=scenario_id,
             clause=clause,

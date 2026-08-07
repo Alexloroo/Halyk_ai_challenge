@@ -88,18 +88,43 @@ class OCRConfig:
         )
 
 
-SUPERSEDED = re.compile(r"НЕДЕЙСТВУЮЩАЯ\s+РЕДАКЦИЯ|Заменена и изложена", re.I)
-DRAFT = re.compile(r"ПРОЕКТ\s*—\s*ПРОМЕЖУТОЧНАЯ|ПРОЕКТ —", re.I)
-EXECUTION = re.compile(r"ИСПОЛНИТЕЛЬНЫЙ\s+ЭКЗЕМПЛЯР", re.I)
-ACCOUNT = re.compile(r"ACC-\d{4}")
-OCR_ACCOUNT = re.compile(r"[AА][CС][CС]\s*[-‐‑‒–—]\s*(\d{4})", re.I)
+SUPERSEDED = re.compile(
+    r"НЕДЕЙСТВУЮЩАЯ\s+РЕДАКЦИЯ|Заменена и изложена|"
+    r"КҮШІН\s+ЖОЙҒАН\s+РЕДАКЦИЯ|КҮШІ\s+ЖОЙЫЛҒАН\s+НҰСҚА",
+    re.I,
+)
+DRAFT = re.compile(r"ПРОЕКТ\s*—\s*ПРОМЕЖУТОЧНАЯ|ПРОЕКТ —|ЖОБА\s*[—-]", re.I)
+EXECUTION = re.compile(r"ИСПОЛНИТЕЛЬНЫЙ\s+ЭКЗЕМПЛЯР|ОРЫНДАУ\s+ДАНАСЫ", re.I)
+NON_BINDING = re.compile(
+    r"МЕТОДИЧЕСК\w+\s+МЕМОРАНДУМ|ВНУТРЕНН\w+\s+УЧЕБН|"
+    r"не\s+является\s+кредитным\s+договором|не\s+созда[её]т\s+обязательств|"
+    r"исключительно\s+для\s+обучения|training\s+(?:memo|example)",
+    re.I,
+)
+AGREEMENT_AUTHORITY = re.compile(
+    r"ДОГОВОР\s+БАНКОВСКОГО\s+ЗАЙМА|КРЕДИТН\w+\s+ДОГОВОР|"
+    r"ИСПОЛНИТЕЛЬНЫЙ\s+ЭКЗЕМПЛЯР|БАНКТІК\s+ҚАРЫЗ\s+ШАРТЫ|"
+    r"КРЕДИТТІК\s+ШАРТ|ОРЫНДАУ\s+ДАНАСЫ",
+    re.I,
+)
+ACCOUNT = re.compile(r"ACC-\d{4}(?![-\d])")
+OCR_ACCOUNT = re.compile(r"[AА][CС][CС]\s*[-‐‑‒–—]\s*(\d{4})(?![-\d])", re.I)
 
 KIND_MARKERS: list[tuple[re.Pattern[str], DocKind]] = [
-    (re.compile(r"Финансовые ковенанты|Статья 6|ДОГОВОР БАНКОВСКОГО", re.I),
+    (re.compile(
+        r"Финансовые ковенанты|Статья 6|ДОГОВОР БАНКОВСКОГО|"
+        r"Қаржылық ковенанттар|6\s*[-–—]?\s*бап|БАНКТІК ҚАРЫЗ ШАРТЫ",
+        re.I,
+    ),
      DocKind.CREDIT_AGREEMENT),
     (re.compile(r"Независимый аудитор|Registered Auditors|Statutory Auditors|"
-                r"ПРИМЕЧАНИЯ К ФИНАНСОВОЙ", re.I), DocKind.AUDIT_NOTES),
-    (re.compile(r"Знай своего клиент|финансового мониторинга|KYC-ACC", re.I), DocKind.KYC),
+                r"ПРИМЕЧАНИЯ К ФИНАНСОВОЙ|Тәуелсіз аудитор|"
+                r"ҚАРЖЫЛЫҚ ЕСЕПТІЛІККЕ ЕСКЕРТПЕЛЕР", re.I), DocKind.AUDIT_NOTES),
+    (re.compile(
+        r"Знай своего клиент|финансового мониторинга|KYC-ACC|"
+        r"Клиентті таны|қаржылық мониторинг",
+        re.I,
+    ), DocKind.KYC),
     (re.compile(r"Комплаенс\s*—|Контролируемый документ", re.I), DocKind.COMPLIANCE),
     (re.compile(r"Проект «Атлас»|Еженедельное обновление", re.I), DocKind.OPERATIONS),
 ]
@@ -226,5 +251,18 @@ def pick(
     ]
     if not matches:
         return None
-    # Prefer the longest: an agreement beats a one-page mention of the same account.
-    return max(matches, key=lambda d: len(d.text))
+    def authority(document: Document) -> tuple[int, int, int]:
+        """Rank legal authority before completeness/length.
+
+        A long training memo can quote every covenant while explicitly being
+        non-binding.  Length is therefore only a final tie-breaker.
+        """
+        negative = bool(NON_BINDING.search(document.text))
+        positive = (
+            bool(AGREEMENT_AUTHORITY.search(document.text))
+            if kind is DocKind.CREDIT_AGREEMENT
+            else True
+        )
+        return (0 if negative else 1, 1 if positive else 0, len(document.text))
+
+    return max(matches, key=authority)

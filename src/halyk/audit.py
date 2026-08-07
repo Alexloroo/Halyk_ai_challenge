@@ -30,6 +30,16 @@ CATEGORY_MAP: dict[str, Category] = {
     "капитальные затраты": Category.CAPEX,
     "налоги": Category.TAX,
     "маркетинговые расходы": Category.MARKETING,
+    "операциялық шығындар": Category.OPEX,
+    "консультациялық қызметтер": Category.PROFESSIONAL,
+    "пайыздық шығындар": Category.INTEREST,
+    "сақтандыру сыйлықақылары": Category.INSURANCE,
+    "коммуналдық қызметтер": Category.UTILITIES,
+    "жалдау төлемдері": Category.LEASE,
+    "еңбекақы төлеу шығындары": Category.PERSONNEL,
+    "күрделі шығындар": Category.CAPEX,
+    "салықтар": Category.TAX,
+    "маркетингтік шығындар": Category.MARKETING,
 }
 
 
@@ -73,9 +83,17 @@ RECLASS_TXN = re.compile(
     r".*?переклассифицирован\w*.*?как\s+(.+?)\.",
     re.S | re.I,
 )
+RECLASS_TXN_KZ = re.compile(
+    r"(?:Операция\s+)?(TXN-\w+-\d+).*?бастапқыда\s+(.+?)\s+ретінде\s+"
+    r"есепке\s+алын.*?(?:аудитор\w*\s+)?(.+?)\s+ретінде\s+"
+    r"(?:қайта\s+жікте|қайта\s+сыныпта)",
+    re.S | re.I,
+)
 
 EXCLUDE_TXN = re.compile(
-    r"[Оо]перация\s+(TXN-\w+-\d+).*?исключен\w*\s+из\s+ковенантного\s+период",
+    r"(?:[Оо]перация\s+)?(TXN-\w+-\d+).*?(?:"
+    r"исключен\w*\s+из\s+ковенантного\s+период|"
+    r"ковенанттық\s+кезеңнен\s+(?:алынып\s+тастал|шығарыл))",
     re.S | re.I,
 )
 
@@ -85,9 +103,10 @@ CUTOFF_TXN = re.compile(
 )
 
 MISSING_TXN = re.compile(
-    r"[Оо]перация\s+(TXN-\w+-\d+).*?"
-    r"(?:сумма\s+не\s+отражена|не\s+отражен\w*\s+в\s+выгрузке)"
-    r".*?фактическ\w+\s+сумм\w+.*?\$\s*([\d,]+(?:\.\d{2})?)",
+    r"(?:[Оо]перация\s+)?(TXN-\w+-\d+).*?"
+    r"(?:сумма\s+не\s+отражена|не\s+отражен\w*\s+в\s+выгрузке|"
+    r"үзінді\s+көшірмеде\s+көрсетілмеген)"
+    r".*?(?:фактическ\w+\s+сумм\w+|нақты\s+сомасы).*?\$\s*([\d,]+(?:\.\d{2})?)",
     re.S | re.I,
 )
 
@@ -155,6 +174,21 @@ DISCLOSED_OBLIGATION = re.compile(
     re.S | re.I,
 )
 
+OPERATION_START = re.compile(r"\b(?:Операция\s+)?TXN-\w+-\d+\b", re.I)
+
+
+def _operation_blocks(text: str) -> list[str]:
+    """Return transaction-scoped audit paragraphs.
+
+    The source prose often puts several operations in one PDF text block.  No
+    adjustment regex may consume text belonging to the next transaction.
+    """
+    starts = [match.start() for match in OPERATION_START.finditer(text)]
+    if not starts:
+        return []
+    ends = [*starts[1:], len(text)]
+    return [text[start:end] for start, end in zip(starts, ends, strict=True)]
+
 
 def extract_adjustments(audit_text: str) -> list[AuditAdjustment]:
     adjustments: list[AuditAdjustment] = []
@@ -174,55 +208,46 @@ def extract_adjustments(audit_text: str) -> list[AuditAdjustment]:
                 description=m.group(0)[:200],
             ))
 
-        for m in RECLASS_TXN.finditer(audit_text):
-            txn_id, old_cat_text, new_cat_text = m.groups()
-            if NO_CHANGE_TXN.search(audit_text[m.start():m.end() + 200]):
-                continue
-            adjustments.append(AuditAdjustment(
-                kind=AdjustmentKind.RECLASSIFY,
-                txn_id=txn_id,
-                amount=None,
-                counterparty=None,
-                old_category=_match_category(old_cat_text),
-                new_category=_match_category(new_cat_text),
-                description=m.group(0)[:200],
-            ))
-
-        for m in EXCLUDE_TXN.finditer(audit_text):
-            adjustments.append(AuditAdjustment(
-                kind=AdjustmentKind.EXCLUDE,
-                txn_id=m.group(1),
-                amount=None,
-                counterparty=None,
-                old_category=None,
-                new_category=None,
-                description=m.group(0)[:200],
-            ))
-
-        for m in CUTOFF_TXN.finditer(audit_text):
-            txn_id = m.group(1)
-            year = int(m.group(2))
-            if year > 2025:
+    for block in _operation_blocks(audit_text):
+        if not skip_reclass:
+            reclass = RECLASS_TXN.search(block) or RECLASS_TXN_KZ.search(block)
+            if reclass and not NO_CHANGE_TXN.search(block):
+                txn_id, old_cat_text, new_cat_text = reclass.groups()
+                adjustments.append(AuditAdjustment(
+                    kind=AdjustmentKind.RECLASSIFY,
+                    txn_id=txn_id,
+                    amount=None,
+                    counterparty=None,
+                    old_category=_match_category(old_cat_text),
+                    new_category=_match_category(new_cat_text),
+                    description=reclass.group(0)[:200],
+                ))
+            exclude = EXCLUDE_TXN.search(block)
+            cutoff = CUTOFF_TXN.search(block)
+            if exclude or (cutoff and int(cutoff.group(2)) > 2025):
+                match = exclude or cutoff
+                assert match is not None
                 adjustments.append(AuditAdjustment(
                     kind=AdjustmentKind.EXCLUDE,
-                    txn_id=txn_id,
+                    txn_id=match.group(1),
                     amount=None,
                     counterparty=None,
                     old_category=None,
                     new_category=None,
-                    description=f"cutoff: services in {year}",
+                    description=match.group(0)[:200],
                 ))
 
-    for m in MISSING_TXN.finditer(audit_text):
-        adjustments.append(AuditAdjustment(
-            kind=AdjustmentKind.MISSING_ENTRY,
-            txn_id=m.group(1),
-            amount=Decimal(m.group(2).replace(",", "")),
-            counterparty=None,
-            old_category=None,
-            new_category=None,
-            description=m.group(0)[:200],
-        ))
+        missing = MISSING_TXN.search(block)
+        if missing:
+            adjustments.append(AuditAdjustment(
+                kind=AdjustmentKind.MISSING_ENTRY,
+                txn_id=missing.group(1),
+                amount=Decimal(missing.group(2).replace(",", "")),
+                counterparty=None,
+                old_category=None,
+                new_category=None,
+                description=missing.group(0)[:200],
+            ))
 
     for m in DISCLOSED_OBLIGATION.finditer(audit_text):
         desc_text = m.group(1).strip()
@@ -284,6 +309,7 @@ def apply_adjustments(
             for e in result:
                 if e.txn_id == adj.txn_id:
                     e.amount = None
+                    e.audit_excluded = True
                     e.defects.append("audit_excluded")
 
         elif adj.kind == AdjustmentKind.MISSING_ENTRY:
@@ -291,6 +317,7 @@ def apply_adjustments(
                 existing = next((e for e in result if e.txn_id == adj.txn_id), None)
                 if existing:
                     existing.amount = -adj.amount
+                    existing.audit_corrected = True
                     existing.defects = [d for d in existing.defects if d != "missing_amount"]
             elif adj.txn_id is None and adj.amount is not None:
                 from datetime import date as dt_date
@@ -307,6 +334,7 @@ def apply_adjustments(
                 )
                 if adj.new_category:
                     synthetic.category = adj.new_category
+                synthetic.audit_corrected = True
                 result.append(synthetic)
 
     return result

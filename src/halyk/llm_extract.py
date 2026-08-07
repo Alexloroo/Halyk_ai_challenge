@@ -37,6 +37,7 @@ class AggKind(StrEnum):
     REVENUE = "revenue"
     EBITDA = "ebitda"
     MAX_SINGLE_CATEGORY = "max_single_category"
+    MAX_SINGLE_TRANSACTION = "max_single_transaction"
     REVENUE_MINUS_MAX_CATEGORY = "revenue_minus_max_category"
     RELATED_PARTY_OUTFLOW = "related_party_outflow"
     UNRESTRICTED_TRANSFER = "unrestricted_transfer"
@@ -92,11 +93,23 @@ class FormulaSpec(BaseModel):
         default=None,
         description="Dollar precondition threshold, if is_conditional=True."
     )
+    condition_agg: AggKind = Field(
+        default=AggKind.SUM_INFLOW,
+        description="Aggregate used only to decide whether a conditional covenant is triggered."
+    )
+    condition_categories: list[str] = Field(
+        default_factory=list,
+        description="Category slugs used by condition_agg, independent from the tested numerator."
+    )
+    condition_comparator: str = Field(
+        default=">",
+        description="Comparison for the trigger, normally '>' for 'exceeds'."
+    )
 
 
 SYSTEM_PROMPT = """\
-You are a financial covenant analyst. Given a clause from a Kazakh credit \
-agreement (in Russian), extract the precise mathematical formula.
+You are a financial covenant analyst. Given a clause from a Kazakhstan credit \
+agreement in Russian or Kazakh, extract the precise mathematical formula.
 
 ## Categories available
 revenue, capex, opex, lease, personnel, utilities, tax, insurance, interest, \
@@ -123,11 +136,13 @@ The denominator fields are ignored.
 (e.g. "≤ 0.42x" or "≥ 1.20x"), output_kind = "ratio".
 3. "не менее" / "at least" / "составляло не менее" → comparator = ">="
 4. "не превышал" / "не более" / "must not exceed" → comparator = "<="
-5. If the clause says "each individual line" or "каждая отдельная статья" — \
-the test is the LARGEST single category total. Use max_single_category \
-and list each category. output_kind = "dollar_amount".
+5. "Each category" / "каждая отдельная статья расходов" means the largest \
+category total: use max_single_category. "Each individual transaction" / \
+"каждая отдельная операция" means the largest ledger transaction: use \
+max_single_transaction. output_kind = "dollar_amount".
 6. A springing/conditional covenant (applies only if some precondition holds): \
-set is_conditional=True and condition_threshold_dollars.
+set is_conditional=True, condition_threshold_dollars, condition_agg and \
+condition_categories. The condition aggregate is independent of the tested numerator.
 7. If the formula is "Revenue minus the largest of [Category A] and [Category B]" \
 ("Выручка за вычетом наибольшей из величин ..."), use \
 numerator_agg = "revenue_minus_max_category" and list the categories \
@@ -188,6 +203,19 @@ _REVENUE_FINANCING_RE = re.compile(
     r"выручк\w*\s+и\s+поступлен\w+\s+по\s+финансирован", re.I,
 )
 _UNRESTRICTED_RE = re.compile(r"неограниченн\w+\s+дочерн", re.I)
+_SINGLE_TRANSACTION_RE = re.compile(
+    r"кажд\w+\s+отдельн\w+\s+операц|(?:largest|each)\s+(?:single|individual)\s+transaction",
+    re.I,
+)
+_FINANCING_CONDITION_RE = re.compile(
+    r"(?:только|лишь)\s+(?:если|при условии).*?поступлен\w+\s+по\s+финансирован|"
+    r"only\s+if.*?financing\s+(?:receipts|proceeds)",
+    re.I | re.S,
+)
+_EBITDA_DEFINITION_RE = re.compile(
+    r"EBITDA\s*(?:=|рассчитывается\s+как|означает).*?(?=(?:[.;\n]|Пункт\s+6\.\d|$))",
+    re.I | re.S,
+)
 
 
 def _fixup(spec: FormulaSpec, rule_text: str) -> FormulaSpec:
@@ -199,7 +227,48 @@ def _fixup(spec: FormulaSpec, rule_text: str) -> FormulaSpec:
         # pledge-coverage table, not via the related-party ownership table.
         spec.numerator_agg = AggKind.UNRESTRICTED_TRANSFER
         spec.numerator_categories = []
+    if _SINGLE_TRANSACTION_RE.search(rule_text):
+        spec.numerator_agg = AggKind.MAX_SINGLE_TRANSACTION
+    if spec.is_conditional and _FINANCING_CONDITION_RE.search(rule_text):
+        spec.condition_agg = AggKind.FINANCING_INFLOW
+        spec.condition_categories = []
     return spec
+
+
+def _ebitda_definition_categories(text: str) -> list[str]:
+    from .rules import CATEGORY_WORDS
+
+    match = _EBITDA_DEFINITION_RE.search(text)
+    if not match:
+        return []
+    found = {
+        category.value
+        for pattern, category in CATEGORY_WORDS
+        if pattern.search(match.group(0))
+    }
+    found.discard("revenue")
+    return sorted(found)
+
+
+def apply_formula_context(
+    rules: dict[str, dict[str, Rule]], formulas: dict[str, FormulaSpec],
+) -> dict[str, FormulaSpec]:
+    """Propagate scenario-level definitions into clauses that reference them."""
+    for scenario_id, clauses in rules.items():
+        definition_categories = _ebitda_definition_categories(
+            "\n".join(rule.text for rule in clauses.values())
+        )
+        if not definition_categories:
+            continue
+        for clause_id in clauses:
+            spec = formulas.get(f"{scenario_id}/{clause_id}")
+            if spec is None:
+                continue
+            if spec.numerator_agg == AggKind.EBITDA and not spec.numerator_categories:
+                spec.numerator_categories = list(definition_categories)
+            if spec.denominator_agg == AggKind.EBITDA and not spec.denominator_categories:
+                spec.denominator_categories = list(definition_categories)
+    return formulas
 
 
 def extract_formulas(
@@ -222,4 +291,4 @@ def extract_formulas(
                       f"/ {spec.denominator_agg}/{spec.denominator_categories} "
                       f"{spec.comparator}"
                       f"{' CONDITIONAL' if spec.is_conditional else ''}")
-    return results
+    return apply_formula_context(rules, results)

@@ -32,6 +32,9 @@ class LedgerEntry:
     is_related_party: bool = False
     is_unrestricted_transfer: bool = False
     audit_reclassified: bool = False
+    audit_corrected: bool = False
+    audit_excluded: bool = False
+    fx_converted: bool = False
     defects: list[str] = field(default_factory=list)
 
     @property

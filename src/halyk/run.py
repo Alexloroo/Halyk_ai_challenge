@@ -210,6 +210,7 @@ def solve(
                             Decimal("0.01")
                         )
                         entry.currency = "USD"
+                        entry.fx_converted = True
             if trace is not None:
                 trace_audit_output(trace, scenario_id, all_adjs, fx_rates, scenario_entries)
 

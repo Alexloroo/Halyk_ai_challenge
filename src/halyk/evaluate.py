@@ -93,10 +93,9 @@ def _sum(entries: list[LedgerEntry]) -> Decimal:
 
 def _spend(entries: list[LedgerEntry], categories: frozenset[Category]) -> list[LedgerEntry]:
     """Outflows in the given categories. Contra entries never count as spend."""
-    wanted = categories or OPEX_LIKE
     return [
         e for e in entries
-        if e.is_outflow and e.category in wanted and e.category is not Category.CONTRA
+        if e.is_outflow and e.category in categories and e.category is not Category.CONTRA
     ]
 
 
@@ -121,9 +120,9 @@ def _verdict(actual: Decimal, rule: Rule, *, comparator_override: str | None = N
 EBITDA_OPEX = frozenset({Category.OPEX})
 
 
-def _ebitda(entries: list[LedgerEntry]) -> Decimal:
+def _ebitda(entries: list[LedgerEntry], categories: frozenset[Category]) -> Decimal:
     rev = _sum(_revenue(entries))
-    opex = _sum(_spend(entries, EBITDA_OPEX))
+    opex = _sum(_spend(entries, categories or EBITDA_OPEX))
     return rev - opex
 
 
@@ -137,8 +136,8 @@ def _agg(
         return _sum(chosen), chosen
     if agg == AggKind.EBITDA:
         rev_entries = _revenue(entries)
-        opex_entries = _spend(entries, OPEX_LIKE)
-        return _ebitda(entries), rev_entries + opex_entries
+        opex_entries = _spend(entries, cats or EBITDA_OPEX)
+        return _ebitda(entries, cats), rev_entries + opex_entries
     if agg == AggKind.SUM_INFLOW:
         chosen = [e for e in entries if e.is_inflow and (not cats or e.category in cats)]
         return _sum(chosen), chosen
@@ -154,6 +153,14 @@ def _agg(
                 best_total = cat_total
                 best_entries = cat_entries
         return best_total, best_entries
+    if agg == AggKind.MAX_SINGLE_TRANSACTION:
+        chosen = _spend(entries, cats) if cats else [
+            e for e in entries if e.is_outflow and e.category is not Category.CONTRA
+        ]
+        if not chosen:
+            return Decimal(0), []
+        largest = max(chosen, key=lambda entry: entry.magnitude)
+        return largest.magnitude, [largest]
     if agg == AggKind.REVENUE_MINUS_MAX_CATEGORY:
         rev_entries = _revenue(entries)
         rev = _sum(rev_entries)
@@ -192,7 +199,9 @@ def _agg(
     if agg == AggKind.UNRESTRICTED_TRANSFER:
         chosen = [e for e in entries if e.is_outflow and e.is_unrestricted_transfer]
         return _sum(chosen), chosen
-    chosen = _spend(entries, cats)
+    chosen = _spend(entries, cats) if cats else [
+        e for e in entries if e.is_outflow and e.category is not Category.CONTRA
+    ]
     return _sum(chosen), chosen
 
 
@@ -221,13 +230,20 @@ def _evaluate_with_formula(
         numerator, num_entries = numerator_constant, []
 
     if formula.is_conditional and formula.condition_threshold_dollars is not None:
-        cond_val = abs(numerator)
-        if cond_val <= Decimal(str(formula.condition_threshold_dollars)):
+        condition_categories = _cats_from_slugs(formula.condition_categories)
+        cond_val, _condition_entries = _agg(scope, formula.condition_agg, condition_categories)
+        threshold = Decimal(str(formula.condition_threshold_dollars))
+        triggered = (
+            cond_val > threshold
+            if formula.condition_comparator == ">"
+            else cond_val >= threshold
+        )
+        if not triggered:
             answer = Answer(
                 scenario_id=rule.scenario_id,
                 clause=rule.clause,
                 status="COMPLIANT",
-                actual=Decimal(0),
+                actual=abs(numerator),
                 basis=[e.txn_id for e in num_entries],
                 note="conditional_not_triggered",
             )
@@ -390,8 +406,10 @@ def find_evidence(
         if (entry := by_id.get(txn_id)) is not None
         and (
             entry.audit_reclassified
+            or entry.audit_corrected
             or entry.is_related_party
             or entry.is_unrestricted_transfer
+            or (formula is not None and formula.numerator_agg.value == "max_single_transaction")
         )
     ]
 
