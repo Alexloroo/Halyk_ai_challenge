@@ -80,7 +80,7 @@ Pipeline строится вокруг одного принципа: **LLM ин
 - какие clauses должны присутствовать в ответе;
 - сколько ячеек необходимо заполнить.
 
-Pipeline не создаёт новые scenario/clauses и не удаляет существующие. Даже если отдельное правило не удалось разобрать, ячейка всё равно получает best-effort ответ вместо пропуска.
+Pipeline не создаёт новые scenario/clauses и не удаляет существующие. Template остаётся единственным source of truth. Если deterministic parser не находит ожидаемый clause, включается валидируемый DeepSeek fallback; если и он не подтверждает правило текстом договора, ячейка всё равно получает best-effort ответ вместо пропуска.
 
 ```text
 submission_template.json
@@ -269,6 +269,19 @@ flags on LedgerEntry
 
 Поддерживаются русские и казахские конструкции, включая `Пункт 6.1`, `6.1-тармақ`, периоды `с … по …` / `… бастап … дейін` и RU/KZ/EN category aliases.
 
+Если один из clauses, уже перечисленных в `submission_template.json`, не найден deterministic parser, `llm_rules.py` запускает отдельный DeepSeek fallback. Модель не формирует ответ ковенанта: она должна вернуть точные фрагменты heading и правила из выбранного agreement, тип правила, comparator и категории.
+
+LLM-результат принимается только при выполнении всех ограничений:
+
+- clause ID точно совпадает с отсутствующей template-ячейкой;
+- heading и полный текст правила дословно присутствуют в agreement;
+- evidence содержит marker запрошенного clause;
+- threshold повторно извлекается из evidence детерминированным parser;
+- comparator не противоречит явной формулировке minimum/maximum;
+- используются только поддерживаемые категории.
+
+Модель не может добавить scenario или clause, которых нет в template. После восстановления `Rule` проходит обычный FormulaSpec и deterministic evaluation pipeline. Конкурентность этого fallback задаётся через `HALYK_RULE_LLM_CONCURRENCY` (по умолчанию `20`).
+
 ### 10. Сложные формулы интерпретируются DeepSeek в `FormulaSpec`
 
 Regex хорошо извлекает threshold и период, но сложные ковенанты могут описывать формулу естественным языком:
@@ -387,7 +400,10 @@ parallel PyMuPDF extraction
           ↓
 Document(kind, edition, account_ids, text)
           │
-          ├── agreement ──→ Rule[] ──→ FormulaSpec (when needed)
+          ├── agreement ──→ deterministic Rule extraction
+          │                    └── validated DeepSeek fallback for missing template clauses
+          │                                      ↓
+          │                                  Rule[] ──→ FormulaSpec (when needed)
           ├── KYC ────────→ related / unrestricted flags
           └── audit ──────→ adjustments / missing amounts / FX
                               │
@@ -421,6 +437,7 @@ Document(kind, edition, account_ids, text)
 | известные document markers | deterministic classifier |
 | неизвестный релевантный document type | DeepSeek fallback |
 | threshold/comparator/period | deterministic rule parser |
+| пропущенный template clause | DeepSeek evidence extraction → deterministic threshold validation |
 | сложная естественно-языковая формула | DeepSeek → validated `FormulaSpec` |
 | final actual/status | deterministic evaluator |
 
@@ -467,6 +484,7 @@ txn_id,date,account_id,counterparty,description,amount,currency
 | `docs.py` | parallel PDF loading, PyMuPDF, OCR, document metadata, authority ranking |
 | `llm_documents.py` | fallback document classification и entity linking |
 | `rules.py` | clause, period, threshold, comparator, categories |
+| `llm_rules.py` | validated fallback для template clauses, пропущенных rule parser |
 | `parties.py` | KYC ownership, related-party и unrestricted flags |
 | `audit.py` | reclassification, exclusion, missing amount/entry, FX |
 | `llm_extract.py` | concurrent DeepSeek parsing → validated `FormulaSpec` |
@@ -517,6 +535,9 @@ HALYK_PDF_WORKERS=16
 
 # Параллельная интерпретация сложных covenant formulas
 HALYK_LLM_CONCURRENCY=50
+
+# Восстановление пропущенных template clauses
+HALYK_RULE_LLM_CONCURRENCY=20
 
 # Selective OCR
 HALYK_OCR_ENABLED=1

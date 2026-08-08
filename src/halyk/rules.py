@@ -296,3 +296,30 @@ def extract_rules(scenario_id: str, agreement_text: str) -> dict[str, Rule]:
             categories=categories,
         )
     return rules
+
+
+def rule_from_evidence(
+    scenario_id: str,
+    clause: str,
+    heading: str,
+    text: str,
+    agreement_text: str,
+    *,
+    kind: RuleKind,
+    comparator: str,
+    categories: list[Category],
+) -> Rule:
+    """Build an executable rule from validated agreement evidence."""
+    resolved_categories = frozenset(categories) or _categories(f"{heading} {text}")
+    period = _quarter_period(text) or _period(text) or _period(agreement_text)
+    return Rule(
+        scenario_id=scenario_id,
+        clause=clause,
+        heading=" ".join(heading.split()),
+        text=" ".join(text.split())[:1200],
+        kind=kind,
+        comparator=comparator,
+        threshold=_threshold(text, kind),
+        period=period,
+        categories=resolved_categories,
+    )

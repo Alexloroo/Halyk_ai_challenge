@@ -42,6 +42,11 @@ from .llm_documents import (
     resolve_entity_links,
 )
 from .llm_extract import FormulaSpec, extract_formulas
+from .llm_rules import (
+    SYSTEM_PROMPT as RULE_EXTRACTION_PROMPT,
+    RuleExtractionRequest,
+    resolve_missing_rules,
+)
 from .parties import extract_related_parties, mark_related, mark_unrestricted
 from .quality import PrivateReadinessReport, assess_private_readiness
 from .rules import Rule, extract_rules
@@ -379,6 +384,8 @@ def solve(
             trace_account_mapping(trace, accounts)
 
     all_rules: dict[str, dict[str, Rule]] = {}
+    rule_records: dict[str, dict[str, object]] = {}
+    rule_requests: list[RuleExtractionRequest] = []
     selected_agreements: dict[str, Document | None] = {}
     party_results: dict[str, object] = {}
     total_adjustments = 0
@@ -454,12 +461,54 @@ def solve(
             party_results[scenario_id] = parties
 
         with _trace_stage(trace, "10_rules"):
-            rules: dict[str, Rule] = extract_rules(scenario_id, agreement.text) if agreement else {}
+            extracted = extract_rules(scenario_id, agreement.text) if agreement else {}
+            rules: dict[str, Rule] = {
+                clause: extracted[clause] for clause in template[scenario_id] if clause in extracted
+            }
             if agreement is None:
                 report.agreements_missing.append(scenario_id)
-            report.rules_found += len(rules)
             all_rules[scenario_id] = rules
-            if trace is not None:
+            for clause in template[scenario_id]:
+                key = f"{scenario_id}/{clause}"
+                found = clause in rules
+                rule_records[key] = {
+                    "source": "deterministic" if found else None,
+                    "llm_requested": False,
+                    "llm_result": None,
+                    "rule": rules.get(clause),
+                }
+                if not found and agreement is not None and use_llm:
+                    rule_records[key]["llm_requested"] = True
+                    rule_requests.append(
+                        RuleExtractionRequest(
+                            key=key,
+                            scenario_id=scenario_id,
+                            clause=clause,
+                            agreement_text=agreement.text[:60000],
+                        )
+                    )
+
+    with _trace_stage(trace, "10_rules"):
+        rule_results = resolve_missing_rules(rule_requests) if rule_requests else {}
+        for key, result in rule_results.items():
+            record = rule_records[key]
+            record["llm_result"] = result
+            if result.rule is None:
+                continue
+            scenario_id, clause = key.split("/", maxsplit=1)
+            all_rules[scenario_id][clause] = result.rule
+            record["source"] = "llm_fallback"
+            record["rule"] = result.rule
+        report.rules_found = sum(len(rules) for rules in all_rules.values())
+        report.notes.append(
+            f"Rule LLM resolutions: "
+            f"{sum(result.rule is not None for result in rule_results.values())}/"
+            f"{len(rule_results)}"
+        )
+        if trace is not None:
+            trace.write_text("10_rules", "system_prompt.txt", RULE_EXTRACTION_PROMPT)
+            trace.write_json("10_rules", "decisions.json", rule_records)
+            for scenario_id, rules in all_rules.items():
                 trace_rules(trace, scenario_id, rules)
 
     if trace is not None:
@@ -468,7 +517,13 @@ def solve(
             "08_audit_and_fx", scenarios=len(template), adjustments=total_adjustments
         )
         trace.update_stage("09_related_parties", scenarios=len(template), resolved=parties_resolved)
-        trace.update_stage("10_rules", scenarios=len(template), rules=report.rules_found)
+        trace.update_stage(
+            "10_rules",
+            scenarios=len(template),
+            rules=report.rules_found,
+            rule_llm_requested=len(rule_results),
+            rule_llm_resolved=sum(result.rule is not None for result in rule_results.values()),
+        )
 
     with _trace_stage(trace, "11_formulas"):
         formulas: dict[str, FormulaSpec] = {}
