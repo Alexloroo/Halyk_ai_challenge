@@ -76,11 +76,11 @@ class FormulaSpec(BaseModel):
     )
     denominator_agg: AggKind = Field(
         default=AggKind.SUM_OUTFLOW,
-        description="How to compute the denominator. Ignored if output_kind=dollar_amount."
+        description="How to compute the denominator. Ignored if output_kind=dollar_amount.",
     )
     denominator_categories: list[str] = Field(
         default_factory=list,
-        description="Category slugs for the denominator. Ignored if output_kind=dollar_amount."
+        description="Category slugs for the denominator. Ignored if output_kind=dollar_amount.",
     )
     comparator: str = Field(
         description="'<=' if the value must not EXCEED the threshold. "
@@ -89,23 +89,21 @@ class FormulaSpec(BaseModel):
     is_conditional: bool = Field(
         default=False,
         description="True only if the covenant says it applies ONLY WHEN a precondition is met "
-        "(e.g. 'only if financing receipts exceed $X')."
+        "(e.g. 'only if financing receipts exceed $X').",
     )
     condition_threshold_dollars: float | None = Field(
-        default=None,
-        description="Dollar precondition threshold, if is_conditional=True."
+        default=None, description="Dollar precondition threshold, if is_conditional=True."
     )
     condition_agg: AggKind = Field(
         default=AggKind.SUM_INFLOW,
-        description="Aggregate used only to decide whether a conditional covenant is triggered."
+        description="Aggregate used only to decide whether a conditional covenant is triggered.",
     )
     condition_categories: list[str] = Field(
         default_factory=list,
-        description="Category slugs used by condition_agg, independent from the tested numerator."
+        description="Category slugs used by condition_agg, independent from the tested numerator.",
     )
     condition_comparator: str = Field(
-        default=">",
-        description="Comparison for the trigger, normally '>' for 'exceeds'."
+        default=">", description="Comparison for the trigger, normally '>' for 'exceeds'."
     )
 
 
@@ -197,17 +195,19 @@ def extract_formula(clause_text: str, *, max_retries: int = 3) -> FormulaSpec | 
 
     for attempt in range(max_retries):
         try:
-            result = structured.invoke([
-                {"role": "system", "content": SYSTEM_PROMPT},
-                {"role": "user", "content": clause_text},
-            ])
+            result = structured.invoke(
+                [
+                    {"role": "system", "content": SYSTEM_PROMPT},
+                    {"role": "user", "content": clause_text},
+                ]
+            )
             if isinstance(result, FormulaSpec):
                 return result
             return FormulaSpec.model_validate(result)
         except Exception as exc:
             if attempt < max_retries - 1:
-                wait = 2 ** attempt
-                print(f"  [retry {attempt+1}/{max_retries}] {exc.__class__.__name__}: {exc}")
+                wait = 2**attempt
+                print(f"  [retry {attempt + 1}/{max_retries}] {exc.__class__.__name__}: {exc}")
                 time.sleep(wait)
             else:
                 print(f"  [FAILED after {max_retries} attempts] {exc}")
@@ -216,7 +216,8 @@ def extract_formula(clause_text: str, *, max_retries: int = 3) -> FormulaSpec | 
 
 
 _REVENUE_FINANCING_RE = re.compile(
-    r"выручк\w*\s+и\s+поступлен\w+\s+по\s+финансирован", re.I,
+    r"выручк\w*\s+и\s+поступлен\w+\s+по\s+финансирован",
+    re.I,
 )
 _UNRESTRICTED_RE = re.compile(r"неограниченн\w+\s+дочерн", re.I)
 _SINGLE_TRANSACTION_RE = re.compile(
@@ -318,16 +319,28 @@ def _ebitda_definition_categories(text: str) -> list[str]:
     if not match:
         return []
     found = {
-        category.value
-        for pattern, category in CATEGORY_WORDS
-        if pattern.search(match.group(0))
+        category.value for pattern, category in CATEGORY_WORDS if pattern.search(match.group(0))
     }
+    definition = match.group(0)
+    coordinated_terms = {
+        "opex": r"операционн\w*|операциялық\w*|operating",
+        "utilities": r"коммунальн\w*|коммуналдық\w*|utilities",
+        "marketing": r"маркетинг\w*|жарнам\w*|marketing",
+        "professional": r"профессиональн\w*|консультац\w*|кәсіби\w*|professional",
+        "personnel": r"персонал\w*|оплат\w*\s+труд\w*|еңбекақ\w*|жалақ\w*|personnel",
+    }
+    found.update(
+        category
+        for category, pattern in coordinated_terms.items()
+        if re.search(pattern, definition, re.I)
+    )
     found.discard("revenue")
     return sorted(found)
 
 
 def apply_formula_context(
-    rules: dict[str, dict[str, Rule]], formulas: dict[str, FormulaSpec],
+    rules: dict[str, dict[str, Rule]],
+    formulas: dict[str, FormulaSpec],
 ) -> dict[str, FormulaSpec]:
     """Propagate scenario-level definitions into clauses that reference them."""
     for scenario_id, clauses in rules.items():
@@ -340,9 +353,9 @@ def apply_formula_context(
             spec = formulas.get(f"{scenario_id}/{clause_id}")
             if spec is None:
                 continue
-            if spec.numerator_agg == AggKind.EBITDA and not spec.numerator_categories:
+            if spec.numerator_agg == AggKind.EBITDA:
                 spec.numerator_categories = list(definition_categories)
-            if spec.denominator_agg == AggKind.EBITDA and not spec.denominator_categories:
+            if spec.denominator_agg == AggKind.EBITDA:
                 spec.denominator_categories = list(definition_categories)
     return formulas
 
@@ -377,8 +390,8 @@ async def _extract_formula_async(
             return spec
         except Exception as exc:
             if attempt < max_retries - 1:
-                print(f"  [retry {attempt+1}/{max_retries}] {exc.__class__.__name__}: {exc}")
-                await asyncio.sleep(2 ** attempt)
+                print(f"  [retry {attempt + 1}/{max_retries}] {exc.__class__.__name__}: {exc}")
+                await asyncio.sleep(2**attempt)
             else:
                 print(f"  [FAILED after {max_retries} attempts] {exc}")
                 return None

@@ -30,13 +30,16 @@ from .audit import (
     is_actionable_audit_text,
 )
 from .categorize import assess_category
-from .docs import DocKind, Document, DocumentLoadIssue, Edition, load_documents, pick
+from .docs import NON_BINDING, DocKind, Document, DocumentLoadIssue, Edition, load_documents, pick
 from .evaluate import Answer, EvaluationTrace, evaluate, find_evidence
 from .ledger import LedgerEntry, by_scenario, load_ledger
 from .llm_categorize import CategoryRequest, FlowDirection, resolve_categories
 from .llm_documents import (
     DocumentClassificationRequest,
+    EntityLinkCandidate,
+    EntityLinkRequest,
     resolve_document_classifications,
+    resolve_entity_links,
 )
 from .llm_extract import FormulaSpec, extract_formulas
 from .parties import extract_related_parties, mark_related, mark_unrestricted
@@ -101,8 +104,19 @@ def _fallback(scenario_id: str, clause: str, note: str) -> Answer:
     )
 
 
-_GROUP_CAPEX_CLAUSE = re.compile(r"капитальн\w+\s+затрат\w*\s+Группы", re.I)
+_GROUP_CAPEX_CLAUSE = re.compile(
+    r"капитальн\w+\s+затрат\w*\s+Группы|"
+    r"(?:the\s+)?Group(?:'s)?\s+capital\s+expenditure|"
+    r"capital\s+expenditure\s+of\s+the\s+Group",
+    re.I,
+)
 _BORROWER_NAME = re.compile(r"([A-Z][A-Za-z\- ]+?(?:JSC|LLP))")
+_CONSOLIDATED_STATEMENT = re.compile(
+    r"consolidated\s+financial\s+statements|"
+    r"консолидированн\w*\s+финансов\w*\s+отчетност\w*|"
+    r"шоғырландырылған\s+қаржылық\s+есептілік",
+    re.I,
+)
 
 
 def _group_capex_for(rule_text: str, documents: list[Document]) -> Decimal | None:
@@ -119,6 +133,100 @@ def _group_capex_for(rule_text: str, documents: list[Document]) -> Decimal | Non
         if capex is not None:
             return capex
     return None
+
+
+def _resolve_group_capex_values(
+    rules: dict[str, dict[str, Rule]],
+    agreements: dict[str, Document | None],
+    accounts: dict[str, str],
+    documents: list[Document],
+    *,
+    use_llm: bool,
+) -> tuple[dict[str, Decimal], dict[str, dict[str, object]]]:
+    """Resolve statement ownership, while keeping all amount extraction deterministic."""
+    values: dict[str, Decimal] = {}
+    records: dict[str, dict[str, object]] = {}
+    requests: list[EntityLinkRequest] = []
+    candidate_documents: dict[str, dict[str, Document]] = {}
+
+    for scenario_id, clauses in rules.items():
+        for clause_id, rule in clauses.items():
+            if _GROUP_CAPEX_CLAUSE.search(rule.text) is None:
+                continue
+            key = f"{scenario_id}/{clause_id}"
+            record: dict[str, object] = {
+                "source": None,
+                "value": None,
+                "llm_requested": False,
+                "llm_result": None,
+                "candidates": [],
+            }
+            records[key] = record
+            deterministic = _group_capex_for(rule.text, documents)
+            if deterministic is not None:
+                values[key] = deterministic
+                record["source"] = "deterministic_name_match"
+                record["value"] = deterministic
+                continue
+            if not use_llm:
+                continue
+
+            account = accounts.get(scenario_id, "")
+            agreement = agreements.get(scenario_id)
+            if not account or agreement is None:
+                continue
+            eligible = sorted(
+                (
+                    document
+                    for document in documents
+                    if account in document.account_ids
+                    and NON_BINDING.search(document.text) is None
+                    and _CONSOLIDATED_STATEMENT.search(document.text) is not None
+                    and extract_group_capex(document.text) is not None
+                ),
+                key=lambda document: str(document.path),
+            )
+            if not eligible:
+                continue
+            candidates = tuple(
+                EntityLinkCandidate(
+                    candidate_id=f"candidate-{index:03d}", text=document.text[:30000]
+                )
+                for index, document in enumerate(eligible, start=1)
+            )
+            candidate_documents[key] = dict(
+                zip((candidate.candidate_id for candidate in candidates), eligible, strict=True)
+            )
+            record["llm_requested"] = True
+            record["candidates"] = [
+                {"candidate_id": candidate.candidate_id, "document": document.path}
+                for candidate, document in zip(candidates, eligible, strict=True)
+            ]
+            requests.append(
+                EntityLinkRequest(
+                    key=key,
+                    agreement_text=agreement.text[:30000],
+                    candidates=candidates,
+                )
+            )
+
+    results = resolve_entity_links(requests) if requests else {}
+    for key, result in results.items():
+        record = records[key]
+        record["llm_result"] = result
+        if result.resolution is None:
+            continue
+        document = candidate_documents[key].get(result.resolution.matched_candidate_id)
+        if document is None:
+            continue
+        capex = extract_group_capex(document.text)
+        if capex is None:
+            continue
+        values[key] = capex
+        record["source"] = "llm_entity_link"
+        record["document"] = document.path
+        record["value"] = capex
+    return values, records
 
 
 def solve(
@@ -176,9 +284,7 @@ def solve(
             records_by_key[key] = record
             entries_by_key[key] = entry
             if assessment.needs_llm and use_llm and (entry.is_inflow or entry.is_outflow):
-                direction = (
-                    FlowDirection.INFLOW if entry.is_inflow else FlowDirection.OUTFLOW
-                )
+                direction = FlowDirection.INFLOW if entry.is_inflow else FlowDirection.OUTFLOW
                 category_requests.append(
                     CategoryRequest(
                         key=key,
@@ -242,14 +348,10 @@ def solve(
             records_by_document_key[key] = record
             documents_by_key[key] = document
             if needs_llm and use_llm:
-                document_requests.append(
-                    DocumentClassificationRequest(key=key, text=document.text)
-                )
+                document_requests.append(DocumentClassificationRequest(key=key, text=document.text))
 
         document_results = (
-            resolve_document_classifications(document_requests)
-            if document_requests
-            else {}
+            resolve_document_classifications(document_requests) if document_requests else {}
         )
         for key, result in document_results.items():
             record = records_by_document_key[key]
@@ -292,8 +394,7 @@ def solve(
                 if (
                     document.kind is DocKind.AUDIT_NOTES
                     or (
-                        document.kind is DocKind.UNKNOWN
-                        and is_actionable_audit_text(document.text)
+                        document.kind is DocKind.UNKNOWN and is_actionable_audit_text(document.text)
                     )
                 )
                 and document.edition is Edition.CURRENT
@@ -330,9 +431,7 @@ def solve(
                 for entry in scenario_entries:
                     if entry.currency in fx_rates and entry.amount is not None:
                         rate = fx_rates[entry.currency]
-                        entry.amount = (Decimal(str(entry.amount)) * rate).quantize(
-                            Decimal("0.01")
-                        )
+                        entry.amount = (Decimal(str(entry.amount)) * rate).quantize(Decimal("0.01"))
                         entry.currency = "USD"
                         entry.fx_converted = True
             if trace is not None:
@@ -355,9 +454,7 @@ def solve(
             party_results[scenario_id] = parties
 
         with _trace_stage(trace, "10_rules"):
-            rules: dict[str, Rule] = (
-                extract_rules(scenario_id, agreement.text) if agreement else {}
-            )
+            rules: dict[str, Rule] = extract_rules(scenario_id, agreement.text) if agreement else {}
             if agreement is None:
                 report.agreements_missing.append(scenario_id)
             report.rules_found += len(rules)
@@ -370,9 +467,7 @@ def solve(
         trace.update_stage(
             "08_audit_and_fx", scenarios=len(template), adjustments=total_adjustments
         )
-        trace.update_stage(
-            "09_related_parties", scenarios=len(template), resolved=parties_resolved
-        )
+        trace.update_stage("09_related_parties", scenarios=len(template), resolved=parties_resolved)
         trace.update_stage("10_rules", scenarios=len(template), rules=report.rules_found)
 
     with _trace_stage(trace, "11_formulas"):
@@ -380,8 +475,26 @@ def solve(
         if use_llm:
             formulas = extract_formulas(all_rules)
             report.notes.append(f"LLM formulas extracted: {len(formulas)}")
+        group_capex_values, entity_link_records = _resolve_group_capex_values(
+            all_rules,
+            selected_agreements,
+            accounts,
+            docs,
+            use_llm=use_llm,
+        )
+        report.notes.append(
+            f"Group capex documents resolved: {len(group_capex_values)}/{len(entity_link_records)}"
+        )
         if trace is not None:
             trace_formulas(trace, all_rules, formulas, enabled=use_llm)
+            trace.write_json("11_formulas", "entity_links.json", entity_link_records)
+            trace.update_stage(
+                "11_formulas",
+                entity_links=sum(
+                    record["source"] == "llm_entity_link" for record in entity_link_records.values()
+                ),
+                group_capex_resolved=len(group_capex_values),
+            )
 
     with _trace_stage(trace, "12_evaluation"):
         evaluation_details: dict[str, EvaluationTrace] = {}
@@ -408,7 +521,7 @@ def solve(
                     continue
                 formula = formulas.get(f"{scenario_id}/{clause}")
                 numerator_constant = (
-                    _group_capex_for(rule.text, docs)
+                    group_capex_values.get(f"{scenario_id}/{clause}")
                     if _GROUP_CAPEX_CLAUSE.search(rule.text)
                     else None
                 )
@@ -461,9 +574,7 @@ def solve(
         )
         if trace is not None:
             trace.write_root_json("private_readiness.json", report.private_readiness)
-            trace.write_json(
-                "12_evaluation", "private_readiness.json", report.private_readiness
-            )
+            trace.write_json("12_evaluation", "private_readiness.json", report.private_readiness)
             trace.update_stage(
                 "12_evaluation",
                 private_readiness=report.private_readiness.status,

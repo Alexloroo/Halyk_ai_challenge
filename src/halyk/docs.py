@@ -100,7 +100,9 @@ EXECUTION = re.compile(r"ИСПОЛНИТЕЛЬНЫЙ\s+ЭКЗЕМПЛЯР|ОР�
 NON_BINDING = re.compile(
     r"МЕТОДИЧЕСК\w+\s+МЕМОРАНДУМ|ВНУТРЕНН\w+\s+УЧЕБН|"
     r"не\s+является\s+кредитным\s+договором|не\s+созда[её]т\s+обязательств|"
-    r"исключительно\s+для\s+обучения|training\s+(?:memo|example)",
+    r"исключительно\s+для\s+обучения|training\s+(?:memo|example)|"
+    r"not\s+(?:a\s+)?(?:credit|loan|facility)\s+agreement|"
+    r"creates?\s+no\s+(?:legal\s+)?obligations|informational\s+only",
     re.I,
 )
 AGREEMENT_AUTHORITY = re.compile(
@@ -113,20 +115,31 @@ ACCOUNT = re.compile(r"ACC-\d{4,}(?![-\d])")
 OCR_ACCOUNT = re.compile(r"[AА][CС][CС]\s*[-‐‑‒–—]\s*(\d{4,})(?![-\d])", re.I)
 
 KIND_MARKERS: list[tuple[re.Pattern[str], DocKind]] = [
-    (re.compile(
-        r"Финансовые ковенанты|Статья 6|ДОГОВОР БАНКОВСКОГО|"
-        r"Қаржылық ковенанттар|6\s*[-–—]?\s*бап|БАНКТІК ҚАРЫЗ ШАРТЫ",
-        re.I,
+    (
+        re.compile(
+            r"Финансовые ковенанты|Статья 6|ДОГОВОР БАНКОВСКОГО|"
+            r"Қаржылық ковенанттар|6\s*[-–—]?\s*бап|БАНКТІК ҚАРЫЗ ШАРТЫ",
+            re.I,
+        ),
+        DocKind.CREDIT_AGREEMENT,
     ),
-     DocKind.CREDIT_AGREEMENT),
-    (re.compile(r"Независимый аудитор|Registered Auditors|Statutory Auditors|"
-                r"ПРИМЕЧАНИЯ К ФИНАНСОВОЙ|Тәуелсіз аудитор|"
-                r"ҚАРЖЫЛЫҚ ЕСЕПТІЛІККЕ ЕСКЕРТПЕЛЕР", re.I), DocKind.AUDIT_NOTES),
-    (re.compile(
-        r"Знай своего клиент|финансового мониторинга|KYC-ACC|"
-        r"Клиентті таны|қаржылық мониторинг",
-        re.I,
-    ), DocKind.KYC),
+    (
+        re.compile(
+            r"Независимый аудитор|Registered Auditors|Statutory Auditors|"
+            r"ПРИМЕЧАНИЯ К ФИНАНСОВОЙ|Тәуелсіз аудитор|"
+            r"ҚАРЖЫЛЫҚ ЕСЕПТІЛІККЕ ЕСКЕРТПЕЛЕР",
+            re.I,
+        ),
+        DocKind.AUDIT_NOTES,
+    ),
+    (
+        re.compile(
+            r"Знай своего клиент|финансового мониторинга|KYC-ACC|"
+            r"Клиентті таны|қаржылық мониторинг",
+            re.I,
+        ),
+        DocKind.KYC,
+    ),
     (re.compile(r"Комплаенс\s*—|Контролируемый документ", re.I), DocKind.COMPLIANCE),
     (re.compile(r"Проект «Атлас»|Еженедельное обновление", re.I), DocKind.OPERATIONS),
 ]
@@ -277,11 +290,13 @@ def pick(
 ) -> Document | None:
     """The one document of this kind, for this account, in this edition."""
     matches = [
-        d for d in documents
+        d
+        for d in documents
         if d.kind is kind and d.edition is edition and account_id in d.account_ids
     ]
     if not matches:
         return None
+
     def authority(document: Document) -> tuple[int, int, int]:
         """Rank legal authority before completeness/length.
 

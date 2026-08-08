@@ -2,14 +2,18 @@ from __future__ import annotations
 
 from datetime import date
 from decimal import Decimal
+from pathlib import Path
 
 from halyk.audit import extract_group_capex
 from halyk.categorize import Category
+from halyk.docs import DocKind, Document, Edition
 from halyk.evaluate import evaluate
 from halyk.ledger import LedgerEntry
+from halyk.llm_documents import EntityLinkResult, EntityLinkSpec
 from halyk.llm_extract import AggKind, FormulaSpec, OutputKind
 from halyk.parties import extract_related_parties, mark_unrestricted
 from halyk.rules import Rule, RuleKind
+from halyk.run import _resolve_group_capex_values
 
 
 def _entry(
@@ -112,3 +116,64 @@ def test_group_capex_and_document_numerator_are_used_in_ratio() -> None:
 
     assert capex == Decimal("50")
     assert answer.actual == Decimal("5")
+
+
+def test_group_capex_falls_back_to_validated_entity_link(monkeypatch) -> None:
+    agreement = Document(
+        path=Path("agreement.pdf"),
+        text="Borrower: Ili Hydro Controls JSC. Group capital expenditure covenant.",
+        kind=DocKind.CREDIT_AGREEMENT,
+        edition=Edition.CURRENT,
+        account_ids=["ACC-0001"],
+        pages=1,
+    )
+    statement = Document(
+        path=Path("statement.pdf"),
+        text=(
+            "Ili Hydro Controls JSC Consolidated Financial Statements\n"
+            "Net book value at the beginning of the year $ 100\n"
+            "Net book value at the end of the year $ 130\n"
+            "Depreciation charge for the year $ 20"
+        ),
+        kind=DocKind.UNKNOWN,
+        edition=Edition.CURRENT,
+        account_ids=["ACC-0001"],
+        pages=1,
+    )
+    covenant = Rule(
+        scenario_id="X28",
+        clause="6.1",
+        heading="Group capex ratio",
+        text="Group capital expenditure for Ili Hydro Controls JSC / EBITDA <= 1x",
+        kind=RuleKind.RATIO,
+        comparator="<=",
+        threshold=Decimal("1"),
+        period=None,
+    )
+
+    def fake_resolve(requests):
+        request = requests[0]
+        return {
+            request.key: EntityLinkResult(
+                EntityLinkSpec(
+                    borrower_name="Ili Hydro Controls JSC",
+                    matched_candidate_id="candidate-001",
+                    agreement_evidence="Borrower: Ili Hydro Controls JSC",
+                    candidate_evidence="Ili Hydro Controls JSC",
+                ),
+                attempts=1,
+            )
+        }
+
+    monkeypatch.setattr("halyk.run.resolve_entity_links", fake_resolve)
+
+    values, records = _resolve_group_capex_values(
+        {"X28": {"6.1": covenant}},
+        {"X28": agreement},
+        {"X28": "ACC-0001"},
+        [agreement, statement],
+        use_llm=True,
+    )
+
+    assert values == {"X28/6.1": Decimal("50")}
+    assert records["X28/6.1"]["source"] == "llm_entity_link"

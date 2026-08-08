@@ -1,5 +1,5 @@
 {
-  "note": "X1/X2 PDFs are not included because they are already in the target system. X23/X24 add native-text DeepSeek formula fixtures and non-binding document distractors.",
+  "note": "X23/X24 exercise document/formula fallbacks. X25-X44 are four-document RU/EN stress bundles for document, category and formula DeepSeek stages.",
   "previous_comparison": {
     "cells": 6,
     "status_matches": 6,
@@ -344,6 +344,406 @@
       "pdf_files": [
         "b7e1490c6fa8.pdf",
         "d4a8f1e903bc.pdf"
+      ]
+    },
+    {
+      "scenario_id": "X25",
+      "account_id": "ACC-8825",
+      "borrower": "Altai Wind Infrastructure JSC",
+      "difficulty": "multi-document-deepseek-stress",
+      "language": "en",
+      "profile": "kyc_audit",
+      "focus": [
+        "LLM document classification",
+        "three LLM FormulaSpec clauses",
+        "LLM ledger categorization",
+        "cross-document selection and evaluation"
+      ],
+      "pdf_files": [
+        "4bf0cc620558.pdf",
+        "b43d3c221466.pdf",
+        "0816784ae6c7.pdf",
+        "3afba7b1c362.pdf"
+      ]
+    },
+    {
+      "scenario_id": "X26",
+      "account_id": "ACC-8826",
+      "borrower": "Caspian Grid Automation JSC",
+      "difficulty": "multi-document-deepseek-stress",
+      "language": "en",
+      "profile": "financing_springing",
+      "focus": [
+        "LLM document classification",
+        "three LLM FormulaSpec clauses",
+        "LLM ledger categorization",
+        "cross-document selection and evaluation"
+      ],
+      "pdf_files": [
+        "159fc7fb753d.pdf",
+        "eac9a67fdee8.pdf",
+        "d7a6dc984071.pdf",
+        "e3b1d63306ba.pdf"
+      ]
+    },
+    {
+      "scenario_id": "X27",
+      "account_id": "ACC-8827",
+      "borrower": "Saryarka Battery Systems JSC",
+      "difficulty": "multi-document-deepseek-stress",
+      "language": "en",
+      "profile": "unrestricted_kyc",
+      "focus": [
+        "LLM document classification",
+        "three LLM FormulaSpec clauses",
+        "LLM ledger categorization",
+        "cross-document selection and evaluation"
+      ],
+      "pdf_files": [
+        "f531dd2279e3.pdf",
+        "33f734dfa6cc.pdf",
+        "742a93ad5138.pdf",
+        "afc87a7ab8cb.pdf"
+      ]
+    },
+    {
+      "scenario_id": "X28",
+      "account_id": "ACC-8828",
+      "borrower": "Ili Hydro Controls JSC",
+      "difficulty": "multi-document-deepseek-stress",
+      "language": "en",
+      "profile": "group_capex",
+      "focus": [
+        "LLM document classification",
+        "three LLM FormulaSpec clauses",
+        "LLM ledger categorization",
+        "cross-document selection and evaluation"
+      ],
+      "pdf_files": [
+        "ad9c2a946d6c.pdf",
+        "b300733f410e.pdf",
+        "c212fc58172f.pdf",
+        "cbbddebc9429.pdf"
+      ]
+    },
+    {
+      "scenario_id": "X29",
+      "account_id": "ACC-8829",
+      "borrower": "Turan Industrial Sensors JSC",
+      "difficulty": "multi-document-deepseek-stress",
+      "language": "en",
+      "profile": "kyc_audit",
+      "focus": [
+        "LLM document classification",
+        "three LLM FormulaSpec clauses",
+        "LLM ledger categorization",
+        "cross-document selection and evaluation"
+      ],
+      "pdf_files": [
+        "7c8f8d52d3d7.pdf",
+        "16f0840969f3.pdf",
+        "2429ac012058.pdf",
+        "37b0a650e149.pdf"
+      ]
+    },
+    {
+      "scenario_id": "X30",
+      "account_id": "ACC-8830",
+      "borrower": "Semey Energy Storage JSC",
+      "difficulty": "multi-document-deepseek-stress",
+      "language": "en",
+      "profile": "financing_springing",
+      "focus": [
+        "LLM document classification",
+        "three LLM FormulaSpec clauses",
+        "LLM ledger categorization",
+        "cross-document selection and evaluation"
+      ],
+      "pdf_files": [
+        "033f9aaf2978.pdf",
+        "16ed5d5412cf.pdf",
+        "01f3ed9a3ec0.pdf",
+        "075373fd6060.pdf"
+      ]
+    },
+    {
+      "scenario_id": "X31",
+      "account_id": "ACC-8831",
+      "borrower": "Atyrau Process Engineering JSC",
+      "difficulty": "multi-document-deepseek-stress",
+      "language": "en",
+      "profile": "unrestricted_kyc",
+      "focus": [
+        "LLM document classification",
+        "three LLM FormulaSpec clauses",
+        "LLM ledger categorization",
+        "cross-document selection and evaluation"
+      ],
+      "pdf_files": [
+        "f58aed44b454.pdf",
+        "b210d43a8c36.pdf",
+        "ab24b0fa1589.pdf",
+        "8e9f343fe863.pdf"
+      ]
+    },
+    {
+      "scenario_id": "X32",
+      "account_id": "ACC-8832",
+      "borrower": "Karatau Rail Components JSC",
+      "difficulty": "multi-document-deepseek-stress",
+      "language": "en",
+      "profile": "group_capex",
+      "focus": [
+        "LLM document classification",
+        "three LLM FormulaSpec clauses",
+        "LLM ledger categorization",
+        "cross-document selection and evaluation"
+      ],
+      "pdf_files": [
+        "ca51929d1b42.pdf",
+        "f72ce5e0000c.pdf",
+        "7686eb113dc3.pdf",
+        "6c5bcb5f55c4.pdf"
+      ]
+    },
+    {
+      "scenario_id": "X33",
+      "account_id": "ACC-8833",
+      "borrower": "Zhetysu Power Electronics JSC",
+      "difficulty": "multi-document-deepseek-stress",
+      "language": "en",
+      "profile": "kyc_audit",
+      "focus": [
+        "LLM document classification",
+        "three LLM FormulaSpec clauses",
+        "LLM ledger categorization",
+        "cross-document selection and evaluation"
+      ],
+      "pdf_files": [
+        "0124ecb36368.pdf",
+        "9ca1fde2dfee.pdf",
+        "2f35103303ff.pdf",
+        "4f3c8ff75a23.pdf"
+      ]
+    },
+    {
+      "scenario_id": "X34",
+      "account_id": "ACC-8834",
+      "borrower": "Aktobe Thermal Systems JSC",
+      "difficulty": "multi-document-deepseek-stress",
+      "language": "en",
+      "profile": "financing_springing",
+      "focus": [
+        "LLM document classification",
+        "three LLM FormulaSpec clauses",
+        "LLM ledger categorization",
+        "cross-document selection and evaluation"
+      ],
+      "pdf_files": [
+        "c75864c4e145.pdf",
+        "a8d42ec86788.pdf",
+        "b698b5e9b2e4.pdf",
+        "6fbf65c89b48.pdf"
+      ]
+    },
+    {
+      "scenario_id": "X35",
+      "account_id": "ACC-8835",
+      "borrower": "Kokshetau Timber Automation JSC",
+      "difficulty": "multi-document-deepseek-stress",
+      "language": "ru",
+      "profile": "unrestricted_kyc",
+      "focus": [
+        "LLM document classification",
+        "three LLM FormulaSpec clauses",
+        "LLM ledger categorization",
+        "cross-document selection and evaluation"
+      ],
+      "pdf_files": [
+        "d5d2eaca0808.pdf",
+        "8085f67d3df0.pdf",
+        "7543726a6309.pdf",
+        "5fda2edd0665.pdf"
+      ]
+    },
+    {
+      "scenario_id": "X36",
+      "account_id": "ACC-8836",
+      "borrower": "Pavlodar Alloy Robotics JSC",
+      "difficulty": "multi-document-deepseek-stress",
+      "language": "ru",
+      "profile": "group_capex",
+      "focus": [
+        "LLM document classification",
+        "three LLM FormulaSpec clauses",
+        "LLM ledger categorization",
+        "cross-document selection and evaluation"
+      ],
+      "pdf_files": [
+        "e2c99493a234.pdf",
+        "05114f2e7f8e.pdf",
+        "9e6825d73e6d.pdf",
+        "ec2a25659bc4.pdf"
+      ]
+    },
+    {
+      "scenario_id": "X37",
+      "account_id": "ACC-8837",
+      "borrower": "Mangystau Water Technologies JSC",
+      "difficulty": "multi-document-deepseek-stress",
+      "language": "ru",
+      "profile": "kyc_audit",
+      "focus": [
+        "LLM document classification",
+        "three LLM FormulaSpec clauses",
+        "LLM ledger categorization",
+        "cross-document selection and evaluation"
+      ],
+      "pdf_files": [
+        "c3569ac61453.pdf",
+        "05b5842225c9.pdf",
+        "96be96a248c0.pdf",
+        "9abfc9dc45c9.pdf"
+      ]
+    },
+    {
+      "scenario_id": "X38",
+      "account_id": "ACC-8838",
+      "borrower": "Kostanay Agricultural Drives JSC",
+      "difficulty": "multi-document-deepseek-stress",
+      "language": "ru",
+      "profile": "financing_springing",
+      "focus": [
+        "LLM document classification",
+        "three LLM FormulaSpec clauses",
+        "LLM ledger categorization",
+        "cross-document selection and evaluation"
+      ],
+      "pdf_files": [
+        "d5c5e48e38b3.pdf",
+        "c6c622205d34.pdf",
+        "57ac9ff6584a.pdf",
+        "db9a7f686ef9.pdf"
+      ]
+    },
+    {
+      "scenario_id": "X39",
+      "account_id": "ACC-8839",
+      "borrower": "Turkistan Packaging Machinery JSC",
+      "difficulty": "multi-document-deepseek-stress",
+      "language": "ru",
+      "profile": "unrestricted_kyc",
+      "focus": [
+        "LLM document classification",
+        "three LLM FormulaSpec clauses",
+        "LLM ledger categorization",
+        "cross-document selection and evaluation"
+      ],
+      "pdf_files": [
+        "af3d0511f0ee.pdf",
+        "fd3bfd559621.pdf",
+        "ac79e455aa34.pdf",
+        "a5f009ca398c.pdf"
+      ]
+    },
+    {
+      "scenario_id": "X40",
+      "account_id": "ACC-8840",
+      "borrower": "Oskemen Precision Controls JSC",
+      "difficulty": "multi-document-deepseek-stress",
+      "language": "ru",
+      "profile": "group_capex",
+      "focus": [
+        "LLM document classification",
+        "three LLM FormulaSpec clauses",
+        "LLM ledger categorization",
+        "cross-document selection and evaluation"
+      ],
+      "pdf_files": [
+        "4943c71aef64.pdf",
+        "9ac9e4c3511a.pdf",
+        "86d7073a6f69.pdf",
+        "d3c7a76d05e2.pdf"
+      ]
+    },
+    {
+      "scenario_id": "X41",
+      "account_id": "ACC-8841",
+      "borrower": "Kyzylorda Pump Engineering JSC",
+      "difficulty": "multi-document-deepseek-stress",
+      "language": "ru",
+      "profile": "kyc_audit",
+      "focus": [
+        "LLM document classification",
+        "three LLM FormulaSpec clauses",
+        "LLM ledger categorization",
+        "cross-document selection and evaluation"
+      ],
+      "pdf_files": [
+        "785b898a383c.pdf",
+        "ab56100ae172.pdf",
+        "75971daf6be0.pdf",
+        "dadbc9106ffc.pdf"
+      ]
+    },
+    {
+      "scenario_id": "X42",
+      "account_id": "ACC-8842",
+      "borrower": "Taraz Freight Automation JSC",
+      "difficulty": "multi-document-deepseek-stress",
+      "language": "ru",
+      "profile": "financing_springing",
+      "focus": [
+        "LLM document classification",
+        "three LLM FormulaSpec clauses",
+        "LLM ledger categorization",
+        "cross-document selection and evaluation"
+      ],
+      "pdf_files": [
+        "fc39f83c3596.pdf",
+        "1e4781ad7649.pdf",
+        "8c9326d0b7b8.pdf",
+        "41e375e1be08.pdf"
+      ]
+    },
+    {
+      "scenario_id": "X43",
+      "account_id": "ACC-8843",
+      "borrower": "Shymkent Polymer Equipment JSC",
+      "difficulty": "multi-document-deepseek-stress",
+      "language": "ru",
+      "profile": "unrestricted_kyc",
+      "focus": [
+        "LLM document classification",
+        "three LLM FormulaSpec clauses",
+        "LLM ledger categorization",
+        "cross-document selection and evaluation"
+      ],
+      "pdf_files": [
+        "98828140d6ec.pdf",
+        "c44501a8715f.pdf",
+        "87e66271db6d.pdf",
+        "ff32b89a3834.pdf"
+      ]
+    },
+    {
+      "scenario_id": "X44",
+      "account_id": "ACC-8844",
+      "borrower": "Balkhash Mining Electronics JSC",
+      "difficulty": "multi-document-deepseek-stress",
+      "language": "ru",
+      "profile": "group_capex",
+      "focus": [
+        "LLM document classification",
+        "three LLM FormulaSpec clauses",
+        "LLM ledger categorization",
+        "cross-document selection and evaluation"
+      ],
+      "pdf_files": [
+        "88c6911ddd13.pdf",
+        "25a0aabb7ecb.pdf",
+        "0de211c2124b.pdf",
+        "2bdde0ea883d.pdf"
       ]
     }
   ]
