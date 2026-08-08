@@ -13,6 +13,7 @@ Two things from the case shape the code more than anything else:
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 from decimal import ROUND_HALF_UP, Decimal
 from typing import TYPE_CHECKING
@@ -33,10 +34,10 @@ CENTS = Decimal("0.01")
 class Answer:
     scenario_id: str
     clause: str
-    status: str  # COMPLIANT | BREACH
+    status: str
     actual: Decimal
     evidence_txn_id: str | None = None
-    basis: list[str] = field(default_factory=list)  # txn ids behind the number
+    basis: list[str] = field(default_factory=list)
     note: str = ""
 
     def rounded(self) -> float:
@@ -208,6 +209,345 @@ def _cats_from_slugs(slugs: list[str]) -> frozenset[Category]:
     return frozenset(mapping[s] for s in slugs if s in mapping)
 
 
+def _semantic_rule_override(
+    rule: Rule,
+    scope: list[LedgerEntry],
+    trace: EvaluationTrace | None,
+    group_capex: Decimal | None,
+) -> Answer | None:
+    text = " ".join(rule.text.casefold().split())
+
+    def spent(*categories: Category) -> tuple[Decimal, list[LedgerEntry]]:
+        rows = _spend(scope, frozenset(categories))
+        return _sum(rows), rows
+
+    def inflow(category: Category) -> tuple[Decimal, list[LedgerEntry]]:
+        rows = [e for e in scope if e.is_inflow and e.category is category]
+        return _sum(rows), rows
+
+    def finish(
+        actual: Decimal,
+        rows: list[LedgerEntry],
+        note: str,
+        *,
+        status: str | None = None,
+        aggregates: dict[str, Decimal] | None = None,
+    ) -> Answer:
+        answer = Answer(
+            rule.scenario_id,
+            rule.clause,
+            status or _verdict(actual, rule),
+            abs(actual),
+            basis=list(dict.fromkeys(e.txn_id for e in rows)),
+            note=note,
+        )
+        _complete_trace(
+            trace,
+            rule,
+            answer,
+            branch=note,
+            aggregates=aggregates or {"semantic_actual": actual},
+        )
+        return answer
+
+    def quarter_totals(rows: list[LedgerEntry]) -> list[tuple[Decimal, list[LedgerEntry]]]:
+        buckets: dict[tuple[int, int], list[LedgerEntry]] = {}
+        for item in rows:
+            buckets.setdefault((item.day.year, (item.day.month - 1) // 3 + 1), []).append(item)
+        return [(_sum(items), items) for _, items in sorted(buckets.items())]
+
+    if ("разрешённой корзин" in text or "permitted basket" in text) and (
+        "связанн" in text or "related part" in text
+    ):
+        basket_match = re.search(
+            r"(?:корзин\w*|basket)[^$]{0,80}\$\s*([\d,]+(?:\.\d{2})?)", text
+        )
+        if basket_match:
+            basket = Decimal(basket_match.group(1).replace(",", ""))
+            related = _related(scope)
+            eligible = [
+                e
+                for e in related
+                if e.category is Category.PROFESSIONAL and not e.audit_reclassified
+            ]
+            actual = _sum(related) - min(basket, _sum(eligible))
+            return finish(actual, related, "semantic_related_party_basket")
+
+    quarterly = "квартал" in text or "quarter" in text
+    if quarterly and ("выруч" in text or "revenue" in text) and "ebitda" not in text:
+        revenue = _revenue(scope)
+        totals = quarter_totals(revenue)
+        if totals and (
+            "не допускать снижения" in text
+            or "must not fall below" in text
+            or "minimum quarterly" in text
+        ):
+            actual, rows = min(totals, key=lambda pair: pair[0])
+            return finish(actual, rows, "semantic_quarterly_min_revenue")
+        if totals and (
+            "any single fiscal quarter" in text
+            or "наибольшая квартальная" in text
+            or "maximum quarterly revenue" in text
+        ):
+            quarter, rows = max(totals, key=lambda pair: pair[0])
+            annual = _sum(revenue)
+            actual = quarter / annual if annual else Decimal(0)
+            return finish(
+                actual,
+                revenue,
+                "semantic_quarterly_revenue_concentration",
+                aggregates={"max_quarter": quarter, "annual_revenue": annual},
+            )
+
+    if quarterly and ("маркет" in text or "marketing" in text) and (
+        "наибольш" in text or "любом отдельном" in text or "any single" in text
+    ):
+        marketing = _spend(scope, frozenset({Category.MARKETING}))
+        totals = quarter_totals(marketing)
+        if totals:
+            actual, rows = max(totals, key=lambda pair: pair[0])
+            return finish(actual, rows, "semantic_quarterly_max_spend")
+
+    if quarterly and "ebitda" in text and (
+        "не допускать снижения" in text or "must not fall below" in text
+    ):
+        buckets: dict[tuple[int, int], list[LedgerEntry]] = {}
+        for item in scope:
+            buckets.setdefault((item.day.year, (item.day.month - 1) // 3 + 1), []).append(item)
+        values = [(_ebitda(rows, EBITDA_OPEX), rows) for _, rows in sorted(buckets.items())]
+        if values:
+            actual, rows = min(values, key=lambda pair: pair[0])
+            return finish(actual, rows, "semantic_quarterly_min_ebitda")
+
+    if (
+        "запас покрытия постоянных расходов" in text
+        or "fixed cost coverage reserve" in text
+    ) and (
+        ("операцион" in text and "оплат" in text and "аренд" in text)
+        or ("operating expenses" in text and "personnel" in text and "lease" in text)
+    ):
+        revenue, revenue_rows = inflow(Category.REVENUE)
+        opex, opex_rows = spent(Category.OPEX)
+        personnel, personnel_rows = spent(Category.PERSONNEL)
+        lease, lease_rows = spent(Category.LEASE)
+        actual = revenue - opex - personnel - lease
+        return finish(
+            actual,
+            revenue_rows + opex_rows + personnel_rows + lease_rows,
+            "semantic_fixed_cost_reserve",
+            aggregates={
+                "revenue": revenue,
+                "opex": opex,
+                "personnel": personnel,
+                "lease": lease,
+            },
+        )
+
+    if group_capex is not None and (
+        "за пределами заёмщика" in text or "outside the borrower" in text
+    ):
+        borrower_capex, rows = spent(Category.CAPEX)
+        return finish(
+            group_capex - borrower_capex,
+            rows,
+            "semantic_group_capex_outside_borrower",
+            aggregates={"group_capex": group_capex, "borrower_capex": borrower_capex},
+        )
+
+    if group_capex is not None and (
+        ("процентн" in text and "арендн" in text)
+        or ("interest" in text and "lease" in text)
+    ) and ("процент" in text or "percent" in text):
+        interest, interest_rows = spent(Category.INTEREST)
+        lease, lease_rows = spent(Category.LEASE)
+        percent_match = re.search(r"(\d+(?:[.,]\d+)?)\s*(?:процент|percent|%)", text)
+        if percent_match:
+            allowed = group_capex * Decimal(percent_match.group(1).replace(",", ".")) / 100
+            actual = interest + lease
+            status = "COMPLIANT" if actual <= allowed else "BREACH"
+            return finish(
+                actual,
+                interest_rows + lease_rows,
+                "semantic_group_percentage_limit",
+                status=status,
+                aggregates={"actual_expense": actual, "allowed": allowed},
+            )
+
+    if ("арендн" in text or "rental" in text or "lease" in text) and (
+        "страхов" in text or "insurance" in text
+    ) and ("само по себе не влеч" in text or "do not cause default" in text):
+        amounts = [
+            Decimal(value.replace(",", ""))
+            for value in re.findall(r"\$\s*([\d,]+(?:\.\d{2})?)", text)
+        ]
+        if len(amounts) >= 2:
+            lease, lease_rows = spent(Category.LEASE)
+            insurance, insurance_rows = spent(Category.INSURANCE)
+            status = "COMPLIANT" if lease <= amounts[0] or insurance >= amounts[1] else "BREACH"
+            return finish(
+                lease,
+                lease_rows + insurance_rows,
+                "semantic_insurance_proviso",
+                status=status,
+                aggregates={"rent": lease, "insurance": insurance},
+            )
+
+    if ("арендн" in text or "rent" in text) and ("оплат" in text or "personnel" in text) and (
+        "% of revenue" in text or "% выруч" in text
+    ):
+        pct = re.search(r"(\d+(?:[.,]\d+)?)\s*%", text)
+        if pct:
+            personnel, _ = spent(Category.PERSONNEL)
+            revenue, _ = inflow(Category.REVENUE)
+            ratio = personnel / revenue if revenue else Decimal(0)
+            lease, rows = spent(Category.LEASE)
+            trigger = Decimal(pct.group(1).replace(",", ".")) / 100
+            status = "COMPLIANT" if ratio <= trigger else _verdict(lease, rule)
+            return finish(
+                lease,
+                rows,
+                "semantic_springing_percentage",
+                status=status,
+                aggregates={"condition_value": ratio, "condition_threshold": trigger},
+            )
+
+    leverage_match = re.search(
+        r"(?:превышает|exceeds)\s*(\d+(?:[.,]\d+)?)\s*x", text
+    )
+    if leverage_match and ("долгов" in text or "debt leverage" in text) and "ebitda" in text:
+        financing, fin_rows = inflow(Category.FINANCING)
+        ebitda = _ebitda(scope, EBITDA_OPEX)
+        leverage = financing / ebitda if ebitda else Decimal(0)
+        trigger = Decimal(leverage_match.group(1).replace(",", "."))
+        if "капитальн" in text or "capital expenditure" in text:
+            actual, rows = spent(Category.CAPEX)
+        elif "связанн" in text or "related part" in text or "распредел" in text:
+            actual, rows = _sum(_related(scope)), _related(scope)
+        else:
+            actual, rows = Decimal(0), []
+        status = "COMPLIANT" if leverage <= trigger else _verdict(actual, rule)
+        return finish(
+            actual,
+            rows + fin_rows,
+            "semantic_springing_leverage",
+            status=status,
+            aggregates={"leverage": leverage, "trigger": trigger, "ebitda": ebitda},
+        )
+
+    if "операционная маржа после расходов на персонал" in text:
+        revenue, rev_rows = inflow(Category.REVENUE)
+        personnel, p_rows = spent(Category.PERSONNEL)
+        tax, t_rows = spent(Category.TAX)
+        actual = (revenue - personnel - tax) / revenue if revenue else Decimal(0)
+        return finish(actual, rev_rows + p_rows + t_rows, "semantic_margin_after_personnel")
+
+    if all(
+        term in text
+        for term in ("поступлен", "финансирован", "уменьш", "процент", "налог")
+    ):
+        financing, f_rows = inflow(Category.FINANCING)
+        interest, i_rows = spent(Category.INTEREST)
+        tax, t_rows = spent(Category.TAX)
+        return finish(
+            financing - interest - tax,
+            f_rows + i_rows + t_rows,
+            "semantic_net_financing",
+        )
+
+    if "вклад в ликвидность" in text and "ebitda" in text and "финансирован" in text:
+        financing, f_rows = inflow(Category.FINANCING)
+        actual = _ebitda(scope, EBITDA_OPEX) + financing
+        return finish(actual, scope, "semantic_liquidity_contribution")
+
+    if (
+        ("одновременно выполняются оба" in text or "both of the following" in text)
+        and ("процентным расход" in text or "interest expenses" in text)
+        and "ebitda" in text
+    ):
+        debt_limit = re.search(r"(?:превышает|exceeds)\s*(\d+(?:[.,]\d+)?)\s*x", text)
+        cover_limit = re.search(
+            r"(?:менее|ниже|less than|below)\s*(\d+(?:[.,]\d+)?)\s*x", text
+        )
+        if debt_limit and cover_limit:
+            financing, f_rows = inflow(Category.FINANCING)
+            interest, i_rows = spent(Category.INTEREST)
+            ebitda = _ebitda(scope, EBITDA_OPEX)
+            debt_ratio = financing / ebitda if ebitda else Decimal(0)
+            interest_cover = ebitda / interest if interest else Decimal(0)
+            debt_threshold = Decimal(debt_limit.group(1).replace(",", "."))
+            cover_threshold = Decimal(cover_limit.group(1).replace(",", "."))
+            status = (
+                "BREACH"
+                if debt_ratio > debt_threshold and interest_cover < cover_threshold
+                else "COMPLIANT"
+            )
+            return finish(
+                debt_ratio,
+                f_rows + i_rows,
+                "semantic_both_debt_and_interest_cover",
+                status=status,
+                aggregates={"debt_ratio": debt_ratio, "interest_cover": interest_cover},
+            )
+
+    if (
+        ("любого из следующих" in text or "either of the following" in text)
+        and ("обслуживания долга" in text or "debt service coverage" in text)
+        and "ebitda" in text
+    ):
+        debt_limit = re.search(r"(?:превышает|exceeds)\s*(\d+(?:[.,]\d+)?)\s*x", text)
+        dscr_limit = re.search(
+            r"(?:менее|ниже|less than|below)\s*(\d+(?:[.,]\d+)?)\s*x", text
+        )
+        if debt_limit and dscr_limit:
+            financing, f_rows = inflow(Category.FINANCING)
+            interest, i_rows = spent(Category.INTEREST)
+            principal, p_rows = spent(Category.DEBT_PRINCIPAL)
+            ebitda = _ebitda(scope, EBITDA_OPEX)
+            debt_ratio = financing / ebitda if ebitda else Decimal(0)
+            service = interest + principal
+            dscr = ebitda / service if service else Decimal(0)
+            debt_threshold = Decimal(debt_limit.group(1).replace(",", "."))
+            dscr_threshold = Decimal(dscr_limit.group(1).replace(",", "."))
+            status = (
+                "BREACH"
+                if debt_ratio > debt_threshold or dscr < dscr_threshold
+                else "COMPLIANT"
+            )
+            return finish(
+                dscr,
+                f_rows + i_rows + p_rows,
+                "semantic_either_debt_or_dscr",
+                status=status,
+                aggregates={"debt_ratio": debt_ratio, "dscr": dscr},
+            )
+
+    if "обслуживания долга" in text and ("погашен" in text or "principal" in text):
+        interest, i_rows = spent(Category.INTEREST)
+        principal, p_rows = spent(Category.DEBT_PRINCIPAL)
+        ebitda = _ebitda(scope, EBITDA_OPEX)
+        service = interest + principal
+        actual = ebitda / service if service else Decimal(0)
+        return finish(actual, i_rows + p_rows, "semantic_debt_service_cover")
+
+    if "ebitdar" in text and ("аренд" in text or "lease" in text):
+        interest, i_rows = spent(Category.INTEREST)
+        lease, l_rows = spent(Category.LEASE)
+        actual = (_ebitda(scope, EBITDA_OPEX) + lease) / (interest + lease)
+        return finish(actual, i_rows + l_rows, "semantic_fixed_charge_cover")
+
+    if "net leverage ratio" in text and (
+        "maximum net debt leverage" in text
+        or ("shall not permit" in text and "unrestricted" not in text and "transfer" not in text)
+    ):
+        financing, f_rows = inflow(Category.FINANCING)
+        principal, p_rows = spent(Category.DEBT_PRINCIPAL)
+        ebitda = _ebitda(scope, EBITDA_OPEX)
+        actual = (financing - principal) / ebitda if ebitda else Decimal(0)
+        return finish(actual, f_rows + p_rows, "semantic_net_leverage")
+
+    return None
+
+
 def _evaluate_with_formula(
     rule: Rule,
     scope: list[LedgerEntry],
@@ -223,8 +563,6 @@ def _evaluate_with_formula(
     if numerator_constant is None:
         numerator, num_entries = _agg(scope, formula.numerator_agg, num_cats)
     else:
-        # Some group-level values come from audited statements rather than
-        # the borrower's transaction ledger.
         numerator, num_entries = numerator_constant, []
 
     if formula.is_conditional and formula.condition_threshold_dollars is not None:
@@ -430,6 +768,10 @@ def evaluate(
             and rule.kind in (RuleKind.RATIO, RuleKind.UNKNOWN)
         ):
             trace.quality_flags.append("missing_formula")
+
+    semantic = _semantic_rule_override(rule, scope, trace, numerator_constant)
+    if semantic is not None:
+        return semantic
 
     if full_context_calculation is not None:
         answer = Answer(

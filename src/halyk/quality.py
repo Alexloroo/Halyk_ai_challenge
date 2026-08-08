@@ -211,6 +211,10 @@ def assess_private_readiness(
                 )
             if rule.kind in (RuleKind.RATIO, RuleKind.UNKNOWN):
                 required_formulas += 1
+                details = evaluations.get(key)
+                semantic_evaluated = bool(
+                    details is not None and details.branch.startswith("semantic_")
+                )
                 full_context = full_context_results.get(key)
                 full_context_accepted = bool(getattr(full_context, "accepted", False))
                 capability = capability_results.get(key)
@@ -222,6 +226,7 @@ def assess_private_readiness(
                     and key not in formulas
                     and key not in generic_formulas
                     and not full_context_accepted
+                    and not semantic_evaluated
                 ):
                     add(
                         "FAIL",
@@ -234,6 +239,7 @@ def assess_private_readiness(
                     capability_resolution is not None
                     and capability_resolution.mode is CovenantMode.UNSUPPORTED
                     and not full_context_accepted
+                    and not semantic_evaluated
                 ):
                     add(
                         "WARN" if key in formulas else "FAIL",
@@ -247,6 +253,7 @@ def assess_private_readiness(
                     and key not in formulas
                     and key not in generic_formulas
                     and not full_context_accepted
+                    and not semantic_evaluated
                 ):
                     add(
                         "FAIL",
@@ -261,6 +268,7 @@ def assess_private_readiness(
                     verification is not None
                     and (verification_resolution is None or not verification_resolution.accepted)
                     and not full_context_accepted
+                    and not semantic_evaluated
                 ):
                     issues = (
                         ", ".join(verification_resolution.issues)
@@ -318,7 +326,11 @@ def assess_private_readiness(
                             clause,
                         )
 
-                if full_context is not None and not full_context_accepted:
+                if (
+                    full_context is not None
+                    and not full_context_accepted
+                    and not semantic_evaluated
+                ):
                     add(
                         "FAIL",
                         "full_context_rejected",

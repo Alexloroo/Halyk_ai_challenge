@@ -43,6 +43,14 @@ WORDED_THRESHOLDS = (
     ),
     (
         re.compile(
+            r"не\s+менее\s+тр[её]х\s+десятых|at\s+least\s+three\s+tenths|"
+            r"кемінде\s+оннан\s+үш",
+            re.I,
+        ),
+        Decimal("30"),
+    ),
+    (
+        re.compile(
             r"не\s+менее\s+одной\s+трети|at\s+least\s+one\s+third|кемінде\s+үштен\s+бір",
             re.I,
         ),
@@ -63,10 +71,6 @@ EXPLICIT_UNRESTRICTED = re.compile(
     r"НЕОГРАНИЧЕННАЯ\s+ДОЧЕРНЯЯ\s+ОРГАНИЗАЦИЯ",
     re.I,
 )
-#: Some dossiers carry a second table — the share of each subsidiary's assets
-#: pledged as security. Subsidiaries below the stated pledge threshold sit
-#: outside the security perimeter and count as *unrestricted* for the
-#: agreement. That table must not leak into the ownership parsing.
 PLEDGE_SECTION = re.compile(
     r"(?:Обеспечительное\s+покрытие\s+дочерних\s+организаций.*?как\s+неограниченные|"
     r"Еншілес\s+ұйымдардың\s+қамтамасыз\s+ету\s+қамтылуы.*?шектелмеген\s+ұйымдар)\.",
@@ -77,14 +81,16 @@ PLEDGE_THRESHOLD = re.compile(
     r"(\d+(?:[.,]\d+)?)\s*%\s*(?:-дан|-ден|-тан|-тен)\s+төмен",
     re.I,
 )
-#: The dossier renders its ownership table one cell per line:
-#:     Aktau Holdings LLP
-#:     34.5%
-#: so the name and its share are on separate lines, not side by side.
 HOLDING = re.compile(
     r"^[ \t]*([^\n%]*?(?:L\.?L\.?P\.?|JSC|LLC|Ltd|АО|ТОО|ООО|ЖШС|АҚ))\.?[ \t]*\n"
     r"[ \t]*(\d+(?:[.,]\d+)?)[ \t]*%",
     re.MULTILINE,
+)
+INDIRECT_HOLDING = re.compile(
+    r"Доля\s+в\s+([^\n;]+?(?:L\.?L\.?P\.?|JSC|LLC|Ltd|АО|ТОО|ООО|ЖШС|АҚ))\s+"
+    r"удерживается\s+косвенно\s+через\s+[^;]+;.*?"
+    r"принадлежит\s+(\d+(?:[.,]\d+)?)\s*%",
+    re.S | re.I,
 )
 
 
@@ -130,6 +136,19 @@ def extract_related_parties(scenario_id: str, kyc_text: str) -> RelatedParties:
 
     holdings = [
         (" ".join(name.split()), _number(share)) for name, share in HOLDING.findall(kyc_text)
+    ]
+    indirect = {
+        " ".join(name.split()).casefold(): _number(intermediate_share)
+        for name, intermediate_share in INDIRECT_HOLDING.findall(kyc_text)
+    }
+    holdings = [
+        (
+            name,
+            share * indirect[name.casefold()] / Decimal("100")
+            if name.casefold() in indirect
+            else share,
+        )
+        for name, share in holdings
     ]
     threshold_names = (
         frozenset(name for name, share in holdings if share >= threshold)

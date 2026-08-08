@@ -183,7 +183,6 @@ def load_template(path: Path) -> dict[str, list[str]]:
 
 
 def _fallback(scenario_id: str, clause: str, note: str) -> Answer:
-    """Never leave a cell empty; a blank and a wrong answer cost the same."""
     from decimal import Decimal
 
     return Answer(
@@ -1010,14 +1009,27 @@ def solve(
                 )
                 details = EvaluationTrace()
                 if full_context_result is not None and not full_context_result.accepted:
-                    answer = _fallback(scenario_id, clause, "full_context_rejected")
-                    details.scope_txn_ids = [entry.txn_id for entry in scenario_entries]
-                    details.branch = "full_context_rejected"
-                    details.comparator = rule.comparator
-                    details.threshold = rule.threshold
-                    details.actual = answer.actual
-                    details.status = answer.status
-                    details.note = answer.note
+                    candidate = evaluate(
+                        rule,
+                        scenario_entries,
+                        formula=formula,
+                        generic_formula=generic_formula,
+                        external_metrics=formula_external_metrics,
+                        documentary_fact=documentary_fact,
+                        trace=details,
+                        numerator_constant=numerator_constant,
+                    )
+                    if candidate.note.startswith("semantic_"):
+                        answer = candidate
+                    else:
+                        answer = _fallback(scenario_id, clause, "full_context_rejected")
+                        details.scope_txn_ids = [entry.txn_id for entry in scenario_entries]
+                        details.branch = "full_context_rejected"
+                        details.comparator = rule.comparator
+                        details.threshold = rule.threshold
+                        details.actual = answer.actual
+                        details.status = answer.status
+                        details.note = answer.note
                 else:
                     answer = evaluate(
                         rule,

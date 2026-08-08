@@ -38,7 +38,7 @@ class Category(StrEnum):
     DEBT_PRINCIPAL = "debt_principal"
     ASSET_TRANSFER = "asset_transfer"
     DISTRIBUTION = "distribution"
-    CONTRA = "contra"  # refunds, credits, reversals — reduce a cost
+    CONTRA = "contra"
     UNKNOWN = "unknown"
 
 
@@ -46,7 +46,6 @@ def _rx(*parts: str) -> re.Pattern[str]:
     return re.compile("|".join(parts), re.IGNORECASE)
 
 
-# Tested first: these reverse a cost and must never count as revenue.
 CONTRA = _rx(
     r"\brebate\b",
     r"\brefund",
@@ -72,7 +71,6 @@ CONTRA = _rx(
     r"түзету кредит",
 )
 
-# Genuine trading income.
 REVENUE = _rx(
     r"\bsales?\b",
     r"\brevenue\b",
@@ -89,9 +87,9 @@ REVENUE = _rx(
     r"клиент төлемі",
 )
 
-# Borrowing proceeds. These are inflows, but never trading revenue.
 FINANCING = _rx(
     r"\b(?:term\s+)?loan\s+(?:facility\s+)?(?:drawdown|proceeds|disbursement)\b",
+    r"\bfacility\s+(?:drawdown|proceeds|disbursement)\b",
     r"\b(?:revolver|revolving|credit)\s+facility\s+(?:drawdown|proceeds)\b",
     r"\bborrowing\s+proceeds\b",
     r"\bfinancing\s+(?:receipts|proceeds)\b",
@@ -124,8 +122,6 @@ DISTRIBUTION = _rx(
     r"бөлінбеген\s+пайда",
 )
 
-# Generic operating services are high-confidence OPEX. More specific category
-# rules below are still evaluated first.
 GENERIC_OPEX = _rx(
     r"\boperating costs?\b",
     r"\boperating and maintenance\b",
@@ -344,6 +340,8 @@ def assess_category(
     if len(candidates) == 1:
         return CategorizationAssessment(candidates[0], candidates, "single_match", False)
     if len(candidates) > 1:
+        if Category.CAPEX in candidates:
+            return CategorizationAssessment(Category.CAPEX, candidates, "specific_capex", False)
         return CategorizationAssessment(candidates[0], candidates, "ordered_match", False)
     if GENERIC_OPEX.search(text):
         return CategorizationAssessment(Category.OPEX, (Category.OPEX,), "generic_opex", False)
@@ -359,7 +357,6 @@ def categorize(description: str, *, is_inflow: bool = False) -> Category:
     return assess_category(description, is_inflow=is_inflow).category
 
 
-#: Categories that make up operating expenditure when a covenant says "opex".
 OPEX_LIKE = frozenset(
     {
         Category.OPEX,

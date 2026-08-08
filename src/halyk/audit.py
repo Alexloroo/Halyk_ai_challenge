@@ -17,7 +17,7 @@ from datetime import date
 from decimal import Decimal
 from enum import StrEnum
 
-from .categorize import Category
+from .categorize import Category, categorize
 from .ledger import LedgerEntry
 
 CATEGORY_MAP: dict[str, Category] = {
@@ -60,6 +60,7 @@ class AuditAdjustment:
     old_category: Category | None
     new_category: Category | None
     description: str
+    is_inflow: bool | None = None
 
 
 @dataclass(frozen=True)
@@ -71,7 +72,7 @@ class FXSettlement:
 
 
 def _match_category(text: str) -> Category | None:
-    lower = text.lower().strip()
+    lower = " ".join(text.lower().split())
     for phrase, cat in CATEGORY_MAP.items():
         if phrase in lower:
             return cat
@@ -199,9 +200,6 @@ def apply_fx_settlements(entries: list[LedgerEntry], settlements: list[FXSettlem
     return corrected
 
 
-#: Group-level capex is not in any ledger: it is derived from the PP&E note of
-#: the ultimate parent's consolidated statements. With no disposals in the
-#: year, additions = closing NBV - opening NBV + depreciation charge.
 NBV_BEGIN = re.compile(
     r"Net book value at the beginning of the year\s*\n?\$\s*([\d,]+(?:\.\d{2})?)",
     re.I,
@@ -317,6 +315,7 @@ def extract_adjustments(audit_text: str) -> list[AuditAdjustment]:
 
         missing = MISSING_TXN.search(block)
         if missing:
+            direction_text = block[missing.start() :]
             adjustments.append(
                 AuditAdjustment(
                     kind=AdjustmentKind.MISSING_ENTRY,
@@ -326,6 +325,13 @@ def extract_adjustments(audit_text: str) -> list[AuditAdjustment]:
                     old_category=None,
                     new_category=None,
                     description=missing.group(0)[:200],
+                    is_inflow=bool(
+                        re.search(
+                            r"\b(?:поступлен\w*|inflow|receipt|кіріс)\b",
+                            direction_text,
+                            re.I,
+                        )
+                    ),
                 )
             )
 
@@ -400,7 +406,9 @@ def apply_adjustments(
             if adj.txn_id and adj.amount is not None:
                 existing = next((e for e in result if e.txn_id == adj.txn_id), None)
                 if existing:
-                    existing.amount = -adj.amount
+                    existing.amount = adj.amount if adj.is_inflow else -adj.amount
+                    if adj.is_inflow:
+                        existing.category = categorize(existing.description, is_inflow=True)
                     existing.audit_corrected = True
                     existing.defects = [d for d in existing.defects if d != "missing_amount"]
             elif adj.txn_id is None and adj.amount is not None:

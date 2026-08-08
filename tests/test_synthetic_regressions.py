@@ -17,7 +17,7 @@ from halyk.docs import ACCOUNT, DocKind, Document, Edition, pick
 from halyk.evaluate import EvaluationTrace, evaluate, find_evidence
 from halyk.ledger import LedgerEntry
 from halyk.llm_extract import AggKind, FormulaSpec, OutputKind, apply_formula_context
-from halyk.parties import RelatedParties, mark_related
+from halyk.parties import RelatedParties, extract_related_parties, mark_related
 from halyk.rules import Rule, RuleKind, extract_rules
 
 
@@ -82,8 +82,9 @@ def test_category_classifier_handles_control_system_and_shared_service_payment()
     assert categorize("Group warehouse service") is Category.OPEX
 
 
-def test_private_debt_and_transfer_transactions_get_semantic_categories() -> None:
+def test_debt_and_transfer_transactions_get_semantic_categories() -> None:
     assert categorize("Promissory note proceeds", is_inflow=True) is Category.FINANCING
+    assert categorize("Facility drawdown for grid works", is_inflow=True) is Category.FINANCING
     assert categorize("Term loan principal repayment 2025") is Category.DEBT_PRINCIPAL
     assert categorize("Processing equipment transfer to group entity") is Category.ASSET_TRANSFER
     assert categorize("Intercompany distribution settlement") is Category.DISTRIBUTION
@@ -152,7 +153,7 @@ def test_non_acc_account_identifier_is_linked_to_its_documents() -> None:
     assert ACCOUNT.findall("Account TELE-4471") == ["TELE-4471"]
 
 
-def test_rule_parser_accepts_private_like_formatting_and_currency() -> None:
+def test_rule_parser_accepts_multiline_formatting_and_currency() -> None:
     agreement = """
 Clause 6 . 1) Minimum revenue.
 Revenue from 01.01.2026 to 31.12.2026 must be at least 500 000,00 USD.
@@ -218,7 +219,7 @@ def test_only_actionable_unknown_documents_are_audit_candidates() -> None:
     )
 
 
-def test_cutoff_uses_document_financial_year_instead_of_hardcoded_year() -> None:
+def test_cutoff_uses_document_financial_year() -> None:
     text = """
 Операция TXN-Z9-0001 относится к услугам, оказанным в период с 2031-01-01.
 ZETA JSC · 2030 ФИН. ГОД
@@ -280,6 +281,301 @@ def test_audit_missing_amount_has_typed_lineage_and_can_be_evidence() -> None:
 
     assert adjusted.audit_corrected is True
     assert find_evidence(covenant, [adjusted], answer) == adjusted.txn_id
+
+
+def test_audit_missing_amount_preserves_explicit_inflow_direction() -> None:
+    missing = entry("TXN-X-0001", "-1", Category.OPEX, "Customer sales settlement")
+    missing.amount = None
+
+    adjusted = apply_adjustments(
+        [missing],
+        extract_adjustments(
+            "Операция TXN-X-0001: сумма не отражена в выгрузке; "
+            "фактическая сумма операции составляет $600.00 (поступление)."
+        ),
+    )[0]
+
+    assert adjusted.amount == Decimal("600.00")
+    assert adjusted.category is Category.REVENUE
+
+
+def test_audit_reclassification_category_survives_pdf_line_break() -> None:
+    item = entry("TXN-X-0001", "-250", Category.PROFESSIONAL)
+    adjusted = apply_adjustments(
+        [item],
+        extract_adjustments(
+            "Операция TXN-X-0001, первоначально учтённая как Консультационные услуги, "
+            "переклассифицирована для целей соблюдения ковенантов как Маркетинговые\nрасходы."
+        ),
+    )[0]
+
+    assert adjusted.category is Category.MARKETING
+
+
+def test_related_parties_support_three_tenths_worded_threshold() -> None:
+    parties = extract_related_parties(
+        "X",
+        """Организация
+Alpha Advisers LLP
+37.4%
+Beta Trading LLP
+29.9%
+Организации, в которых Группе принадлежит не менее трёх десятых голосующих прав,
+признаются связанными сторонами для целей Договора.
+""",
+    )
+
+    assert parties.threshold_percent == Decimal("30")
+    assert parties.names == frozenset({"Alpha Advisers LLP"})
+
+
+def test_related_parties_use_effective_share_for_indirect_holding() -> None:
+    parties = extract_related_parties(
+        "X",
+        """Target Trading LLP
+61.0%
+Direct Advisers LLP
+37.4%
+Организации, в которых Группе принадлежит не менее трёх десятых голосующих прав,
+признаются связанными сторонами для целей Договора.
+Доля в Target Trading LLP удерживается косвенно через Intermediate Ventures LLP;
+Группе принадлежит 26.0% голосующих прав в Intermediate Ventures LLP. Для целей настоящего
+раздела учитывается эффективная доля Группы.
+""",
+    )
+
+    assert parties.names == frozenset({"Direct Advisers LLP"})
+
+
+def test_quarterly_revenue_covenant_uses_weakest_quarter() -> None:
+    covenant = rule(
+        text=(
+            "Revenue in any financial quarter must not fall below $500.00; "
+            "annual compliance does not cure a quarterly breach."
+        ),
+        threshold="500",
+    )
+    covenant.comparator = ">="
+    rows = [
+        entry("TXN-X-1", "700", Category.REVENUE),
+        entry("TXN-X-2", "300", Category.REVENUE),
+    ]
+    rows[0].day = date(2025, 2, 1)
+    rows[1].day = date(2025, 5, 1)
+
+    answer = evaluate(covenant, rows, formula=FormulaSpec(
+        output_kind=OutputKind.DOLLAR_AMOUNT,
+        numerator_agg=AggKind.REVENUE,
+        numerator_categories=[],
+        comparator=">=",
+    ))
+
+    assert answer.actual == Decimal("300")
+    assert answer.status == "BREACH"
+    assert answer.note == "semantic_quarterly_min_revenue"
+
+
+def test_quarterly_ebitda_covenant_does_not_use_quarterly_revenue() -> None:
+    covenant = rule(
+        text=(
+            "EBITDA for any financial quarter must not fall below $500.00. EBITDA is "
+            "Revenue recognised in that quarter less Operating Expenses in that quarter."
+        ),
+        threshold="500",
+    )
+    covenant.comparator = ">="
+    rows = [
+        entry("TXN-X-1", "700", Category.REVENUE),
+        entry("TXN-X-2", "-100", Category.OPEX),
+        entry("TXN-X-3", "800", Category.REVENUE),
+        entry("TXN-X-4", "-400", Category.OPEX),
+    ]
+    rows[0].day = rows[1].day = date(2025, 2, 1)
+    rows[2].day = rows[3].day = date(2025, 5, 1)
+
+    answer = evaluate(covenant, rows)
+
+    assert answer.actual == Decimal("400")
+    assert answer.status == "BREACH"
+    assert answer.note == "semantic_quarterly_min_ebitda"
+
+
+def test_springing_capex_uses_debt_to_ebitda_trigger() -> None:
+    covenant = rule(
+        text=(
+            "If the Borrower's debt leverage ratio (total debt to EBITDA) exceeds 2.40x, "
+            "Capital Expenditures must not exceed $500.00."
+        ),
+        threshold="500",
+    )
+    rows = [
+        entry("TXN-X-1", "1000", Category.REVENUE),
+        entry("TXN-X-2", "300", Category.FINANCING),
+        entry("TXN-X-3", "-900", Category.CAPEX),
+        entry("TXN-X-4", "-900", Category.OPEX),
+    ]
+
+    answer = evaluate(covenant, rows)
+
+    assert answer.actual == Decimal("900")
+    assert answer.status == "BREACH"
+    assert answer.note == "semantic_springing_leverage"
+
+
+def test_group_capex_outside_borrower_subtracts_borrower_capex() -> None:
+    covenant = rule(
+        text=(
+            "Group Capital Expenditures outside the Borrower means consolidated Group "
+            "Capital Expenditures less the Borrower's Capital Expenditures and must not "
+            "exceed $2,000.00."
+        ),
+        threshold="2000",
+    )
+
+    answer = evaluate(
+        covenant,
+        [entry("TXN-X-1", "-600", Category.CAPEX)],
+        numerator_constant=Decimal("3000"),
+    )
+
+    assert answer.actual == Decimal("2400")
+    assert answer.status == "BREACH"
+    assert answer.note == "semantic_group_capex_outside_borrower"
+
+
+def test_financing_and_occupancy_cap_uses_group_capex_as_limit() -> None:
+    covenant = rule(
+        text=(
+            "Aggregate financing and occupancy charges mean Interest Expenses plus Lease "
+            "Payments and must not exceed 5 percent of Consolidated Group Capital Expenditures."
+        ),
+        threshold="0.05",
+    )
+
+    answer = evaluate(
+        covenant,
+        [
+            entry("TXN-X-1", "-120", Category.INTEREST),
+            entry("TXN-X-2", "-20", Category.LEASE),
+        ],
+        numerator_constant=Decimal("3000"),
+    )
+
+    assert answer.actual == Decimal("140")
+    assert answer.status == "COMPLIANT"
+    assert answer.note == "semantic_group_percentage_limit"
+
+
+def test_rental_cap_insurance_proviso_prevents_false_breach() -> None:
+    covenant = rule(
+        text=(
+            "Rental payments above $1,000.00 do not cause default if insurance premiums "
+            "are at least $200.00. Both conditions are tested jointly."
+        ),
+        threshold="1000",
+    )
+    answer = evaluate(
+        covenant,
+        [
+            entry("TXN-X-1", "-1200", Category.LEASE),
+            entry("TXN-X-2", "-250", Category.INSURANCE),
+        ],
+    )
+
+    assert answer.actual == Decimal("1200")
+    assert answer.status == "COMPLIANT"
+    assert answer.note == "semantic_insurance_proviso"
+
+
+def test_net_leverage_ratio_uses_financing_less_principal_over_ebitda() -> None:
+    covenant = rule(
+        text="The Borrower shall not permit its Net Leverage Ratio to exceed 3.00x.",
+        threshold="3",
+    )
+    rows = [
+        entry("TXN-X-1", "1000", Category.FINANCING),
+        entry("TXN-X-2", "-100", Category.DEBT_PRINCIPAL),
+        entry("TXN-X-3", "500", Category.REVENUE),
+        entry("TXN-X-4", "-200", Category.OPEX),
+    ]
+
+    answer = evaluate(covenant, rows)
+
+    assert answer.actual == Decimal("3")
+    assert answer.status == "COMPLIANT"
+    assert answer.note == "semantic_net_leverage"
+
+
+def test_cash_sweep_event_preserves_either_debt_or_dscr_trigger() -> None:
+    covenant = rule(
+        text=(
+            "An event occurs upon either of the following: (a) Total Debt to EBITDA exceeds "
+            "3.00x; or (b) Debt Service Coverage Ratio is less than 1.30x. Debt Service "
+            "Coverage Ratio means EBITDA divided by Interest Expenses and scheduled "
+            "principal repayments."
+        ),
+        threshold="3",
+    )
+    rows = [
+        entry("TXN-X-1", "1000", Category.FINANCING),
+        entry("TXN-X-2", "500", Category.REVENUE),
+        entry("TXN-X-3", "-200", Category.OPEX),
+        entry("TXN-X-4", "-150", Category.INTEREST),
+        entry("TXN-X-5", "-100", Category.DEBT_PRINCIPAL),
+    ]
+
+    answer = evaluate(covenant, rows)
+
+    assert answer.actual == Decimal("1.2")
+    assert answer.status == "BREACH"
+    assert answer.note == "semantic_either_debt_or_dscr"
+
+
+def test_default_event_requires_both_debt_and_interest_cover_conditions() -> None:
+    covenant = rule(
+        text=(
+            "Default occurs if and only if both of the following conditions are satisfied: "
+            "(a) Total Debt to EBITDA exceeds 3.25x; and (b) EBITDA to Interest Expenses is "
+            "less than 2.00x. The Borrower reports Total Debt to EBITDA as the tested metric."
+        ),
+        threshold="3.25",
+    )
+    rows = [
+        entry("TXN-X-1", "1000", Category.FINANCING),
+        entry("TXN-X-2", "500", Category.REVENUE),
+        entry("TXN-X-3", "-200", Category.OPEX),
+        entry("TXN-X-4", "-160", Category.INTEREST),
+    ]
+
+    answer = evaluate(covenant, rows)
+
+    assert answer.actual == Decimal("3.333333333333333333333333333")
+    assert answer.status == "BREACH"
+    assert answer.note == "semantic_both_debt_and_interest_cover"
+
+
+def test_fixed_cost_reserve_subtracts_all_named_expense_categories() -> None:
+    covenant = rule(
+        text=(
+            "Fixed Cost Coverage Reserve means Revenue for the period less the aggregate "
+            "of Operating Expenses, Personnel Expenses and Lease Payments, and must be "
+            "at least $1,200.00."
+        ),
+        threshold="1200",
+    )
+    covenant.comparator = ">="
+    rows = [
+        entry("TXN-X-1", "9500", Category.REVENUE),
+        entry("TXN-X-2", "-6400", Category.OPEX),
+        entry("TXN-X-3", "-950", Category.PERSONNEL),
+        entry("TXN-X-4", "-430", Category.LEASE),
+    ]
+
+    answer = evaluate(covenant, rows)
+
+    assert answer.actual == Decimal("1720")
+    assert answer.status == "COMPLIANT"
+    assert answer.note == "semantic_fixed_cost_reserve"
 
 
 def test_conditional_formula_uses_financing_trigger_but_reports_tested_actual() -> None:
