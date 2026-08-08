@@ -27,13 +27,16 @@ from .audit import (
     extract_adjustments,
     extract_fx_rates,
     extract_group_capex,
+    is_actionable_audit_text,
 )
-from .categorize import categorize
+from .categorize import assess_category
 from .docs import DocKind, Document, DocumentLoadIssue, Edition, load_documents, pick
 from .evaluate import Answer, EvaluationTrace, evaluate, find_evidence
 from .ledger import LedgerEntry, by_scenario, load_ledger
+from .llm_categorize import CategoryRequest, FlowDirection, resolve_categories
 from .llm_extract import FormulaSpec, extract_formulas
 from .parties import extract_related_parties, mark_related, mark_unrestricted
+from .quality import PrivateReadinessReport, assess_private_readiness
 from .rules import Rule, extract_rules
 from .tracing import TraceWriter
 from .tracing.documents import trace_classified, trace_pymupdf
@@ -63,6 +66,7 @@ class RunReport:
     agreements_missing: list[str] = field(default_factory=list)
     parties_unresolved: list[str] = field(default_factory=list)
     notes: list[str] = field(default_factory=list)
+    private_readiness: PrivateReadinessReport | None = None
 
 
 def account_map(entries: list[LedgerEntry]) -> dict[str, str]:
@@ -136,10 +140,65 @@ def solve(
             trace_loaded(trace, entries)
 
     with _trace_stage(trace, "03_ledger_categorized"):
-        for entry in entries:
-            entry.category = categorize(entry.description, is_inflow=entry.is_inflow)
+        categorization_records: list[dict[str, object]] = []
+        category_requests: list[CategoryRequest] = []
+        records_by_key: dict[str, dict[str, object]] = {}
+        entries_by_key: dict[str, LedgerEntry] = {}
+        for index, entry in enumerate(entries):
+            assessment = assess_category(entry.description, is_inflow=entry.is_inflow)
+            entry.category = assessment.category
+            key = f"{entry.txn_id}#{index}"
+            record: dict[str, object] = {
+                "key": key,
+                "txn_id": entry.txn_id,
+                "description": entry.description,
+                "counterparty": entry.counterparty,
+                "direction": (
+                    FlowDirection.INFLOW
+                    if entry.is_inflow
+                    else FlowDirection.OUTFLOW
+                    if entry.is_outflow
+                    else None
+                ),
+                "initial_category": assessment.category,
+                "candidate_categories": assessment.candidates,
+                "reason": assessment.reason,
+                "needs_llm": assessment.needs_llm,
+                "llm_requested": False,
+                "llm_result": None,
+                "final_category": assessment.category,
+            }
+            categorization_records.append(record)
+            records_by_key[key] = record
+            entries_by_key[key] = entry
+            if assessment.needs_llm and use_llm and (entry.is_inflow or entry.is_outflow):
+                direction = (
+                    FlowDirection.INFLOW if entry.is_inflow else FlowDirection.OUTFLOW
+                )
+                category_requests.append(
+                    CategoryRequest(
+                        key=key,
+                        description=entry.description,
+                        counterparty=entry.counterparty,
+                        direction=direction,
+                    )
+                )
+                record["llm_requested"] = True
+
+        category_results = resolve_categories(category_requests) if category_requests else {}
+        for key, result in category_results.items():
+            record = records_by_key[key]
+            record["llm_result"] = result
+            if result.resolution is not None:
+                entries_by_key[key].category = result.resolution.category
+                record["final_category"] = result.resolution.category
+        report.notes.append(
+            f"Category LLM resolutions: "
+            f"{sum(result.resolution is not None for result in category_results.values())}/"
+            f"{len(category_results)}"
+        )
         if trace is not None:
-            trace_categorized(trace, entries)
+            trace_categorized(trace, entries, categorization_records)
 
     with _trace_stage(trace, "04_pymupdf"):
         document_issues: list[DocumentLoadIssue] = []
@@ -162,6 +221,8 @@ def solve(
             trace_account_mapping(trace, accounts)
 
     all_rules: dict[str, dict[str, Rule]] = {}
+    selected_agreements: dict[str, Document | None] = {}
+    party_results: dict[str, object] = {}
     total_adjustments = 0
     parties_resolved = 0
     for scenario_id in template:
@@ -172,12 +233,19 @@ def solve(
             audit_docs = [
                 document
                 for document in docs
-                if document.kind in (DocKind.AUDIT_NOTES, DocKind.UNKNOWN)
+                if (
+                    document.kind is DocKind.AUDIT_NOTES
+                    or (
+                        document.kind is DocKind.UNKNOWN
+                        and is_actionable_audit_text(document.text)
+                    )
+                )
                 and document.edition is Edition.CURRENT
                 and account in document.account_ids
             ]
             kyc = pick(docs, DocKind.KYC, account)
             agreement = pick(docs, DocKind.CREDIT_AGREEMENT, account)
+            selected_agreements[scenario_id] = agreement
             if trace is not None:
                 trace_selected(
                     trace,
@@ -228,6 +296,7 @@ def solve(
                 report.parties_unresolved.append(scenario_id)
             if trace is not None:
                 trace_parties(trace, scenario_id, parties, scenario_entries)
+            party_results[scenario_id] = parties
 
         with _trace_stage(trace, "10_rules"):
             rules: dict[str, Rule] = (
@@ -259,6 +328,7 @@ def solve(
             trace_formulas(trace, all_rules, formulas, enabled=use_llm)
 
     with _trace_stage(trace, "12_evaluation"):
+        evaluation_details: dict[str, EvaluationTrace] = {}
         for scenario_id, clauses in template.items():
             scenario_entries = grouped.get(scenario_id, [])
             rules = all_rules.get(scenario_id, {})
@@ -286,7 +356,7 @@ def solve(
                     if _GROUP_CAPEX_CLAUSE.search(rule.text)
                     else None
                 )
-                details = EvaluationTrace() if trace is not None else None
+                details = EvaluationTrace()
                 answer = evaluate(
                     rule,
                     scenario_entries,
@@ -294,6 +364,7 @@ def solve(
                     trace=details,
                     numerator_constant=numerator_constant,
                 )
+                evaluation_details[f"{scenario_id}/{clause}"] = details
                 evidence_trials: dict[str, str] = {}
                 answer.evidence_txn_id = find_evidence(
                     rule,
@@ -319,6 +390,30 @@ def solve(
             report.answers[scenario_id] = cells
         if trace is not None:
             trace.update_stage("12_evaluation", cells=report.cells_expected)
+
+        report.private_readiness = assess_private_readiness(
+            template=template,
+            grouped=grouped,
+            agreements=selected_agreements,
+            parties=party_results,
+            rules=all_rules,
+            formulas=formulas,
+            evaluations=evaluation_details,
+            categorization_records=categorization_records,
+            document_issues=document_issues,
+            llm_enabled=use_llm,
+        )
+        if trace is not None:
+            trace.write_root_json("private_readiness.json", report.private_readiness)
+            trace.write_json(
+                "12_evaluation", "private_readiness.json", report.private_readiness
+            )
+            trace.update_stage(
+                "12_evaluation",
+                private_readiness=report.private_readiness.status,
+                private_readiness_failures=report.private_readiness.checks["failures"],
+                private_readiness_warnings=report.private_readiness.checks["warnings"],
+            )
 
     return report
 

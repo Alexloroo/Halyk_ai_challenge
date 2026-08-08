@@ -177,6 +177,17 @@ class TraceWriter:
         self._register(stage, path)
         return path
 
+    def write_root_json(self, name: str, payload: Any) -> Path:
+        """Write a top-level run summary without creating another pipeline stage."""
+        path = (self.root / name).resolve()
+        if path.parent != self.root or path.name == "manifest.json":
+            raise ValueError(f"unsafe trace summary artifact: {name}")
+        path.write_text(
+            json.dumps(jsonable(payload), ensure_ascii=False, indent=2) + "\n",
+            encoding="utf-8",
+        )
+        return path
+
     def write_text(self, stage: str, name: str, content: str) -> Path:
         path = self._artifact_path(stage, name)
         path.write_text(content, encoding="utf-8")

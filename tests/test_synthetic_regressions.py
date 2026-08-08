@@ -4,8 +4,13 @@ from datetime import date
 from decimal import Decimal
 from pathlib import Path
 
-from halyk.audit import AdjustmentKind, apply_adjustments, extract_adjustments
-from halyk.categorize import Category, categorize
+from halyk.audit import (
+    AdjustmentKind,
+    apply_adjustments,
+    extract_adjustments,
+    is_actionable_audit_text,
+)
+from halyk.categorize import Category, assess_category, categorize
 from halyk.docs import ACCOUNT, DocKind, Document, Edition, pick
 from halyk.evaluate import EvaluationTrace, evaluate, find_evidence
 from halyk.ledger import LedgerEntry
@@ -69,6 +74,19 @@ def test_category_classifier_handles_control_system_and_shared_service_payment()
     assert categorize("Group warehouse service") is Category.OPEX
 
 
+def test_category_assessment_resolves_known_conflicts_and_routes_novel_text_to_llm() -> None:
+    financing = assess_category("Term loan facility drawdown", is_inflow=True)
+    marketing = assess_category("Point-of-sale marketing materials", is_inflow=False)
+    novel = assess_category("Orbital fleet synchronization", is_inflow=False)
+
+    assert financing.category is Category.FINANCING
+    assert financing.needs_llm is False
+    assert marketing.category is Category.MARKETING
+    assert marketing.needs_llm is False
+    assert novel.category is Category.OPEX
+    assert novel.needs_llm is True
+
+
 def test_related_party_matching_is_exact_after_safe_name_normalization() -> None:
     parties = RelatedParties(
         scenario_id="X", threshold_percent=Decimal("25"), holdings=[],
@@ -102,6 +120,44 @@ def test_document_picker_prefers_executed_agreement_over_long_training_memo() ->
 def test_subaccount_identifier_does_not_match_primary_account() -> None:
     assert ACCOUNT.findall("KYC-ACC Account ID: ACC-8819-02") == []
     assert ACCOUNT.findall("KYC-ACC Account ID: ACC-8819") == ["ACC-8819"]
+    assert ACCOUNT.findall("KYC-ACC Account ID: ACC-123456") == ["ACC-123456"]
+
+
+def test_rule_parser_accepts_private_like_formatting_and_currency() -> None:
+    agreement = """
+Clause 6 . 1) Minimum revenue.
+Revenue from 01.01.2026 to 31.12.2026 must be at least 500 000,00 USD.
+Clause 6.2: Professional services ratio.
+Professional services / revenue must not exceed 0,30x.
+Article 7
+"""
+    rules = extract_rules("PRIVATE99", agreement)
+
+    assert rules["6.1"].threshold == Decimal("500000.00")
+    assert rules["6.1"].period == (date(2026, 1, 1), date(2026, 12, 31))
+    assert rules["6.1"].comparator == ">="
+    assert rules["6.2"].threshold == Decimal("0.30")
+    assert rules["6.2"].comparator == "<="
+
+
+def test_only_actionable_unknown_documents_are_audit_candidates() -> None:
+    assert is_actionable_audit_text("ACC-123456 weekly operational status") is False
+    assert is_actionable_audit_text(
+        "Операция TXN-Z9-0001 исключена из ковенантного периода."
+    ) is True
+
+
+def test_cutoff_uses_document_financial_year_instead_of_hardcoded_year() -> None:
+    text = """
+Операция TXN-Z9-0001 относится к услугам, оказанным в период с 2031-01-01.
+ZETA JSC · 2030 ФИН. ГОД
+"""
+
+    adjustments = extract_adjustments(text)
+
+    assert [(item.kind, item.txn_id) for item in adjustments] == [
+        (AdjustmentKind.EXCLUDE, "TXN-Z9-0001")
+    ]
 
 
 def test_audit_adjustments_do_not_cross_transaction_blocks() -> None:
@@ -143,7 +199,7 @@ def test_audit_missing_amount_has_typed_lineage_and_can_be_evidence() -> None:
 def test_conditional_formula_uses_financing_trigger_but_reports_tested_actual() -> None:
     entries = [
         entry("TXN-X-1", "-650", Category.MARKETING),
-        entry("TXN-X-2", "1000", Category.UNKNOWN, "Loan facility proceeds"),
+        entry("TXN-X-2", "1000", Category.FINANCING, "Loan facility proceeds"),
     ]
     formula = FormulaSpec(
         output_kind=OutputKind.DOLLAR_AMOUNT,

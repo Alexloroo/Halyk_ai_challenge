@@ -109,8 +109,8 @@ AGREEMENT_AUTHORITY = re.compile(
     r"КРЕДИТТІК\s+ШАРТ|ОРЫНДАУ\s+ДАНАСЫ",
     re.I,
 )
-ACCOUNT = re.compile(r"ACC-\d{4}(?![-\d])")
-OCR_ACCOUNT = re.compile(r"[AА][CС][CС]\s*[-‐‑‒–—]\s*(\d{4})(?![-\d])", re.I)
+ACCOUNT = re.compile(r"ACC-\d{4,}(?![-\d])")
+OCR_ACCOUNT = re.compile(r"[AА][CС][CС]\s*[-‐‑‒–—]\s*(\d{4,})(?![-\d])", re.I)
 
 KIND_MARKERS: list[tuple[re.Pattern[str], DocKind]] = [
     (re.compile(

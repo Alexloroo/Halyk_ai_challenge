@@ -50,6 +50,13 @@ def main(argv: list[str] | None = None) -> int:
         trace = TraceWriter.create(args.trace_dir)
 
     report = solve(data_dir=root, use_llm=args.use_llm, trace=trace)
+    if report.private_readiness is not None:
+        readiness = report.private_readiness
+        print(
+            f"private readiness: {readiness.status} "
+            f"(failures={readiness.checks['failures']}, "
+            f"warnings={readiness.checks['warnings']})"
+        )
     submission_stage = trace.stage("13_submission") if trace is not None else nullcontext()
     with submission_stage:
         submission = to_submission(

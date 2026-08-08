@@ -217,6 +217,23 @@ _EBITDA_DEFINITION_RE = re.compile(
     r"EBITDA\s*(?:=|рассчитывается\s+как|означает).*?(?=(?:[.;\n]|Пункт\s+6\.\d|$))",
     re.I | re.S,
 )
+_MINIMUM_COMPARATOR_RE = re.compile(
+    r"минимальн|не\s+менее|не\s+ниже|не\s+допускать.*?ниже|"
+    r"minimum|at\s+least|must\s+not\s+fall\s+below|"
+    r"кем\s+емес|төмен\s+емес|ең\s+төменгі",
+    re.I | re.S,
+)
+_MAXIMUM_COMPARATOR_RE = re.compile(
+    r"максимальн|не\s+более|не\s+выше|не\s+превыш|"
+    r"maximum|must\s+not\s+exceed|not\s+exceed|"
+    r"аспау|артық\s+емес|жоғары\s+емес|ең\s+жоғары",
+    re.I,
+)
+_RATIO_MEANING_RE = re.compile(
+    r"ratio|коэффициент|отношени|дол[яи]|fraction|proportion|"
+    r"арақатынас|қатынас|үлес|рентабельност|покрыти|leverage|intensity",
+    re.I,
+)
 
 
 def _fixup(spec: FormulaSpec, rule_text: str) -> FormulaSpec:
@@ -234,6 +251,49 @@ def _fixup(spec: FormulaSpec, rule_text: str) -> FormulaSpec:
         spec.condition_agg = AggKind.FINANCING_INFLOW
         spec.condition_categories = []
     return spec
+
+
+def formula_validation_errors(spec: FormulaSpec, rule: Rule) -> list[str]:
+    """Find semantic contradictions before a model formula reaches evaluation."""
+    from .categorize import Category
+    from .rules import PERCENT, RATIO, RuleKind
+
+    errors: list[str] = []
+    valid_categories = {category.value for category in Category}
+    for field_name, categories in (
+        ("numerator_categories", spec.numerator_categories),
+        ("denominator_categories", spec.denominator_categories),
+        ("condition_categories", spec.condition_categories),
+    ):
+        invalid = sorted(set(categories) - valid_categories)
+        if invalid:
+            errors.append(f"{field_name} contains unsupported categories: {invalid}")
+
+    text = f"{rule.heading} {rule.text}"
+    expected_comparator = None
+    if _MINIMUM_COMPARATOR_RE.search(text):
+        expected_comparator = ">="
+    elif _MAXIMUM_COMPARATOR_RE.search(text):
+        expected_comparator = "<="
+    if spec.comparator not in {"<=", ">="}:
+        errors.append(f"unsupported comparator: {spec.comparator}")
+    elif expected_comparator is not None and spec.comparator != expected_comparator:
+        errors.append(
+            f"comparator {spec.comparator} contradicts explicit {expected_comparator} wording"
+        )
+
+    requires_ratio = rule.kind is RuleKind.RATIO or (
+        rule.kind is RuleKind.UNKNOWN
+        and _RATIO_MEANING_RE.search(text) is not None
+        and (RATIO.search(text) is not None or PERCENT.search(text) is not None)
+    )
+    if requires_ratio and spec.output_kind is not OutputKind.RATIO:
+        errors.append("ratio covenant returned a dollar_amount formula")
+    if spec.is_conditional and spec.condition_threshold_dollars is None:
+        errors.append("conditional formula has no trigger threshold")
+    if spec.condition_comparator not in {">", ">="}:
+        errors.append(f"unsupported condition comparator: {spec.condition_comparator}")
+    return errors
 
 
 def _ebitda_definition_categories(text: str) -> list[str]:
@@ -281,22 +341,25 @@ def _llm_concurrency() -> int:
 
 async def _extract_formula_async(
     structured,
-    clause_text: str,
+    rule: Rule,
     semaphore: asyncio.Semaphore,
     *,
     max_retries: int = 3,
 ) -> FormulaSpec | None:
     messages = [
         {"role": "system", "content": SYSTEM_PROMPT},
-        {"role": "user", "content": clause_text},
+        {"role": "user", "content": rule.text},
     ]
     for attempt in range(max_retries):
         try:
             async with semaphore:
                 result = await structured.ainvoke(messages)
-            if isinstance(result, FormulaSpec):
-                return result
-            return FormulaSpec.model_validate(result)
+            spec = result if isinstance(result, FormulaSpec) else FormulaSpec.model_validate(result)
+            spec = _fixup(spec, rule.text)
+            errors = formula_validation_errors(spec, rule)
+            if errors:
+                raise ValueError("; ".join(errors))
+            return spec
         except Exception as exc:
             if attempt < max_retries - 1:
                 print(f"  [retry {attempt+1}/{max_retries}] {exc.__class__.__name__}: {exc}")
@@ -329,10 +392,9 @@ async def extract_formulas_async(
     semaphore = asyncio.Semaphore(_llm_concurrency())
 
     async def parse_one(key: str, rule: Rule) -> tuple[str, FormulaSpec | None]:
-        spec = await _extract_formula_async(structured, rule.text, semaphore)
+        spec = await _extract_formula_async(structured, rule, semaphore)
         if spec is None:
             return key, None
-        spec = _fixup(spec, rule.text)
         print(
             f"LLM: completed {key} -> {spec.output_kind} "
             f"{spec.numerator_agg}/{spec.numerator_categories} "

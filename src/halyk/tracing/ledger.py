@@ -72,7 +72,11 @@ def trace_loaded(writer: TraceWriter, entries: list[LedgerEntry]) -> None:
     writer.update_stage("02_ledger_loaded", rows=len(entries), defects=sum(defects.values()))
 
 
-def trace_categorized(writer: TraceWriter, entries: list[LedgerEntry]) -> None:
+def trace_categorized(
+    writer: TraceWriter,
+    entries: list[LedgerEntry],
+    decisions: list[dict[str, object]] | None = None,
+) -> None:
     _write_entries(writer, "03_ledger_categorized", "ledger.csv", entries)
     counts = Counter(entry.category.value for entry in entries)
     writer.write_json(
@@ -80,8 +84,21 @@ def trace_categorized(writer: TraceWriter, entries: list[LedgerEntry]) -> None:
         "category_counts.json",
         {"rows": len(entries), "categories": counts},
     )
+    decisions = decisions or []
+    writer.write_json("03_ledger_categorized", "decisions.json", decisions)
+    requested = [decision for decision in decisions if decision.get("llm_requested")]
+    resolved = [
+        decision
+        for decision in requested
+        if getattr(decision.get("llm_result"), "resolution", None) is not None
+    ]
     writer.update_stage(
-        "03_ledger_categorized", rows=len(entries), categories=len(counts)
+        "03_ledger_categorized",
+        rows=len(entries),
+        categories=len(counts),
+        category_llm_requested=len(requested),
+        category_llm_resolved=len(resolved),
+        category_llm_failed=len(requested) - len(resolved),
     )
 
 
