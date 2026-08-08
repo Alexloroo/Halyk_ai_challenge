@@ -35,8 +35,14 @@ def entry(txn_id: str, amount: str, category: Category, description: str = "test
 
 def rule(*, text: str, threshold: str = "500", kind: RuleKind = RuleKind.RATIO) -> Rule:
     return Rule(
-        scenario_id="X", clause="6.1", heading="test", text=text, kind=kind,
-        comparator="<=", threshold=Decimal(threshold), period=None,
+        scenario_id="X",
+        clause="6.1",
+        heading="test",
+        text=text,
+        kind=kind,
+        comparator="<=",
+        threshold=Decimal(threshold),
+        period=None,
     )
 
 
@@ -89,8 +95,11 @@ def test_category_assessment_resolves_known_conflicts_and_routes_novel_text_to_l
 
 def test_related_party_matching_is_exact_after_safe_name_normalization() -> None:
     parties = RelatedParties(
-        scenario_id="X", threshold_percent=Decimal("25"), holdings=[],
-        names=frozenset({"Nova Holdings LLP"}), unrestricted=frozenset(),
+        scenario_id="X",
+        threshold_percent=Decimal("25"),
+        holdings=[],
+        names=frozenset({"Nova Holdings LLP"}),
+        unrestricted=frozenset(),
     )
     exact = entry("TXN-X-1", "-1", Category.OPEX)
     exact.counterparty = "Nova Holdings LLP (Almaty office)"
@@ -107,11 +116,18 @@ def test_document_picker_prefers_executed_agreement_over_long_training_memo() ->
         Path("training.pdf"),
         "МЕТОДИЧЕСКИЙ МЕМОРАНДУМ. Документ не является кредитным договором "
         "и не создаёт обязательств. " * 100,
-        DocKind.CREDIT_AGREEMENT, Edition.CURRENT, ["ACC-9999"], 5,
+        DocKind.CREDIT_AGREEMENT,
+        Edition.CURRENT,
+        ["ACC-9999"],
+        5,
     )
     executed = Document(
-        Path("agreement.pdf"), "ИСПОЛНИТЕЛЬНЫЙ ЭКЗЕМПЛЯР ДОГОВОР БАНКОВСКОГО ЗАЙМА",
-        DocKind.CREDIT_AGREEMENT, Edition.CURRENT, ["ACC-9999"], 2,
+        Path("agreement.pdf"),
+        "ИСПОЛНИТЕЛЬНЫЙ ЭКЗЕМПЛЯР ДОГОВОР БАНКОВСКОГО ЗАЙМА",
+        DocKind.CREDIT_AGREEMENT,
+        Edition.CURRENT,
+        ["ACC-9999"],
+        2,
     )
 
     assert pick([training, executed], DocKind.CREDIT_AGREEMENT, "ACC-9999") is executed
@@ -142,9 +158,9 @@ Article 7
 
 def test_only_actionable_unknown_documents_are_audit_candidates() -> None:
     assert is_actionable_audit_text("ACC-123456 weekly operational status") is False
-    assert is_actionable_audit_text(
-        "Операция TXN-Z9-0001 исключена из ковенантного периода."
-    ) is True
+    assert (
+        is_actionable_audit_text("Операция TXN-Z9-0001 исключена из ковенантного периода.") is True
+    )
 
 
 def test_cutoff_uses_document_financial_year_instead_of_hardcoded_year() -> None:
@@ -211,8 +227,12 @@ def test_conditional_formula_uses_financing_trigger_but_reports_tested_actual() 
         condition_agg=AggKind.FINANCING_INFLOW,
     )
     details = EvaluationTrace()
-    answer = evaluate(rule(text="marketing only if financing exceeds $1,500"), entries,
-                      formula=formula, trace=details)
+    answer = evaluate(
+        rule(text="marketing only if financing exceeds $1,500"),
+        entries,
+        formula=formula,
+        trace=details,
+    )
 
     assert answer.actual == Decimal("650")
     assert answer.status == "COMPLIANT"
@@ -229,12 +249,20 @@ def test_explicit_ebitda_definition_is_propagated_to_all_scenario_formulas() -> 
         }
     }
     formulas = {
-        "X/6.1": FormulaSpec(output_kind=OutputKind.RATIO, numerator_agg=AggKind.SUM_OUTFLOW,
-                              numerator_categories=["capex"], denominator_agg=AggKind.EBITDA,
-                              comparator="<="),
-        "X/6.2": FormulaSpec(output_kind=OutputKind.RATIO, numerator_agg=AggKind.SUM_OUTFLOW,
-                              numerator_categories=["capex"], denominator_agg=AggKind.EBITDA,
-                              comparator="<="),
+        "X/6.1": FormulaSpec(
+            output_kind=OutputKind.RATIO,
+            numerator_agg=AggKind.SUM_OUTFLOW,
+            numerator_categories=["capex"],
+            denominator_agg=AggKind.EBITDA,
+            comparator="<=",
+        ),
+        "X/6.2": FormulaSpec(
+            output_kind=OutputKind.RATIO,
+            numerator_agg=AggKind.SUM_OUTFLOW,
+            numerator_categories=["capex"],
+            denominator_agg=AggKind.EBITDA,
+            comparator="<=",
+        ),
     }
     apply_formula_context(rules, formulas)
 
@@ -243,17 +271,73 @@ def test_explicit_ebitda_definition_is_propagated_to_all_scenario_formulas() -> 
     assert set(formulas["X/6.2"].denominator_categories) == expected
 
 
+def test_coordinated_russian_ebitda_definition_is_authoritative() -> None:
+    rules = {
+        "X": {
+            "6.1": rule(
+                text=(
+                    "EBITDA = выручка за вычетом операционных, коммунальных, "
+                    "маркетинговых, профессиональных расходов и расходов на персонал."
+                )
+            ),
+        }
+    }
+    formulas = {
+        "X/6.1": FormulaSpec(
+            output_kind=OutputKind.RATIO,
+            numerator_agg=AggKind.SUM_OUTFLOW,
+            numerator_categories=["capex"],
+            denominator_agg=AggKind.EBITDA,
+            denominator_categories=["marketing", "personnel"],
+            comparator="<=",
+        ),
+    }
+
+    apply_formula_context(rules, formulas)
+
+    assert set(formulas["X/6.1"].denominator_categories) == {
+        "opex",
+        "utilities",
+        "marketing",
+        "professional",
+        "personnel",
+    }
+
+
+def test_model_ebitda_categories_remain_when_no_explicit_definition_exists() -> None:
+    rules = {"X": {"6.1": rule(text="capex / EBITDA <= 1x")}}
+    formulas = {
+        "X/6.1": FormulaSpec(
+            output_kind=OutputKind.RATIO,
+            numerator_agg=AggKind.SUM_OUTFLOW,
+            numerator_categories=["capex"],
+            denominator_agg=AggKind.EBITDA,
+            denominator_categories=["opex", "personnel"],
+            comparator="<=",
+        ),
+    }
+
+    apply_formula_context(rules, formulas)
+
+    assert formulas["X/6.1"].denominator_categories == ["opex", "personnel"]
+
+
 def test_single_operation_formula_uses_largest_transaction_not_category_total() -> None:
     spec = FormulaSpec(
         output_kind=OutputKind.DOLLAR_AMOUNT,
         numerator_agg=AggKind.MAX_SINGLE_TRANSACTION,
-        numerator_categories=["capex"], comparator="<=",
+        numerator_categories=["capex"],
+        comparator="<=",
     )
     covenant = rule(text="каждая отдельная операция не выше $500")
-    answer = evaluate(covenant, [
-        entry("TXN-X-1", "-400", Category.CAPEX),
-        entry("TXN-X-2", "-300", Category.CAPEX),
-    ], formula=spec)
+    answer = evaluate(
+        covenant,
+        [
+            entry("TXN-X-1", "-400", Category.CAPEX),
+            entry("TXN-X-2", "-300", Category.CAPEX),
+        ],
+        formula=spec,
+    )
 
     assert answer.actual == Decimal("400")
 
@@ -267,9 +351,13 @@ def test_ratio_verdict_uses_unrounded_value() -> None:
         denominator_agg=AggKind.REVENUE,
         comparator="<=",
     )
-    answer = evaluate(covenant, [
-        entry("TXN-X-1", "-40007", Category.CAPEX),
-        entry("TXN-X-2", "1000000", Category.REVENUE),
-    ], formula=spec)
+    answer = evaluate(
+        covenant,
+        [
+            entry("TXN-X-1", "-40007", Category.CAPEX),
+            entry("TXN-X-2", "1000000", Category.REVENUE),
+        ],
+        formula=spec,
+    )
     assert answer.rounded() == 0.04
     assert answer.status == "BREACH"

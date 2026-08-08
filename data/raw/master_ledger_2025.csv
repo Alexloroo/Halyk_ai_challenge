@@ -1604,3 +1604,138 @@ TXN-X24-0002,2025-04-05,ACC-8824,Jetisu Media Group,Digital marketing campaign,-
 TXN-X24-0003,2025-06-18,ACC-8824,Alatau Advisory Partners,Technical consulting engagement,-80000.00,USD
 TXN-X24-0004,2025-08-23,ACC-8824,Zhetysu Solar Payroll,Production team wages,-190000.00,USD
 TXN-X24-0005,2025-10-11,ACC-8824,Taldykorgan Utility Network,Electricity distribution service,-70000.00,USD
+TXN-X25-0001,2025-01-15,ACC-8825,Industrial Customer,Sales revenue settlement,1200000.00,USD
+TXN-X25-0002,2025-02-15,ACC-8825,Altai Strategic Holdings LLP,Management services payment,-260000.00,USD
+TXN-X25-0003,2025-03-15,ACC-8825,Independent Vendor LLP,Maintenance service,-90000.00,USD
+TXN-X25-0004,2025-04-15,ACC-8825,Payroll Office,Monthly payroll,-250000.00,USD
+TXN-X25-0005,2025-05-15,ACC-8825,Tax Authority,Corporate tax payment,-170000.00,USD
+TXN-X25-0006,2025-06-15,ACC-8825,Equipment Vendor,Purchase of fixed asset equipment,-160000.00,USD
+TXN-X25-0007,2025-07-15,ACC-8825,Visibility Studio,Public visibility placement wave X25,-120000.00,USD
+TXN-X26-0001,2025-01-15,ACC-8826,Industrial Customer,Sales revenue settlement,955000.00,USD
+TXN-X26-0002,2025-02-15,ACC-8826,Senior Lender,Senior credit facility proceeds,500000.00,USD
+TXN-X26-0003,2025-03-15,ACC-8826,Payroll Office,Monthly payroll,-180000.00,USD
+TXN-X26-0004,2025-04-15,ACC-8826,Tax Authority,Corporate tax payment,-90000.00,USD
+TXN-X26-0005,2025-05-15,ACC-8826,Equipment Vendor,Purchase of fixed asset equipment,-100000.00,USD
+TXN-X26-0007,2025-07-15,ACC-8826,Visibility Studio,Public visibility placement wave X26,-220000.00,USD
+TXN-X27-0001,2025-01-15,ACC-8827,Industrial Customer,Sales revenue settlement,1510000.00,USD
+TXN-X27-0002,2025-02-15,ACC-8827,Saryarka Unpledged Assets LLP,Transfer of fixed asset equipment,-180000.00,USD
+TXN-X27-0003,2025-03-15,ACC-8827,Equipment Vendor,Purchase of fixed asset equipment,-220000.00,USD
+TXN-X27-0004,2025-04-15,ACC-8827,Saryarka Strategic Holdings LLP,Management services payment,-180000.00,USD
+TXN-X27-0005,2025-05-15,ACC-8827,Insurance Provider,Insurance premium,-100000.00,USD
+TXN-X27-0006,2025-06-15,ACC-8827,External Adviser,Consulting services,-150000.00,USD
+TXN-X27-0007,2025-07-15,ACC-8827,Visibility Studio,Public visibility placement wave X27,-220000.00,USD
+TXN-X28-0001,2025-01-15,ACC-8828,Industrial Customer,Sales revenue settlement,2030000.00,USD
+TXN-X28-0002,2025-02-15,ACC-8828,Plant Operator,Routine maintenance service,-300000.00,USD
+TXN-X28-0003,2025-03-15,ACC-8828,Power Network,Electricity supply,-100000.00,USD
+TXN-X28-0004,2025-04-15,ACC-8828,External Adviser,Consulting services,-100000.00,USD
+TXN-X28-0005,2025-05-15,ACC-8828,Payroll Office,Monthly payroll,-250000.00,USD
+TXN-X28-0006,2025-06-15,ACC-8828,Senior Lender,Term loan interest,-100000.00,USD
+TXN-X28-0007,2025-07-15,ACC-8828,Visibility Studio,Public visibility placement wave X28,-150000.00,USD
+TXN-X29-0001,2025-01-15,ACC-8829,Industrial Customer,Sales revenue settlement,1240000.00,USD
+TXN-X29-0002,2025-02-15,ACC-8829,Turan Strategic Holdings LLP,Management services payment,-260000.00,USD
+TXN-X29-0003,2025-03-15,ACC-8829,Independent Vendor LLP,Maintenance service,-90000.00,USD
+TXN-X29-0004,2025-04-15,ACC-8829,Payroll Office,Monthly payroll,-250000.00,USD
+TXN-X29-0005,2025-05-15,ACC-8829,Tax Authority,Corporate tax payment,-170000.00,USD
+TXN-X29-0006,2025-06-15,ACC-8829,Equipment Vendor,Purchase of fixed asset equipment,-160000.00,USD
+TXN-X29-0007,2025-07-15,ACC-8829,Visibility Studio,Public visibility placement wave X29,-120000.00,USD
+TXN-X30-0001,2025-01-15,ACC-8830,Industrial Customer,Sales revenue settlement,975000.00,USD
+TXN-X30-0002,2025-02-15,ACC-8830,Senior Lender,Senior credit facility proceeds,500000.00,USD
+TXN-X30-0003,2025-03-15,ACC-8830,Payroll Office,Monthly payroll,-180000.00,USD
+TXN-X30-0004,2025-04-15,ACC-8830,Tax Authority,Corporate tax payment,-90000.00,USD
+TXN-X30-0005,2025-05-15,ACC-8830,Equipment Vendor,Purchase of fixed asset equipment,-100000.00,USD
+TXN-X30-0007,2025-07-15,ACC-8830,Visibility Studio,Public visibility placement wave X30,-220000.00,USD
+TXN-X31-0001,2025-01-15,ACC-8831,Industrial Customer,Sales revenue settlement,1530000.00,USD
+TXN-X31-0002,2025-02-15,ACC-8831,Atyrau Unpledged Assets LLP,Transfer of fixed asset equipment,-180000.00,USD
+TXN-X31-0003,2025-03-15,ACC-8831,Equipment Vendor,Purchase of fixed asset equipment,-220000.00,USD
+TXN-X31-0004,2025-04-15,ACC-8831,Atyrau Strategic Holdings LLP,Management services payment,-180000.00,USD
+TXN-X31-0005,2025-05-15,ACC-8831,Insurance Provider,Insurance premium,-100000.00,USD
+TXN-X31-0006,2025-06-15,ACC-8831,External Adviser,Consulting services,-150000.00,USD
+TXN-X31-0007,2025-07-15,ACC-8831,Visibility Studio,Public visibility placement wave X31,-220000.00,USD
+TXN-X32-0001,2025-01-15,ACC-8832,Industrial Customer,Sales revenue settlement,2070000.00,USD
+TXN-X32-0002,2025-02-15,ACC-8832,Plant Operator,Routine maintenance service,-300000.00,USD
+TXN-X32-0003,2025-03-15,ACC-8832,Power Network,Electricity supply,-100000.00,USD
+TXN-X32-0004,2025-04-15,ACC-8832,External Adviser,Consulting services,-100000.00,USD
+TXN-X32-0005,2025-05-15,ACC-8832,Payroll Office,Monthly payroll,-250000.00,USD
+TXN-X32-0006,2025-06-15,ACC-8832,Senior Lender,Term loan interest,-100000.00,USD
+TXN-X32-0007,2025-07-15,ACC-8832,Visibility Studio,Public visibility placement wave X32,-150000.00,USD
+TXN-X33-0001,2025-01-15,ACC-8833,Industrial Customer,Sales revenue settlement,1280000.00,USD
+TXN-X33-0002,2025-02-15,ACC-8833,Zhetysu Strategic Holdings LLP,Management services payment,-260000.00,USD
+TXN-X33-0003,2025-03-15,ACC-8833,Independent Vendor LLP,Maintenance service,-90000.00,USD
+TXN-X33-0004,2025-04-15,ACC-8833,Payroll Office,Monthly payroll,-250000.00,USD
+TXN-X33-0005,2025-05-15,ACC-8833,Tax Authority,Corporate tax payment,-170000.00,USD
+TXN-X33-0006,2025-06-15,ACC-8833,Equipment Vendor,Purchase of fixed asset equipment,-160000.00,USD
+TXN-X33-0007,2025-07-15,ACC-8833,Visibility Studio,Public visibility placement wave X33,-120000.00,USD
+TXN-X34-0001,2025-01-15,ACC-8834,Industrial Customer,Sales revenue settlement,995000.00,USD
+TXN-X34-0002,2025-02-15,ACC-8834,Senior Lender,Senior credit facility proceeds,500000.00,USD
+TXN-X34-0003,2025-03-15,ACC-8834,Payroll Office,Monthly payroll,-180000.00,USD
+TXN-X34-0004,2025-04-15,ACC-8834,Tax Authority,Corporate tax payment,-90000.00,USD
+TXN-X34-0005,2025-05-15,ACC-8834,Equipment Vendor,Purchase of fixed asset equipment,-100000.00,USD
+TXN-X34-0007,2025-07-15,ACC-8834,Visibility Studio,Public visibility placement wave X34,-220000.00,USD
+TXN-X35-0001,2025-01-15,ACC-8835,Industrial Customer,Sales revenue settlement,1550000.00,USD
+TXN-X35-0002,2025-02-15,ACC-8835,Kokshetau Unpledged Assets LLP,Transfer of fixed asset equipment,-180000.00,USD
+TXN-X35-0003,2025-03-15,ACC-8835,Equipment Vendor,Purchase of fixed asset equipment,-220000.00,USD
+TXN-X35-0004,2025-04-15,ACC-8835,Kokshetau Strategic Holdings LLP,Management services payment,-180000.00,USD
+TXN-X35-0005,2025-05-15,ACC-8835,Insurance Provider,Insurance premium,-100000.00,USD
+TXN-X35-0006,2025-06-15,ACC-8835,External Adviser,Consulting services,-150000.00,USD
+TXN-X35-0007,2025-07-15,ACC-8835,Visibility Studio,Public visibility placement wave X35,-220000.00,USD
+TXN-X36-0001,2025-01-15,ACC-8836,Industrial Customer,Sales revenue settlement,2110000.00,USD
+TXN-X36-0002,2025-02-15,ACC-8836,Plant Operator,Routine maintenance service,-300000.00,USD
+TXN-X36-0003,2025-03-15,ACC-8836,Power Network,Electricity supply,-100000.00,USD
+TXN-X36-0004,2025-04-15,ACC-8836,External Adviser,Consulting services,-100000.00,USD
+TXN-X36-0005,2025-05-15,ACC-8836,Payroll Office,Monthly payroll,-250000.00,USD
+TXN-X36-0006,2025-06-15,ACC-8836,Senior Lender,Term loan interest,-100000.00,USD
+TXN-X36-0007,2025-07-15,ACC-8836,Visibility Studio,Public visibility placement wave X36,-150000.00,USD
+TXN-X37-0001,2025-01-15,ACC-8837,Industrial Customer,Sales revenue settlement,1320000.00,USD
+TXN-X37-0002,2025-02-15,ACC-8837,Mangystau Strategic Holdings LLP,Management services payment,-260000.00,USD
+TXN-X37-0003,2025-03-15,ACC-8837,Independent Vendor LLP,Maintenance service,-90000.00,USD
+TXN-X37-0004,2025-04-15,ACC-8837,Payroll Office,Monthly payroll,-250000.00,USD
+TXN-X37-0005,2025-05-15,ACC-8837,Tax Authority,Corporate tax payment,-170000.00,USD
+TXN-X37-0006,2025-06-15,ACC-8837,Equipment Vendor,Purchase of fixed asset equipment,-160000.00,USD
+TXN-X37-0007,2025-07-15,ACC-8837,Visibility Studio,Public visibility placement wave X37,-120000.00,USD
+TXN-X38-0001,2025-01-15,ACC-8838,Industrial Customer,Sales revenue settlement,1015000.00,USD
+TXN-X38-0002,2025-02-15,ACC-8838,Senior Lender,Senior credit facility proceeds,500000.00,USD
+TXN-X38-0003,2025-03-15,ACC-8838,Payroll Office,Monthly payroll,-180000.00,USD
+TXN-X38-0004,2025-04-15,ACC-8838,Tax Authority,Corporate tax payment,-90000.00,USD
+TXN-X38-0005,2025-05-15,ACC-8838,Equipment Vendor,Purchase of fixed asset equipment,-100000.00,USD
+TXN-X38-0007,2025-07-15,ACC-8838,Visibility Studio,Public visibility placement wave X38,-220000.00,USD
+TXN-X39-0001,2025-01-15,ACC-8839,Industrial Customer,Sales revenue settlement,1570000.00,USD
+TXN-X39-0002,2025-02-15,ACC-8839,Turkistan Unpledged Assets LLP,Transfer of fixed asset equipment,-180000.00,USD
+TXN-X39-0003,2025-03-15,ACC-8839,Equipment Vendor,Purchase of fixed asset equipment,-220000.00,USD
+TXN-X39-0004,2025-04-15,ACC-8839,Turkistan Strategic Holdings LLP,Management services payment,-180000.00,USD
+TXN-X39-0005,2025-05-15,ACC-8839,Insurance Provider,Insurance premium,-100000.00,USD
+TXN-X39-0006,2025-06-15,ACC-8839,External Adviser,Consulting services,-150000.00,USD
+TXN-X39-0007,2025-07-15,ACC-8839,Visibility Studio,Public visibility placement wave X39,-220000.00,USD
+TXN-X40-0001,2025-01-15,ACC-8840,Industrial Customer,Sales revenue settlement,2150000.00,USD
+TXN-X40-0002,2025-02-15,ACC-8840,Plant Operator,Routine maintenance service,-300000.00,USD
+TXN-X40-0003,2025-03-15,ACC-8840,Power Network,Electricity supply,-100000.00,USD
+TXN-X40-0004,2025-04-15,ACC-8840,External Adviser,Consulting services,-100000.00,USD
+TXN-X40-0005,2025-05-15,ACC-8840,Payroll Office,Monthly payroll,-250000.00,USD
+TXN-X40-0006,2025-06-15,ACC-8840,Senior Lender,Term loan interest,-100000.00,USD
+TXN-X40-0007,2025-07-15,ACC-8840,Visibility Studio,Public visibility placement wave X40,-150000.00,USD
+TXN-X41-0001,2025-01-15,ACC-8841,Industrial Customer,Sales revenue settlement,1360000.00,USD
+TXN-X41-0002,2025-02-15,ACC-8841,Kyzylorda Strategic Holdings LLP,Management services payment,-260000.00,USD
+TXN-X41-0003,2025-03-15,ACC-8841,Independent Vendor LLP,Maintenance service,-90000.00,USD
+TXN-X41-0004,2025-04-15,ACC-8841,Payroll Office,Monthly payroll,-250000.00,USD
+TXN-X41-0005,2025-05-15,ACC-8841,Tax Authority,Corporate tax payment,-170000.00,USD
+TXN-X41-0006,2025-06-15,ACC-8841,Equipment Vendor,Purchase of fixed asset equipment,-160000.00,USD
+TXN-X41-0007,2025-07-15,ACC-8841,Visibility Studio,Public visibility placement wave X41,-120000.00,USD
+TXN-X42-0001,2025-01-15,ACC-8842,Industrial Customer,Sales revenue settlement,1035000.00,USD
+TXN-X42-0002,2025-02-15,ACC-8842,Senior Lender,Senior credit facility proceeds,500000.00,USD
+TXN-X42-0003,2025-03-15,ACC-8842,Payroll Office,Monthly payroll,-180000.00,USD
+TXN-X42-0004,2025-04-15,ACC-8842,Tax Authority,Corporate tax payment,-90000.00,USD
+TXN-X42-0005,2025-05-15,ACC-8842,Equipment Vendor,Purchase of fixed asset equipment,-100000.00,USD
+TXN-X42-0007,2025-07-15,ACC-8842,Visibility Studio,Public visibility placement wave X42,-220000.00,USD
+TXN-X43-0001,2025-01-15,ACC-8843,Industrial Customer,Sales revenue settlement,1590000.00,USD
+TXN-X43-0002,2025-02-15,ACC-8843,Shymkent Unpledged Assets LLP,Transfer of fixed asset equipment,-180000.00,USD
+TXN-X43-0003,2025-03-15,ACC-8843,Equipment Vendor,Purchase of fixed asset equipment,-220000.00,USD
+TXN-X43-0004,2025-04-15,ACC-8843,Shymkent Strategic Holdings LLP,Management services payment,-180000.00,USD
+TXN-X43-0005,2025-05-15,ACC-8843,Insurance Provider,Insurance premium,-100000.00,USD
+TXN-X43-0006,2025-06-15,ACC-8843,External Adviser,Consulting services,-150000.00,USD
+TXN-X43-0007,2025-07-15,ACC-8843,Visibility Studio,Public visibility placement wave X43,-220000.00,USD
+TXN-X44-0001,2025-01-15,ACC-8844,Industrial Customer,Sales revenue settlement,2190000.00,USD
+TXN-X44-0002,2025-02-15,ACC-8844,Plant Operator,Routine maintenance service,-300000.00,USD
+TXN-X44-0003,2025-03-15,ACC-8844,Power Network,Electricity supply,-100000.00,USD
+TXN-X44-0004,2025-04-15,ACC-8844,External Adviser,Consulting services,-100000.00,USD
+TXN-X44-0005,2025-05-15,ACC-8844,Payroll Office,Monthly payroll,-250000.00,USD
+TXN-X44-0006,2025-06-15,ACC-8844,Senior Lender,Term loan interest,-100000.00,USD
+TXN-X44-0007,2025-07-15,ACC-8844,Visibility Studio,Public visibility placement wave X44,-150000.00,USD

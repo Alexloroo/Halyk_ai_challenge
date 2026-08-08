@@ -7,8 +7,12 @@ from halyk.docs import DocKind, Edition
 from halyk.llm_documents import (
     DocumentClassificationRequest,
     DocumentClassificationSpec,
+    EntityLinkCandidate,
+    EntityLinkRequest,
+    EntityLinkSpec,
     _document_concurrency,
     resolve_document_classifications,
+    resolve_entity_links,
 )
 
 
@@ -45,7 +49,7 @@ class FakeLLM:
         self.builds = 0
 
     def with_structured_output(self, schema):
-        assert schema is DocumentClassificationSpec
+        assert schema in (DocumentClassificationSpec, EntityLinkSpec)
         self.builds += 1
         return self.structured
 
@@ -79,9 +83,7 @@ def test_document_requests_are_bounded_and_share_one_runnable(monkeypatch) -> No
 
 def test_one_document_failure_does_not_cancel_siblings(monkeypatch) -> None:
     structured = FakeStructured(failures=frozenset({"broken-marker"}))
-    monkeypatch.setattr(
-        "halyk.llm_extract._build_llm", lambda: FakeLLM(structured)
-    )
+    monkeypatch.setattr("halyk.llm_extract._build_llm", lambda: FakeLLM(structured))
 
     async def no_wait(delay: float) -> None:
         return None
@@ -108,9 +110,7 @@ def test_non_binding_training_memo_cannot_be_promoted_to_agreement(monkeypatch) 
             return _resolution(DocKind.UNKNOWN)
 
     structured = SequencedStructured()
-    monkeypatch.setattr(
-        "halyk.llm_extract._build_llm", lambda: FakeLLM(structured)
-    )
+    monkeypatch.setattr("halyk.llm_extract._build_llm", lambda: FakeLLM(structured))
 
     async def no_wait(delay: float) -> None:
         return None
@@ -129,3 +129,50 @@ def test_non_binding_training_memo_cannot_be_promoted_to_agreement(monkeypatch) 
     assert structured.calls == 2
     assert result.resolution is not None
     assert result.resolution.kind is DocKind.UNKNOWN
+
+
+def test_entity_link_requires_supplied_candidate_and_exact_evidence(monkeypatch) -> None:
+    class SequencedEntityStructured:
+        def __init__(self) -> None:
+            self.calls = 0
+
+        async def ainvoke(self, messages):
+            self.calls += 1
+            if self.calls == 1:
+                return EntityLinkSpec(
+                    borrower_name="Invented JSC",
+                    matched_candidate_id="not-supplied",
+                    agreement_evidence="invented agreement quote",
+                    candidate_evidence="invented candidate quote",
+                )
+            return EntityLinkSpec(
+                borrower_name="Ili Hydro Controls JSC",
+                matched_candidate_id="candidate-001",
+                agreement_evidence="Borrower: Ili Hydro Controls JSC",
+                candidate_evidence="Ili Hydro Controls JSC",
+            )
+
+    structured = SequencedEntityStructured()
+    monkeypatch.setattr("halyk.llm_extract._build_llm", lambda: FakeLLM(structured))
+
+    async def no_wait(delay: float) -> None:
+        return None
+
+    monkeypatch.setattr("halyk.llm_documents.asyncio.sleep", no_wait)
+    request = EntityLinkRequest(
+        key="X28/6.1",
+        agreement_text="Borrower: Ili Hydro Controls JSC",
+        candidates=(
+            EntityLinkCandidate(
+                candidate_id="candidate-001",
+                text="Ili Hydro Controls JSC Consolidated Financial Statements",
+            ),
+        ),
+    )
+
+    result = resolve_entity_links([request])[request.key]
+
+    assert structured.calls == 2
+    assert result.attempts == 2
+    assert result.resolution is not None
+    assert result.resolution.matched_candidate_id == "candidate-001"

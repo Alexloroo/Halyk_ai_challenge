@@ -163,6 +163,26 @@ unknown
 Если файла нет, стадия помечается `skipped`, а основной pipeline успешно
 завершается.
 
+### Синтетический stress-набор X25–X44
+
+В `data/raw` добавлены 20 RU/EN сценариев по четыре PDF на каждый. Набор
+проверяет неизвестные document layouts, current/superseded selection, KYC,
+audit reclassification, financing conditions, unrestricted subsidiaries,
+group capex из consolidated statements и сложные составные формулы.
+
+Набор воспроизводимо пересоздаётся командой:
+
+```bash
+python3 tools/generate_x25_x44_stress_fixtures.py
+```
+
+Подробная карта документов и ожидаемых результатов находится в
+`data/raw/stress_fixture_manifest.json`. Новые сценарии добавляют 80 PDF,
+135 ledger rows и 60 submission cells; все 60 clauses требуют FormulaSpec от
+DeepSeek, а 20 уникальных descriptions предназначены для category fallback.
+Четыре действующих договора (два RU и два EN) являются image-only и проходят
+полную цепочку OCR → document LLM → formula LLM.
+
 ## Архитектура
 
 ```text
