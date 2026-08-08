@@ -10,6 +10,7 @@ One short call per clause, structured output via Pydantic, retry on errors.
 from __future__ import annotations
 
 import asyncio
+import inspect
 import os
 import re
 import time
@@ -174,6 +175,20 @@ def _build_llm():
         max_retries=0,
         temperature=0,
     )
+
+
+async def _close_llm(llm) -> None:
+    """Close provider clients before the owning asyncio event loop exits."""
+    async_client = getattr(llm, "root_async_client", None)
+    async_close = getattr(async_client, "close", None)
+    if callable(async_close):
+        result = async_close()
+        if inspect.isawaitable(result):
+            await result
+    sync_client = getattr(llm, "root_client", None)
+    sync_close = getattr(sync_client, "close", None)
+    if callable(sync_close):
+        sync_close()
 
 
 def extract_formula(clause_text: str, *, max_retries: int = 3) -> FormulaSpec | None:
@@ -404,7 +419,10 @@ async def extract_formulas_async(
         )
         return key, spec
 
-    completed = await asyncio.gather(*(parse_one(key, rule) for key, rule in pending))
+    try:
+        completed = await asyncio.gather(*(parse_one(key, rule) for key, rule in pending))
+    finally:
+        await _close_llm(llm)
     results = {key: spec for key, spec in completed if spec is not None}
     return apply_formula_context(rules, results)
 

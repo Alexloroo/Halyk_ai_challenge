@@ -645,8 +645,46 @@
           "evidence_txn_id": null
         }
       }
+    },
+    "X23": {
+      "covenants": {
+        "6.1": {
+          "status": "COMPLIANT",
+          "actual": 0.15,
+          "evidence_txn_id": null
+        },
+        "6.2": {
+          "status": "COMPLIANT",
+          "actual": 800000.0,
+          "evidence_txn_id": null
+        },
+        "6.3": {
+          "status": "COMPLIANT",
+          "actual": 1000000.0,
+          "evidence_txn_id": null
+        }
+      }
+    },
+    "X24": {
+      "covenants": {
+        "6.1": {
+          "status": "COMPLIANT",
+          "actual": 0.23,
+          "evidence_txn_id": null
+        },
+        "6.2": {
+          "status": "COMPLIANT",
+          "actual": 1200000.0,
+          "evidence_txn_id": null
+        },
+        "6.3": {
+          "status": "COMPLIANT",
+          "actual": 200000.0,
+          "evidence_txn_id": null
+        }
+      }
     }
   },
   "seed": 20260807,
-  "version": "combined-public-v1+bias-x1-x22-v2"
+  "version": "combined-public-v1+bias-x1-x24-v3"
 }

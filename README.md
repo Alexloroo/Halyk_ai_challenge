@@ -199,7 +199,7 @@ Orchestration находится в `src/halyk/run.py` и разделена н�
 | `02_ledger_loaded` | исходный ledger и defects |
 | `03_ledger_categorized` | категории всех транзакций и линейдж deterministic/LLM решений |
 | `04_pymupdf` | текст каждого PDF, native/OCR pages и ошибки OCR |
-| `05_documents_classified` | тип, edition, account IDs |
+| `05_documents_classified` | тип, edition, account IDs и lineage LLM fallback |
 | `06_account_mapping` | связь scenario → account |
 | `07_documents_selected` | выбранные agreement, KYC и audit docs |
 | `08_audit_and_fx` | ledger до/после adjustment и FX |
@@ -218,6 +218,7 @@ Orchestration находится в `src/halyk/run.py` и разделена н�
 | `categorize.py` | высокоточная RU/KZ/EN regex-категоризация |
 | `llm_categorize.py` | DeepSeek fallback для новых и неоднозначных формулировок ledger |
 | `docs.py` | PyMuPDF, OCR, document kind, edition и authority ranking |
+| `llm_documents.py` | DeepSeek fallback для релевантных PDF с неизвестным типом |
 | `rules.py` | RU/KZ clauses `6.1–6.3`, period, threshold и comparator |
 | `parties.py` | KYC ownership threshold и exact legal-name matching |
 | `audit.py` | transaction-scoped reclassify, exclude, missing entry и FX |
@@ -242,6 +243,21 @@ Orchestration находится в `src/halyk/run.py` и разделена н�
    personnel/еңбекақы, utilities/коммуналдық и другие.
 6. KYC поддерживает `LLP/JSC/ТОО/АО/ЖШС/АҚ` и казахские threshold-фразы.
 7. DeepSeek получает явную инструкцию интерпретировать русские и казахские clauses.
+
+## Fallback-классификация документов
+
+Если PDF связан с account из текущего template, но его тип не распознан
+детерминированными маркерами, stage 05 отправляет его текст в DeepSeek. Модель
+определяет тип и edition до выбора agreement/KYC/audit документа. Явно
+необязательные training memo и документы, которые не создают обязательств,
+не могут быть повышены до действующего кредитного договора.
+
+```text
+HALYK_DOCUMENT_LLM_CONCURRENCY=20
+```
+
+Исходная и итоговая классификация, число попыток и ошибки сохраняются в
+`trace/05_documents_classified/decisions.json`.
 
 ## Гибридная категоризация ledger
 
