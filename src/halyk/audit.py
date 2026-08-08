@@ -153,13 +153,16 @@ def extract_fx_rates(text: str) -> dict[str, Decimal]:
 #: the ultimate parent's consolidated statements. With no disposals in the
 #: year, additions = closing NBV - opening NBV + depreciation charge.
 NBV_BEGIN = re.compile(
-    r"Net book value at the beginning of the year\s*\n?\$\s*([\d,]+(?:\.\d{2})?)", re.I,
+    r"Net book value at the beginning of the year\s*\n?\$\s*([\d,]+(?:\.\d{2})?)",
+    re.I,
 )
 NBV_END = re.compile(
-    r"Net book value at the end of the year\s*\n?\$\s*([\d,]+(?:\.\d{2})?)", re.I,
+    r"Net book value at the end of the year\s*\n?\$\s*([\d,]+(?:\.\d{2})?)",
+    re.I,
 )
 DEPRECIATION_CHARGE = re.compile(
-    r"Depreciation charge for the year\s*\n?\$\s*([\d,]+(?:\.\d{2})?)", re.I,
+    r"Depreciation charge for the year\s*\n?\$\s*([\d,]+(?:\.\d{2})?)",
+    re.I,
 )
 
 
@@ -208,15 +211,17 @@ def extract_adjustments(audit_text: str) -> list[AuditAdjustment]:
     if not skip_reclass:
         for m in RECLASS_AMOUNT.finditer(audit_text):
             amount_str, counterparty, old_cat_text, new_cat_text = m.groups()
-            adjustments.append(AuditAdjustment(
-                kind=AdjustmentKind.RECLASSIFY,
-                txn_id=None,
-                amount=Decimal(amount_str.replace(",", "")),
-                counterparty=counterparty.strip(),
-                old_category=_match_category(old_cat_text),
-                new_category=_match_category(new_cat_text),
-                description=m.group(0)[:200],
-            ))
+            adjustments.append(
+                AuditAdjustment(
+                    kind=AdjustmentKind.RECLASSIFY,
+                    txn_id=None,
+                    amount=Decimal(amount_str.replace(",", "")),
+                    counterparty=counterparty.strip(),
+                    old_category=_match_category(old_cat_text),
+                    new_category=_match_category(new_cat_text),
+                    description=m.group(0)[:200],
+                )
+            )
 
     covenant_year_match = COVENANT_YEAR.search(audit_text) or FINANCIAL_YEAR.search(audit_text)
     covenant_year = (
@@ -230,15 +235,17 @@ def extract_adjustments(audit_text: str) -> list[AuditAdjustment]:
             reclass = RECLASS_TXN.search(block) or RECLASS_TXN_KZ.search(block)
             if reclass and not NO_CHANGE_TXN.search(block):
                 txn_id, old_cat_text, new_cat_text = reclass.groups()
-                adjustments.append(AuditAdjustment(
-                    kind=AdjustmentKind.RECLASSIFY,
-                    txn_id=txn_id,
-                    amount=None,
-                    counterparty=None,
-                    old_category=_match_category(old_cat_text),
-                    new_category=_match_category(new_cat_text),
-                    description=reclass.group(0)[:200],
-                ))
+                adjustments.append(
+                    AuditAdjustment(
+                        kind=AdjustmentKind.RECLASSIFY,
+                        txn_id=txn_id,
+                        amount=None,
+                        counterparty=None,
+                        old_category=_match_category(old_cat_text),
+                        new_category=_match_category(new_cat_text),
+                        description=reclass.group(0)[:200],
+                    )
+                )
             exclude = EXCLUDE_TXN.search(block)
             cutoff = CUTOFF_TXN.search(block)
             if exclude or (
@@ -246,27 +253,31 @@ def extract_adjustments(audit_text: str) -> list[AuditAdjustment]:
             ):
                 match = exclude or cutoff
                 assert match is not None
-                adjustments.append(AuditAdjustment(
-                    kind=AdjustmentKind.EXCLUDE,
-                    txn_id=match.group(1),
-                    amount=None,
-                    counterparty=None,
-                    old_category=None,
-                    new_category=None,
-                    description=match.group(0)[:200],
-                ))
+                adjustments.append(
+                    AuditAdjustment(
+                        kind=AdjustmentKind.EXCLUDE,
+                        txn_id=match.group(1),
+                        amount=None,
+                        counterparty=None,
+                        old_category=None,
+                        new_category=None,
+                        description=match.group(0)[:200],
+                    )
+                )
 
         missing = MISSING_TXN.search(block)
         if missing:
-            adjustments.append(AuditAdjustment(
-                kind=AdjustmentKind.MISSING_ENTRY,
-                txn_id=missing.group(1),
-                amount=Decimal(missing.group(2).replace(",", "")),
-                counterparty=None,
-                old_category=None,
-                new_category=None,
-                description=missing.group(0)[:200],
-            ))
+            adjustments.append(
+                AuditAdjustment(
+                    kind=AdjustmentKind.MISSING_ENTRY,
+                    txn_id=missing.group(1),
+                    amount=Decimal(missing.group(2).replace(",", "")),
+                    counterparty=None,
+                    old_category=None,
+                    new_category=None,
+                    description=missing.group(0)[:200],
+                )
+            )
 
     for m in DISCLOSED_OBLIGATION.finditer(audit_text):
         desc_text = m.group(1).strip()
@@ -274,15 +285,17 @@ def extract_adjustments(audit_text: str) -> list[AuditAdjustment]:
         cat = _match_category(desc_text)
         if cat is None and "пособ" in desc_text.lower():
             cat = Category.PERSONNEL
-        adjustments.append(AuditAdjustment(
-            kind=AdjustmentKind.MISSING_ENTRY,
-            txn_id=None,
-            amount=amount,
-            counterparty=None,
-            old_category=None,
-            new_category=cat,
-            description=f"disclosed obligation: {desc_text}",
-        ))
+        adjustments.append(
+            AuditAdjustment(
+                kind=AdjustmentKind.MISSING_ENTRY,
+                txn_id=None,
+                amount=amount,
+                counterparty=None,
+                old_category=None,
+                new_category=cat,
+                description=f"disclosed obligation: {desc_text}",
+            )
+        )
 
     return adjustments
 
@@ -297,10 +310,7 @@ def _find_entry_by_amount(
     amount: Decimal,
     counterparty: str | None,
 ) -> LedgerEntry | None:
-    candidates = [
-        e for e in entries
-        if e.magnitude == amount
-    ]
+    candidates = [e for e in entries if e.magnitude == amount]
     if len(candidates) == 1:
         return candidates[0]
     if counterparty and candidates:

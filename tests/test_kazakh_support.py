@@ -35,6 +35,23 @@ Account ID: ACC-9901
     assert rules["6.3"].categories == frozenset({Category.UTILITIES})
 
 
+def test_kazakh_revenue_minimum_with_must_not_be_less_wording() -> None:
+    text = """
+БАНКТІК ҚАРЫЗ ШАРТЫ
+6-бап. Қаржылық ковенанттар
+6.2-тармақ Түсімнің ең төменгі деңгейі.
+2025-01-01 бастап 2025-12-31 дейін түсім USD 1,000,000-нан кем болмауға тиіс.
+7-бап. Қорытынды ережелер
+"""
+
+    rule = extract_rules("K2", text)["6.2"]
+
+    assert rule.kind is RuleKind.MIN_REVENUE
+    assert rule.comparator == ">="
+    assert rule.threshold == Decimal("1000000")
+    assert rule.categories == frozenset({Category.REVENUE})
+
+
 def test_kazakh_ledger_descriptions_are_categorized() -> None:
     assert categorize("Жабдық сатып алу бойынша күрделі шығындар") is Category.CAPEX
     assert categorize("Қызметкерлерге еңбекақы төлеу") is Category.PERSONNEL

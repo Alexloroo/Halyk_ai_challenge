@@ -26,7 +26,7 @@ class LedgerEntry:
     account_id: str
     counterparty: str
     description: str
-    amount: Decimal | None          # signed, as recorded: expenses negative
+    amount: Decimal | None  # signed, as recorded: expenses negative
     currency: str
     category: Category = Category.UNKNOWN
     is_related_party: bool = False

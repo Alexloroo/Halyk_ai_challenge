@@ -14,6 +14,4 @@ def trace_submission(writer: TraceWriter, submission: dict[str, object]) -> None
         if isinstance(answers, dict)
         else 0
     )
-    writer.update_stage(
-        "13_submission", status="completed", scenarios=scenarios, cells=cells
-    )
+    writer.update_stage("13_submission", status="completed", scenarios=scenarios, cells=cells)

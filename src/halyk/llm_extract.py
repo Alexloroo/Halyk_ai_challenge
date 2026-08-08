@@ -193,7 +193,7 @@ def extract_formula(clause_text: str, *, max_retries: int = 3) -> FormulaSpec | 
     llm = _build_llm()
     structured = llm.with_structured_output(FormulaSpec)
 
-    for attempt in range(max_retries):
+    for attempt in range(max_retries + 1):
         try:
             result = structured.invoke(
                 [
@@ -205,12 +205,12 @@ def extract_formula(clause_text: str, *, max_retries: int = 3) -> FormulaSpec | 
                 return result
             return FormulaSpec.model_validate(result)
         except Exception as exc:
-            if attempt < max_retries - 1:
+            if attempt < max_retries:
                 wait = 2**attempt
                 print(f"  [retry {attempt + 1}/{max_retries}] {exc.__class__.__name__}: {exc}")
                 time.sleep(wait)
             else:
-                print(f"  [FAILED after {max_retries} attempts] {exc}")
+                print(f"  [FAILED after {max_retries + 1} attempts] {exc}")
                 return None
     return None
 
@@ -378,7 +378,7 @@ async def _extract_formula_async(
         {"role": "system", "content": SYSTEM_PROMPT},
         {"role": "user", "content": rule.text},
     ]
-    for attempt in range(max_retries):
+    for attempt in range(max_retries + 1):
         try:
             async with semaphore:
                 result = await structured.ainvoke(messages)
@@ -389,11 +389,11 @@ async def _extract_formula_async(
                 raise ValueError("; ".join(errors))
             return spec
         except Exception as exc:
-            if attempt < max_retries - 1:
+            if attempt < max_retries:
                 print(f"  [retry {attempt + 1}/{max_retries}] {exc.__class__.__name__}: {exc}")
                 await asyncio.sleep(2**attempt)
             else:
-                print(f"  [FAILED after {max_retries} attempts] {exc}")
+                print(f"  [FAILED after {max_retries + 1} attempts] {exc}")
                 return None
     return None
 

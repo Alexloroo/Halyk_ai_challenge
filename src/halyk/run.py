@@ -23,6 +23,7 @@ from pathlib import Path
 
 from . import paths
 from .audit import (
+    AuditAdjustment,
     apply_adjustments,
     extract_adjustments,
     extract_fx_rates,
@@ -32,7 +33,29 @@ from .audit import (
 from .categorize import assess_category
 from .docs import NON_BINDING, DocKind, Document, DocumentLoadIssue, Edition, load_documents, pick
 from .evaluate import Answer, EvaluationTrace, evaluate, find_evidence
+from .generic_formula import (
+    CovenantMode,
+    ExternalMetric,
+    GenericFormulaSpec,
+    MetricSource,
+    requires_generic_replacement,
+)
 from .ledger import LedgerEntry, by_scenario, load_ledger
+from .llm_capabilities import (
+    CAPABILITY_SYSTEM_PROMPT,
+    DOCUMENTARY_SYSTEM_PROMPT,
+    GENERIC_VERIFIER_SYSTEM_PROMPT,
+    METRIC_SYSTEM_PROMPT,
+    CapabilityRequest,
+    DocumentaryFactRequest,
+    DocumentMetricRequest,
+    EvidenceCandidate,
+    GenericVerificationRequest,
+    resolve_capabilities,
+    resolve_document_metrics,
+    resolve_documentary_facts,
+    verify_generic_formulas,
+)
 from .llm_categorize import CategoryRequest, FlowDirection, resolve_categories
 from .llm_documents import (
     DocumentClassificationRequest,
@@ -42,14 +65,23 @@ from .llm_documents import (
     resolve_entity_links,
 )
 from .llm_extract import FormulaSpec, extract_formulas
+from .llm_full_context import (
+    CALCULATOR_SYSTEM_PROMPT,
+    VERIFIER_SYSTEM_PROMPT,
+    FullContextRequest,
+    build_full_context_payload,
+    resolve_full_context,
+)
 from .llm_rules import (
     SYSTEM_PROMPT as RULE_EXTRACTION_PROMPT,
+)
+from .llm_rules import (
     RuleExtractionRequest,
     resolve_missing_rules,
 )
 from .parties import extract_related_parties, mark_related, mark_unrestricted
 from .quality import PrivateReadinessReport, assess_private_readiness
-from .rules import Rule, extract_rules
+from .rules import Rule, RuleKind, extract_rules
 from .tracing import TraceWriter
 from .tracing.documents import trace_classified, trace_pymupdf
 from .tracing.evaluation import trace_evaluation
@@ -67,6 +99,47 @@ from .tracing.template import trace_template
 
 def _trace_stage(trace: TraceWriter | None, name: str):
     return trace.stage(name) if trace is not None else nullcontext()
+
+
+def _needs_capability_fallback(
+    existing_formula: FormulaSpec | None,
+    proposal: GenericFormulaSpec,
+) -> bool:
+    if proposal.mode is CovenantMode.DOCUMENTARY:
+        return True
+    if proposal.mode is not CovenantMode.GENERIC_NUMERIC:
+        return False
+    if existing_formula is None:
+        return True
+    return any(
+        requirement.source is MetricSource.DOCUMENT for requirement in proposal.required_metrics
+    ) or requires_generic_replacement(proposal.expression)
+
+
+def _full_context_reason(
+    key: str,
+    *,
+    rule: Rule,
+    formulas: dict[str, FormulaSpec],
+    generic_formulas: dict[str, GenericFormulaSpec],
+    capability_results: dict[str, object],
+    generic_verifications: dict[str, object],
+) -> str | None:
+    if rule.kind not in (RuleKind.RATIO, RuleKind.UNKNOWN):
+        return None
+    capability = capability_results.get(key)
+    capability_resolution = getattr(capability, "resolution", None)
+    if capability_resolution is not None and capability_resolution.mode is CovenantMode.UNSUPPORTED:
+        return "capability_unsupported"
+    verification = generic_verifications.get(key)
+    verification_resolution = getattr(verification, "resolution", None)
+    if verification is not None and (
+        verification_resolution is None or not verification_resolution.accepted
+    ):
+        return "generic_verification_failed"
+    if key not in formulas and key not in generic_formulas:
+        return "formula_unavailable"
+    return None
 
 
 @dataclass
@@ -234,6 +307,37 @@ def _resolve_group_capex_values(
     return values, records
 
 
+def _evidence_candidates_for(
+    scenario_id: str,
+    accounts: dict[str, str],
+    documents: list[Document],
+    *,
+    include_agreements: bool = True,
+) -> tuple[EvidenceCandidate, ...]:
+    account = accounts.get(scenario_id, "")
+    if not account:
+        return ()
+    eligible = sorted(
+        (
+            document
+            for document in documents
+            if account in document.account_ids
+            and document.edition is Edition.CURRENT
+            and NON_BINDING.search(document.text) is None
+            and (include_agreements or document.kind is not DocKind.CREDIT_AGREEMENT)
+        ),
+        key=lambda document: str(document.path),
+    )
+    return tuple(
+        EvidenceCandidate(
+            candidate_id=f"candidate-{index:03d}",
+            source=str(document.path),
+            text=document.text[:20000],
+        )
+        for index, document in enumerate(eligible, start=1)
+    )
+
+
 def solve(
     *,
     data_dir: Path | None = None,
@@ -387,6 +491,8 @@ def solve(
     rule_records: dict[str, dict[str, object]] = {}
     rule_requests: list[RuleExtractionRequest] = []
     selected_agreements: dict[str, Document | None] = {}
+    selected_kyc: dict[str, Document | None] = {}
+    audit_adjustments_by_scenario: dict[str, tuple[AuditAdjustment, ...]] = {}
     party_results: dict[str, object] = {}
     total_adjustments = 0
     parties_resolved = 0
@@ -410,6 +516,7 @@ def solve(
             kyc = pick(docs, DocKind.KYC, account)
             agreement = pick(docs, DocKind.CREDIT_AGREEMENT, account)
             selected_agreements[scenario_id] = agreement
+            selected_kyc[scenario_id] = kyc
             if trace is not None:
                 trace_selected(
                     trace,
@@ -429,6 +536,7 @@ def solve(
                 all_adjs.extend(extract_adjustments(audit_document.text))
                 fx_rates.update(extract_fx_rates(audit_document.text))
             total_adjustments += len(all_adjs)
+            audit_adjustments_by_scenario[scenario_id] = tuple(all_adjs)
             if all_adjs:
                 scenario_entries = apply_adjustments(scenario_entries, all_adjs)
                 grouped[scenario_id] = scenario_entries
@@ -527,9 +635,164 @@ def solve(
 
     with _trace_stage(trace, "11_formulas"):
         formulas: dict[str, FormulaSpec] = {}
+        generic_formulas: dict[str, GenericFormulaSpec] = {}
+        generic_candidates: dict[str, GenericFormulaSpec] = {}
+        external_metrics: dict[str, dict[str, ExternalMetric]] = {}
+        documentary_facts: dict[str, bool] = {}
+        capability_records: dict[str, dict[str, object]] = {}
         if use_llm:
             formulas = extract_formulas(all_rules)
             report.notes.append(f"LLM formulas extracted: {len(formulas)}")
+
+            capability_requests = [
+                CapabilityRequest(
+                    key=f"{scenario_id}/{clause}",
+                    rule=rule,
+                    existing_formula=formulas.get(f"{scenario_id}/{clause}"),
+                )
+                for scenario_id, rules in all_rules.items()
+                for clause, rule in rules.items()
+                if rule.kind in (RuleKind.RATIO, RuleKind.UNKNOWN)
+            ]
+            capability_results = resolve_capabilities(capability_requests)
+            for request in capability_requests:
+                result = capability_results[request.key]
+                spec = result.resolution
+                capability_records[request.key] = {
+                    "rule": request.rule,
+                    "existing_formula": request.existing_formula,
+                    "verification": result,
+                    "effective_path": (
+                        CovenantMode.EXISTING_FORMULA
+                        if request.existing_formula is not None
+                        else "capability_failed"
+                    ),
+                }
+                if spec is None:
+                    continue
+                if _needs_capability_fallback(request.existing_formula, spec):
+                    generic_candidates[request.key] = spec
+                    capability_records[request.key]["effective_path"] = (
+                        "pending_generic_verification"
+                    )
+                elif spec.mode is CovenantMode.UNSUPPORTED and request.existing_formula is None:
+                    capability_records[request.key]["effective_path"] = CovenantMode.UNSUPPORTED
+
+            capability_requests_by_key = {request.key: request for request in capability_requests}
+            verification_requests = [
+                GenericVerificationRequest(
+                    key=key,
+                    rule=capability_requests_by_key[key].rule,
+                    plan=spec,
+                )
+                for key, spec in generic_candidates.items()
+            ]
+            generic_verifications = verify_generic_formulas(verification_requests)
+            for request in verification_requests:
+                verification = generic_verifications[request.key]
+                capability_records[request.key]["generic_verification"] = verification
+                accepted = verification.resolution is not None and verification.resolution.accepted
+                if accepted:
+                    generic_formulas[request.key] = request.plan
+                    formulas.pop(request.key, None)
+                    capability_records[request.key]["effective_path"] = request.plan.mode
+                else:
+                    capability_records[request.key]["effective_path"] = (
+                        "existing_formula_after_rejected_generic"
+                        if request.key in formulas
+                        else "rejected_generic"
+                    )
+
+            metric_requests: list[DocumentMetricRequest] = []
+            fact_requests: list[DocumentaryFactRequest] = []
+            for key, spec in generic_formulas.items():
+                scenario_id = key.split("/", maxsplit=1)[0]
+                candidates = _evidence_candidates_for(scenario_id, accounts, docs)
+                if not candidates:
+                    continue
+                if spec.mode is CovenantMode.GENERIC_NUMERIC:
+                    for requirement in spec.required_metrics:
+                        if requirement.source is not MetricSource.DOCUMENT:
+                            continue
+                        metric_requests.append(
+                            DocumentMetricRequest(
+                                key=f"{key}::{requirement.name}",
+                                metric=requirement.name,
+                                description=requirement.description,
+                                evidence_terms=tuple(requirement.evidence_terms),
+                                candidates=candidates,
+                            )
+                        )
+                elif spec.mode is CovenantMode.DOCUMENTARY and spec.documentary_requirement:
+                    documentary_candidates = _evidence_candidates_for(
+                        scenario_id,
+                        accounts,
+                        docs,
+                        include_agreements=False,
+                    )
+                    if not documentary_candidates:
+                        continue
+                    fact_requests.append(
+                        DocumentaryFactRequest(
+                            key=key,
+                            requirement=spec.documentary_requirement,
+                            candidates=documentary_candidates,
+                        )
+                    )
+
+            metric_results = resolve_document_metrics(metric_requests)
+            metric_trace_records = {
+                request.key: {
+                    "metric": request.metric,
+                    "description": request.description,
+                    "evidence_terms": request.evidence_terms,
+                    "candidates": [
+                        {
+                            "candidate_id": candidate.candidate_id,
+                            "source": candidate.source,
+                        }
+                        for candidate in request.candidates
+                    ],
+                    "result": metric_results[request.key],
+                }
+                for request in metric_requests
+            }
+            for request in metric_requests:
+                result = metric_results[request.key]
+                formula_key = request.key.rsplit("::", maxsplit=1)[0]
+                if result.metric is not None:
+                    external_metrics.setdefault(formula_key, {})[request.metric] = result.metric
+            fact_results = resolve_documentary_facts(fact_requests)
+            fact_trace_records = {
+                request.key: {
+                    "requirement": request.requirement,
+                    "candidates": [
+                        {
+                            "candidate_id": candidate.candidate_id,
+                            "source": candidate.source,
+                        }
+                        for candidate in request.candidates
+                    ],
+                    "result": fact_results[request.key],
+                }
+                for request in fact_requests
+            }
+            for request in fact_requests:
+                result = fact_results[request.key]
+                if result.resolution is not None:
+                    documentary_facts[request.key] = result.resolution.fact_present
+            report.notes.append(
+                f"Generic formulas: {len(generic_formulas)}; "
+                f"document metrics: {sum(len(values) for values in external_metrics.values())}; "
+                f"documentary facts: {len(documentary_facts)}"
+            )
+        else:
+            capability_results = {}
+            generic_verifications = {}
+            metric_results = {}
+            metric_trace_records = {}
+            fact_results = {}
+            fact_trace_records = {}
         group_capex_values, entity_link_records = _resolve_group_capex_values(
             all_rules,
             selected_agreements,
@@ -540,15 +803,99 @@ def solve(
         report.notes.append(
             f"Group capex documents resolved: {len(group_capex_values)}/{len(entity_link_records)}"
         )
+        full_context_records: dict[str, dict[str, object]] = {}
+        full_context_requests: list[FullContextRequest] = []
+        if use_llm:
+            for scenario_id, clauses in all_rules.items():
+                agreement = selected_agreements.get(scenario_id)
+                if agreement is None:
+                    continue
+                for clause, rule in clauses.items():
+                    key = f"{scenario_id}/{clause}"
+                    reason = _full_context_reason(
+                        key,
+                        rule=rule,
+                        formulas=formulas,
+                        generic_formulas=generic_formulas,
+                        capability_results=capability_results,
+                        generic_verifications=generic_verifications,
+                    )
+                    if reason is None or rule.threshold is None:
+                        continue
+                    request = FullContextRequest(
+                        key=key,
+                        rule=rule,
+                        account_id=accounts.get(scenario_id, ""),
+                        agreement_text=agreement.text,
+                        ledger=tuple(grouped.get(scenario_id, [])),
+                        audit_adjustments=audit_adjustments_by_scenario.get(scenario_id, ()),
+                        candidates=_evidence_candidates_for(scenario_id, accounts, docs),
+                        external_metrics=external_metrics.get(key, {}),
+                        kyc_text=(
+                            selected_kyc[scenario_id].text
+                            if selected_kyc.get(scenario_id) is not None
+                            else ""
+                        ),
+                    )
+                    full_context_requests.append(request)
+                    full_context_records[key] = {
+                        "reason": reason,
+                        "request": build_full_context_payload(request),
+                    }
+            full_context_results = resolve_full_context(full_context_requests)
+            for key, result in full_context_results.items():
+                full_context_records[key]["result"] = result
+        else:
+            full_context_results = {}
         if trace is not None:
             trace_formulas(trace, all_rules, formulas, enabled=use_llm)
+            trace.write_text("11_formulas", "capability_prompt.txt", CAPABILITY_SYSTEM_PROMPT)
+            trace.write_text(
+                "11_formulas", "generic_verifier_prompt.txt", GENERIC_VERIFIER_SYSTEM_PROMPT
+            )
+            trace.write_text("11_formulas", "metric_prompt.txt", METRIC_SYSTEM_PROMPT)
+            trace.write_text("11_formulas", "documentary_prompt.txt", DOCUMENTARY_SYSTEM_PROMPT)
+            trace.write_text(
+                "11_formulas", "full_context_calculator_prompt.txt", CALCULATOR_SYSTEM_PROMPT
+            )
+            trace.write_text(
+                "11_formulas", "full_context_verifier_prompt.txt", VERIFIER_SYSTEM_PROMPT
+            )
+            trace.write_json("11_formulas", "capabilities.json", capability_records)
+            trace.write_json("11_formulas", "generic_formulas.json", generic_formulas)
+            trace.write_json("11_formulas", "generic_verifications.json", generic_verifications)
+            trace.write_json("11_formulas", "document_metrics.json", metric_trace_records)
+            trace.write_json("11_formulas", "documentary_facts.json", fact_trace_records)
             trace.write_json("11_formulas", "entity_links.json", entity_link_records)
+            trace.write_json("11_formulas", "full_context.json", full_context_records)
             trace.update_stage(
                 "11_formulas",
+                capability_verified=sum(
+                    result.resolution is not None for result in capability_results.values()
+                ),
+                capability_failed=sum(
+                    result.resolution is None for result in capability_results.values()
+                ),
+                generic_formulas=len(generic_formulas),
+                generic_verified=sum(
+                    result.resolution is not None and result.resolution.accepted
+                    for result in generic_verifications.values()
+                ),
+                unsupported_formulas=sum(
+                    result.resolution is not None
+                    and result.resolution.mode is CovenantMode.UNSUPPORTED
+                    for result in capability_results.values()
+                ),
+                document_metrics=sum(len(values) for values in external_metrics.values()),
+                documentary_facts=len(documentary_facts),
                 entity_links=sum(
                     record["source"] == "llm_entity_link" for record in entity_link_records.values()
                 ),
                 group_capex_resolved=len(group_capex_values),
+                full_context_requested=len(full_context_requests),
+                full_context_accepted=sum(
+                    result.accepted for result in full_context_results.values()
+                ),
             )
 
     with _trace_stage(trace, "12_evaluation"):
@@ -575,29 +922,55 @@ def solve(
                         )
                     continue
                 formula = formulas.get(f"{scenario_id}/{clause}")
-                numerator_constant = (
-                    group_capex_values.get(f"{scenario_id}/{clause}")
-                    if _GROUP_CAPEX_CLAUSE.search(rule.text)
+                key = f"{scenario_id}/{clause}"
+                generic_formula = generic_formulas.get(key)
+                formula_external_metrics = external_metrics.get(key, {})
+                documentary_fact = documentary_facts.get(key)
+                full_context_result = full_context_results.get(key)
+                full_context_calculation = (
+                    full_context_result.calculation
+                    if full_context_result is not None and full_context_result.accepted
                     else None
                 )
-                details = EvaluationTrace()
-                answer = evaluate(
-                    rule,
-                    scenario_entries,
-                    formula=formula,
-                    trace=details,
-                    numerator_constant=numerator_constant,
+                numerator_constant = (
+                    group_capex_values.get(key) if _GROUP_CAPEX_CLAUSE.search(rule.text) else None
                 )
+                details = EvaluationTrace()
+                if full_context_result is not None and not full_context_result.accepted:
+                    answer = _fallback(scenario_id, clause, "full_context_rejected")
+                    details.scope_txn_ids = [entry.txn_id for entry in scenario_entries]
+                    details.branch = "full_context_rejected"
+                    details.comparator = rule.comparator
+                    details.threshold = rule.threshold
+                    details.actual = answer.actual
+                    details.status = answer.status
+                    details.note = answer.note
+                else:
+                    answer = evaluate(
+                        rule,
+                        scenario_entries,
+                        formula=formula,
+                        generic_formula=generic_formula,
+                        external_metrics=formula_external_metrics,
+                        documentary_fact=documentary_fact,
+                        trace=details,
+                        numerator_constant=numerator_constant,
+                        full_context_calculation=full_context_calculation,
+                    )
                 evaluation_details[f"{scenario_id}/{clause}"] = details
                 evidence_trials: dict[str, str] = {}
-                answer.evidence_txn_id = find_evidence(
-                    rule,
-                    scenario_entries,
-                    answer,
-                    formula=formula,
-                    trials=evidence_trials if trace is not None else None,
-                    numerator_constant=numerator_constant,
-                )
+                if full_context_result is None:
+                    answer.evidence_txn_id = find_evidence(
+                        rule,
+                        scenario_entries,
+                        answer,
+                        formula=formula,
+                        generic_formula=generic_formula,
+                        external_metrics=formula_external_metrics,
+                        documentary_fact=documentary_fact,
+                        trials=evidence_trials if trace is not None else None,
+                        numerator_constant=numerator_constant,
+                    )
                 cells[clause] = answer
                 if trace is not None:
                     trace_evaluation(
@@ -606,6 +979,10 @@ def solve(
                         clause,
                         rule=rule,
                         formula=formula,
+                        generic_formula=generic_formula,
+                        external_metrics=formula_external_metrics,
+                        documentary_fact=(fact_results.get(key) if key in fact_results else None),
+                        full_context_result=full_context_result,
                         entries=scenario_entries,
                         details=details,
                         answer=answer,
@@ -626,6 +1003,12 @@ def solve(
             categorization_records=categorization_records,
             document_issues=document_issues,
             llm_enabled=use_llm,
+            generic_formulas=generic_formulas,
+            capability_results=capability_results,
+            generic_verifications=generic_verifications,
+            external_metrics=external_metrics,
+            documentary_facts=documentary_facts,
+            full_context_results=full_context_results,
         )
         if trace is not None:
             trace.write_root_json("private_readiness.json", report.private_readiness)

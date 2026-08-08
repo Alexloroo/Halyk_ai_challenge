@@ -28,6 +28,10 @@ class RuleExtractionSpec(BaseModel):
     categories: list[Category] = Field(
         description="Only financial categories explicitly used by the covenant"
     )
+    is_documentary: bool = Field(
+        default=False,
+        description="True only for a non-numeric documentary obligation with no threshold",
+    )
 
 
 @dataclass(frozen=True)
@@ -55,6 +59,9 @@ Return only the requested clause. Never add, rename, or infer another scenario o
 clause. Copy heading_evidence and rule_evidence exactly from the supplied agreement. \
 rule_evidence must contain the complete tested covenant, its threshold, and enough \
 wording to determine the comparator. Do not calculate actual values or compliance.
+
+For a genuinely non-numeric documentary obligation, set kind=unknown and \
+is_documentary=true; only then may rule_evidence omit a numeric threshold.
 
 Allowed kinds: min_revenue, max_category_spend, max_related_party, \
 related_party_share, ratio, unknown. Allowed categories: revenue, financing, capex, \
@@ -128,9 +135,12 @@ def _validate_and_build(
     if MINIMUM_WORDS.search(combined) and not MAXIMUM_WORDS.search(combined):
         if resolution.comparator != ">=":
             errors.append("comparator contradicts explicit minimum wording")
-    elif MAXIMUM_WORDS.search(combined) and not MINIMUM_WORDS.search(combined):
-        if resolution.comparator != "<=":
-            errors.append("comparator contradicts explicit maximum wording")
+    elif (
+        MAXIMUM_WORDS.search(combined)
+        and not MINIMUM_WORDS.search(combined)
+        and resolution.comparator != "<="
+    ):
+        errors.append("comparator contradicts explicit maximum wording")
     if errors:
         return errors, None
 
@@ -144,7 +154,10 @@ def _validate_and_build(
         comparator=resolution.comparator,
         categories=resolution.categories,
     )
-    if rule.threshold is None:
+    if resolution.is_documentary and resolution.kind is not RuleKind.UNKNOWN:
+        errors.append("documentary rule must use unknown kind")
+        return errors, None
+    if rule.threshold is None and not resolution.is_documentary:
         errors.append("rule_evidence contains no supported threshold")
         return errors, None
     return errors, rule
@@ -167,7 +180,7 @@ async def _resolve_one(
     ]
     last_error: str | None = None
     validation_feedback = ""
-    for attempt in range(max_retries):
+    for attempt in range(max_retries + 1):
         messages[-1]["content"] = payload + validation_feedback
         try:
             async with semaphore:
@@ -188,11 +201,11 @@ async def _resolve_one(
             return RuleExtractionResult(resolution, rule, attempt + 1)
         except Exception as exc:
             last_error = f"{type(exc).__name__}: {exc}"
-            if attempt < max_retries - 1:
+            if attempt < max_retries:
                 print(f"  [rule retry {attempt + 1}/{max_retries}] {request.key}: {last_error}")
                 await asyncio.sleep(2**attempt)
-    print(f"  [rule FAILED after {max_retries} attempts] {request.key}: {last_error}")
-    return RuleExtractionResult(None, None, max_retries, last_error)
+    print(f"  [rule FAILED after {max_retries + 1} attempts] {request.key}: {last_error}")
+    return RuleExtractionResult(None, None, max_retries + 1, last_error)
 
 
 async def resolve_missing_rules_async(

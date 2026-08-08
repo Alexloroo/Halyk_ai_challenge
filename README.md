@@ -319,6 +319,61 @@ HALYK_LLM_CONCURRENCY=50
 
 После ответа модели выполняются deterministic fixups и semantic validation: неподдерживаемые категории, конфликт comparator и некорректный тип формулы не должны молча попасть в evaluator.
 
+#### Новые типы ковенантов: capability verifier и GenericFormulaSpec
+
+После обычного FormulaSpec независимый capability-запрос проверяет, действительно ли закрытая схема `AggKind` выражает весь смысл clause. Проверяются операции, numerator/denominator, условия, comparator и необходимые источники данных. Если существующая формула точна, pipeline оставляет прежний быстрый путь без изменения арифметики.
+
+Если правило требует новой математики, DeepSeek строит ограниченное дерево `GenericFormulaSpec`:
+
+```text
+constant / metric / sum_inflow / sum_outflow
+max_transaction / max_category / count
+add / subtract / multiply / divide
+min / max / average / abs
+```
+
+AST не содержит Python, SQL или произвольных функций. Глубина, количество узлов, arity операторов, comparator и источники метрик валидируются Python-кодом. Затем второй независимый LLM verifier сверяет построенное дерево с дословным clause evidence. Отклонённая или невыразимая формула не маскируется ближайшим `AggKind`: она получает `unsupported_formula` / `generic_formula_rejected` в private readiness, а submission сохраняет обязательный best-effort ответ.
+
+Каждая невалидная capability-попытка сохраняется в `capabilities.json` внутри `attempt_history`: там видны исходный structured response, первая возвращённая `clause_evidence` и точные ошибки локального валидатора. Поэтому успешный retry больше не скрывает причину первого отказа.
+
+Пример нового выражения:
+
+```text
+(revenue - capex - tax) / interest
+```
+
+представляется деревом `divide(subtract(...), sum_outflow(interest))`, после чего полностью вычисляется deterministic interpreter через `Decimal`.
+
+#### Реестр метрик и значения из документов
+
+Каждый generic-план объявляет `required_metrics` и источник каждой метрики:
+
+```text
+ledger: revenue, financing_inflow, EBITDA, related-party outflow, total inflow/outflow
+document: cash balance, total/net debt, equity, current assets/liabilities,
+          inventory, group CAPEX и новые statement metrics
+```
+
+Для document metric модель может только выбрать account-linked current документ и вернуть точные `evidence` и `value_text`. Candidate ID проверяется, evidence должен дословно присутствовать в переданном тексте, scale должен подтверждаться словами `thousand/million/billion` или их RU/KZ аналогами. Число и multiplier применяет Python.
+
+#### Нефинансовые documentary covenants
+
+Ковенанты вроде наличия действующей страховки, обязательного отчёта или согласия банка используют режим `documentary`. DeepSeek ищет точное подтверждающее evidence в account-linked документах, а Python преобразует установленный факт в `actual=1/0` и формирует verdict. Если подтверждение отсутствует, trace явно помечает, что отсутствие нельзя доказать так же строго, как найденную цитату.
+
+#### Последний full-context fallback
+
+Если capability verifier доказал, что `FormulaSpec` не подходит, а `GenericFormulaSpec` невозможно независимо подтвердить, запускается последний fallback только для одной ячейки:
+
+```text
+FormulaSpec → GenericFormulaSpec → full-context calculator + verifier
+                                      ↓ отказ
+                                 COMPLIANT / 0
+```
+
+Calculator получает только данные текущего scenario/account: полный current agreement, исправленный ledger, категории и направления, related/unrestricted flags, audit adjustments, KYC, account-linked current документы, найденные document metrics, threshold, comparator и period. В запрос не попадают `ground_truth.json`, scoring, synthetic manifest, ответы или данные других scenarios.
+
+Модель обязана вернуть пошаговую арифметику со ссылками `txn:<id>`, `metric:<name>` и `step:<n>`. Python независимо проверяет принадлежность каждой транзакции scenario/account и периоду, режим знака `signed/magnitude`, отсутствие повторного прямого учёта, валюты, каждый промежуточный результат, дословные document quotes, неизменность threshold/comparator/period и соответствие status рассчитанному actual. Затем отдельный DeepSeek verifier независимо сверяет результат и источники. При расхождении вся пара запросов повторяется один раз; неподтверждённый ответ не принимается.
+
 ### 11. Внешние финансовые значения связываются отдельно
 
 Некоторые ковенанты используют значение не из transaction ledger, например group-level CAPEX из consolidated financial statements.
@@ -327,7 +382,7 @@ Pipeline сначала пытается найти такой документ 
 
 То есть модель помогает решить entity-linking задачу, но не придумывает финансовый показатель.
 
-### 12. Финальный расчёт полностью детерминирован
+### 12. Финальный расчёт детерминирован для FormulaSpec и GenericFormulaSpec
 
 `evaluate.py` получает:
 
@@ -349,6 +404,8 @@ Rule
 6. сравнивает неокруглённый `actual` с threshold;
 7. определяет `COMPLIANT` / `BREACH`;
 8. ищет допустимый `evidence_txn_id`;
+
+Единственное исключение — описанный выше full-context fallback. Даже там модель не получает безусловного права записать ответ: Python перепроверяет арифметику и источники, после чего требуется совпадение с независимым verifier.
 9. округляет `actual` только при сериализации submission.
 
 LLM не получает ledger total и не принимает финальное решение `COMPLIANT/BREACH`.
@@ -439,6 +496,9 @@ Document(kind, edition, account_ids, text)
 | threshold/comparator/period | deterministic rule parser |
 | пропущенный template clause | DeepSeek evidence extraction → deterministic threshold validation |
 | сложная естественно-языковая формула | DeepSeek → validated `FormulaSpec` |
+| новая математика | capability verifier → allowlisted `GenericFormulaSpec` AST |
+| balance-sheet/document metric | evidence-bound document selection → Python Decimal parsing |
+| нефинансовый covenant | documentary evidence → deterministic boolean evaluation |
 | final actual/status | deterministic evaluator |
 
 Главная идея: **модель преобразует неструктурированный текст в ограниченную структуру, а критическая финансовая логика остаётся воспроизводимой**.
@@ -485,6 +545,9 @@ txn_id,date,account_id,counterparty,description,amount,currency
 | `llm_documents.py` | fallback document classification и entity linking |
 | `rules.py` | clause, period, threshold, comparator, categories |
 | `llm_rules.py` | validated fallback для template clauses, пропущенных rule parser |
+| `generic_formula.py` | безопасный AST, metric registry и deterministic interpreter |
+| `llm_capabilities.py` | capability verification, generic verifier, document metrics/facts |
+| `llm_full_context.py` | scenario-scoped calculator/verifier и локальная проверка арифметики |
 | `parties.py` | KYC ownership, related-party и unrestricted flags |
 | `audit.py` | reclassification, exclusion, missing amount/entry, FX |
 | `llm_extract.py` | concurrent DeepSeek parsing → validated `FormulaSpec` |
@@ -525,6 +588,25 @@ python3 -m halyk \
 
 `trace/manifest.json` содержит status и `duration_seconds` для стадий pipeline, а trace-папки сохраняют промежуточные данные для debugging. `private_readiness.json` показывает проблемы, важные для запуска на неизвестном датасете. Если присутствует `ground_truth.json`, fulltrace также выполняет локальное сравнение после создания submission.
 
+Для новых ковенантов stage `11_formulas` дополнительно сохраняет:
+
+```text
+capabilities.json
+generic_formulas.json
+generic_verifications.json
+document_metrics.json
+documentary_facts.json
+full_context.json
+capability_prompt.txt
+generic_verifier_prompt.txt
+metric_prompt.txt
+documentary_prompt.txt
+full_context_calculator_prompt.txt
+full_context_verifier_prompt.txt
+```
+
+Поэтому `unsupported_formula`, отсутствующая document metric, отклонённое AST или неподтверждённый documentary fact видны даже без `ground_truth.json`.
+
 Для обычного финального запуска trace не требуется.
 
 ## Настройки производительности
@@ -538,6 +620,12 @@ HALYK_LLM_CONCURRENCY=50
 
 # Восстановление пропущенных template clauses
 HALYK_RULE_LLM_CONCURRENCY=20
+
+# Capability verification, generic verifier и document evidence extraction
+HALYK_CAPABILITY_LLM_CONCURRENCY=30
+
+# Последний scenario-scoped calculator/verifier fallback
+HALYK_FULL_CONTEXT_LLM_CONCURRENCY=50
 
 # Selective OCR
 HALYK_OCR_ENABLED=1

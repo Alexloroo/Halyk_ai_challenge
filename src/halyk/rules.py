@@ -78,7 +78,7 @@ class Rule:
     heading: str
     text: str
     kind: RuleKind
-    comparator: str                  # ">=" for minimums, "<=" for ceilings
+    comparator: str  # ">=" for minimums, "<=" for ceilings
     threshold: Decimal | None
     period: tuple[date, date] | None
     categories: frozenset[Category] = frozenset()
@@ -89,52 +89,107 @@ class Rule:
 
 
 HEADING_RULES: list[tuple[re.Pattern[str], RuleKind, str, frozenset[Category]]] = [
-    (re.compile(r"выручк\w*\s+за\s+вычет", re.I),
-     RuleKind.UNKNOWN, ">=", frozenset()),
-    (re.compile(r"минимальн\w*\s+выручк", re.I),
-     RuleKind.MIN_REVENUE, ">=", frozenset({Category.REVENUE})),
-    (re.compile(r"minimum\s+revenue|revenue\s+minimum", re.I),
-     RuleKind.MIN_REVENUE, ">=", frozenset({Category.REVENUE})),
-    (re.compile(r"максимальн\w*\s+платеж\w*\s+связанн", re.I),
-     RuleKind.MAX_RELATED_PARTY, "<=", frozenset()),
-    (re.compile(
-        r"maximum\s+related[- ]party\s+payments?\b(?!\s+as\s+a\s+proportion)", re.I
+    (re.compile(r"выручк\w*\s+за\s+вычет", re.I), RuleKind.UNKNOWN, ">=", frozenset()),
+    (
+        re.compile(r"минимальн\w*\s+выручк", re.I),
+        RuleKind.MIN_REVENUE,
+        ">=",
+        frozenset({Category.REVENUE}),
     ),
-     RuleKind.MAX_RELATED_PARTY, "<=", frozenset()),
-    (re.compile(r"related-party payments as a proportion|дол\w*\s+платеж\w*\s+связанн", re.I),
-     RuleKind.RELATED_PARTY_SHARE, "<=", frozenset()),
-    (re.compile(r"максимальн\w*\s+расход\w*\s+по\s+категории", re.I),
-     RuleKind.MAX_CATEGORY_SPEND, "<=", frozenset()),
-    (re.compile(r"maximum\s+(?:category\s+)?spend|category\s+spend\s+ceiling", re.I),
-     RuleKind.MAX_CATEGORY_SPEND, "<=", frozenset()),
-    (re.compile(r"ratio|коэффициент|отношени|рентабельност|покрыти|leverage|intensity", re.I),
-     RuleKind.RATIO, "<=", frozenset()),
-    (re.compile(r"коэффициент|арақатынас|қатынас|рентабельділік|өтімділік|жабу", re.I),
-     RuleKind.RATIO, "<=", frozenset()),
-    (re.compile(r"ең\s+төменгі.*(?:түсім|кіріс)|минималды.*(?:түсім|кіріс)", re.I),
-     RuleKind.MIN_REVENUE, ">=", frozenset({Category.REVENUE})),
-    (re.compile(r"байланысты\s+тарап.*(?:ең\s+жоғары|максималды)", re.I),
-     RuleKind.MAX_RELATED_PARTY, "<=", frozenset()),
-    (re.compile(r"санат\s+бойынша.*(?:ең\s+жоғары|максималды).*шығын", re.I),
-     RuleKind.MAX_CATEGORY_SPEND, "<=", frozenset()),
+    (
+        re.compile(r"minimum\s+revenue|revenue\s+minimum", re.I),
+        RuleKind.MIN_REVENUE,
+        ">=",
+        frozenset({Category.REVENUE}),
+    ),
+    (
+        re.compile(r"максимальн\w*\s+платеж\w*\s+связанн", re.I),
+        RuleKind.MAX_RELATED_PARTY,
+        "<=",
+        frozenset(),
+    ),
+    (
+        re.compile(r"maximum\s+related[- ]party\s+payments?\b(?!\s+as\s+a\s+proportion)", re.I),
+        RuleKind.MAX_RELATED_PARTY,
+        "<=",
+        frozenset(),
+    ),
+    (
+        re.compile(r"related-party payments as a proportion|дол\w*\s+платеж\w*\s+связанн", re.I),
+        RuleKind.RELATED_PARTY_SHARE,
+        "<=",
+        frozenset(),
+    ),
+    (
+        re.compile(r"максимальн\w*\s+расход\w*\s+по\s+категории", re.I),
+        RuleKind.MAX_CATEGORY_SPEND,
+        "<=",
+        frozenset(),
+    ),
+    (
+        re.compile(r"maximum\s+(?:category\s+)?spend|category\s+spend\s+ceiling", re.I),
+        RuleKind.MAX_CATEGORY_SPEND,
+        "<=",
+        frozenset(),
+    ),
+    (
+        re.compile(r"ratio|коэффициент|отношени|рентабельност|покрыти|leverage|intensity", re.I),
+        RuleKind.RATIO,
+        "<=",
+        frozenset(),
+    ),
+    (
+        re.compile(r"коэффициент|арақатынас|қатынас|рентабельділік|өтімділік|жабу", re.I),
+        RuleKind.RATIO,
+        "<=",
+        frozenset(),
+    ),
+    (
+        re.compile(
+            r"ең\s+төменгі.*(?:түсім|кіріс)|(?:түсім|кіріс)\w*.*ең\s+төменгі|"
+            r"минималды.*(?:түсім|кіріс)",
+            re.I,
+        ),
+        RuleKind.MIN_REVENUE,
+        ">=",
+        frozenset({Category.REVENUE}),
+    ),
+    (
+        re.compile(r"байланысты\s+тарап.*(?:ең\s+жоғары|максималды)", re.I),
+        RuleKind.MAX_RELATED_PARTY,
+        "<=",
+        frozenset(),
+    ),
+    (
+        re.compile(r"санат\s+бойынша.*(?:ең\s+жоғары|максималды).*шығын", re.I),
+        RuleKind.MAX_CATEGORY_SPEND,
+        "<=",
+        frozenset(),
+    ),
 ]
 
 #: Category words as they appear inside clause text.
 CATEGORY_WORDS: list[tuple[re.Pattern[str], Category]] = [
     (re.compile(r"страхов|\binsurance\b", re.I), Category.INSURANCE),
     (re.compile(r"аренд|лизинг|\blease\b", re.I), Category.LEASE),
-    (re.compile(r"персонал|оплат\w*\s+труда|фонд оплаты|\bpersonnel\b|\bpayroll\b", re.I),
-     Category.PERSONNEL),
+    (
+        re.compile(r"персонал|оплат\w*\s+труда|фонд оплаты|\bpersonnel\b|\bpayroll\b", re.I),
+        Category.PERSONNEL,
+    ),
     (re.compile(r"коммунальн|\butilit(?:y|ies)\b", re.I), Category.UTILITIES),
     (re.compile(r"налог|\btax(?:es)?\b", re.I), Category.TAX),
     (re.compile(r"процент|купон|\binterest\b", re.I), Category.INTEREST),
     (re.compile(r"маркетинг|реклам|\bmarketing\b", re.I), Category.MARKETING),
-    (re.compile(r"капитальн\w*\s+затрат|\bcapex\b|\bcapital expenditure", re.I),
-     Category.CAPEX),
-    (re.compile(r"операционн\w*\s+расход|\bopex\b|\boperating expense", re.I),
-     Category.OPEX),
-    (re.compile(r"консультац|профессиональн|\bprofessional(?: services?)?\b|"
-                r"\bconsult(?:ing|ancy)?\b|\badvisory\b", re.I), Category.PROFESSIONAL),
+    (re.compile(r"капитальн\w*\s+затрат|\bcapex\b|\bcapital expenditure", re.I), Category.CAPEX),
+    (re.compile(r"операционн\w*\s+расход|\bopex\b|\boperating expense", re.I), Category.OPEX),
+    (
+        re.compile(
+            r"консультац|профессиональн|\bprofessional(?: services?)?\b|"
+            r"\bconsult(?:ing|ancy)?\b|\badvisory\b",
+            re.I,
+        ),
+        Category.PROFESSIONAL,
+    ),
     (re.compile(r"выручк|\brevenue\b", re.I), Category.REVENUE),
     (re.compile(r"сақтандыру", re.I), Category.INSURANCE),
     (re.compile(r"жалдау|лизинг", re.I), Category.LEASE),
@@ -145,14 +200,13 @@ CATEGORY_WORDS: list[tuple[re.Pattern[str], Category]] = [
     (re.compile(r"маркетинг|жарнама", re.I), Category.MARKETING),
     (re.compile(r"күрделі\s+шығын|капиталдық\s+шығын", re.I), Category.CAPEX),
     (re.compile(r"операциялық\s+шығын", re.I), Category.OPEX),
-    (re.compile(r"кәсіби|консультациялық|аудиторлық|заңгерлік", re.I),
-     Category.PROFESSIONAL),
+    (re.compile(r"кәсіби|консультациялық|аудиторлық|заңгерлік", re.I), Category.PROFESSIONAL),
     (re.compile(r"түсім|кіріс", re.I), Category.REVENUE),
 ]
 
 MINIMUM_WORDS = re.compile(
     r"не\s+менее|не\s+ниже|at\s+least|not\s+less\s+than|must\s+not\s+fall\s+below|"
-    r"кем\s+емес|төмен\s+емес",
+    r"кем\s+емес|төмен\s+емес|кем\s+болма\w*\s+тиіс",
     re.I,
 )
 MAXIMUM_WORDS = re.compile(
@@ -200,17 +254,11 @@ def _money_number(text: str) -> Decimal:
         compact = compact.replace(thousands_separator, "").replace(decimal_separator, ".")
     elif "," in compact:
         pieces = compact.split(",")
-        compact = (
-            ".".join(pieces)
-            if len(pieces) == 2 and len(pieces[-1]) <= 2
-            else "".join(pieces)
-        )
+        compact = ".".join(pieces) if len(pieces) == 2 and len(pieces[-1]) <= 2 else "".join(pieces)
     elif compact.count(".") > 1:
         pieces = compact.split(".")
         compact = (
-            "".join(pieces[:-1]) + "." + pieces[-1]
-            if len(pieces[-1]) <= 2
-            else "".join(pieces)
+            "".join(pieces[:-1]) + "." + pieces[-1] if len(pieces[-1]) <= 2 else "".join(pieces)
         )
     return Decimal(compact)
 
@@ -259,10 +307,7 @@ def _period(text: str) -> tuple[date, date] | None:
     match = EU_PERIOD.search(text)
     if not match:
         return None
-    return tuple(
-        date(int(raw[-4:]), int(raw[3:5]), int(raw[:2]))
-        for raw in match.groups()
-    )
+    return tuple(date(int(raw[-4:]), int(raw[3:5]), int(raw[:2])) for raw in match.groups())
 
 
 def extract_rules(scenario_id: str, agreement_text: str) -> dict[str, Rule]:
@@ -288,7 +333,7 @@ def extract_rules(scenario_id: str, agreement_text: str) -> dict[str, Rule]:
             scenario_id=scenario_id,
             clause=clause,
             heading=heading,
-            text=" ".join(body.split())[:1200],
+            text=" ".join(body.split())[:4000],
             kind=kind,
             comparator=comparator,
             threshold=_threshold(body, kind),
@@ -316,7 +361,7 @@ def rule_from_evidence(
         scenario_id=scenario_id,
         clause=clause,
         heading=" ".join(heading.split()),
-        text=" ".join(text.split())[:1200],
+        text=" ".join(text.split())[:4000],
         kind=kind,
         comparator=comparator,
         threshold=_threshold(text, kind),

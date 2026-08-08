@@ -53,9 +53,7 @@ def test_solve_fulltrace_writes_every_pipeline_stage(tmp_path: Path) -> None:
     manifest = json.loads((writer.root / "manifest.json").read_text(encoding="utf-8"))
     assert [stage["name"] for stage in manifest["stages"]] == expected_stages
     assert (writer.root / "04_pymupdf" / "one.txt").read_text(encoding="utf-8").strip()
-    categorized = (writer.root / "03_ledger_categorized" / "ledger.csv").read_text(
-        encoding="utf-8"
-    )
+    categorized = (writer.root / "03_ledger_categorized" / "ledger.csv").read_text(encoding="utf-8")
     assert "revenue" in categorized
     assert (writer.root / "08_audit_and_fx" / "P1" / "ledger_before.csv").exists()
     assert (writer.root / "08_audit_and_fx" / "P1" / "ledger_after.csv").exists()
@@ -63,9 +61,7 @@ def test_solve_fulltrace_writes_every_pipeline_stage(tmp_path: Path) -> None:
         (writer.root / "12_evaluation" / "P1" / "6_1.json").read_text(encoding="utf-8")
     )
     assert evaluation["answer"]["note"] == "no rule extracted"
-    readiness = json.loads(
-        (writer.root / "private_readiness.json").read_text(encoding="utf-8")
-    )
+    readiness = json.loads((writer.root / "private_readiness.json").read_text(encoding="utf-8"))
     assert readiness["status"] == "FAIL"
     assert "missing_rule" in {finding["code"] for finding in readiness["findings"]}
 
@@ -150,9 +146,7 @@ def test_fulltrace_records_real_adjustment_rule_and_evidence_calculation(tmp_pat
     after = (writer.root / "08_audit_and_fx/P1/ledger_after.csv").read_text()
     assert ",opex," in before
     assert ",capex," in after
-    evaluation = json.loads(
-        (writer.root / "12_evaluation/P1/6_1.json").read_text(encoding="utf-8")
-    )
+    evaluation = json.loads((writer.root / "12_evaluation/P1/6_1.json").read_text(encoding="utf-8"))
     assert evaluation["rule"]["kind"] == "max_category_spend"
     assert evaluation["calculation"]["aggregates"] == {"selected_total": "60.00"}
     assert evaluation["evidence_trials"] == {"TXN-P1-0001": "COMPLIANT"}

@@ -33,9 +33,7 @@ def test_document_loader_reports_failed_pdfs_without_losing_valid_text(tmp_path:
 
     writer = TraceWriter.create(tmp_path / "trace")
     trace_pymupdf(writer, documents, issues)
-    index = json.loads(
-        (writer.root / "04_pymupdf/index.json").read_text(encoding="utf-8")
-    )
+    index = json.loads((writer.root / "04_pymupdf/index.json").read_text(encoding="utf-8"))
     assert index[0]["native_pages"] == [1]
     assert index[0]["ocr_pages"] == []
     assert index[0]["ocr_failed_pages"] == []

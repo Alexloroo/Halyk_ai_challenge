@@ -8,6 +8,7 @@ from dataclasses import dataclass, field
 from .categorize import Category
 from .docs import Document, DocumentLoadIssue
 from .evaluate import EvaluationTrace
+from .generic_formula import CovenantMode, ExternalMetric, GenericFormulaSpec, MetricSource
 from .ledger import LedgerEntry
 from .llm_extract import FormulaSpec
 from .parties import RelatedParties
@@ -43,12 +44,24 @@ def assess_private_readiness(
     categorization_records: list[dict[str, object]],
     document_issues: list[DocumentLoadIssue],
     llm_enabled: bool,
+    generic_formulas: dict[str, GenericFormulaSpec] | None = None,
+    capability_results: dict[str, object] | None = None,
+    generic_verifications: dict[str, object] | None = None,
+    external_metrics: dict[str, dict[str, ExternalMetric]] | None = None,
+    documentary_facts: dict[str, bool] | None = None,
+    full_context_results: dict[str, object] | None = None,
 ) -> PrivateReadinessReport:
     """Return actionable validation findings without changing solver output."""
     findings: list[QualityFinding] = []
     expected_cells = sum(len(clauses) for clauses in template.values())
     category_llm_requested = 0
     category_llm_resolved = 0
+    generic_formulas = generic_formulas or {}
+    capability_results = capability_results or {}
+    generic_verifications = generic_verifications or {}
+    external_metrics = external_metrics or {}
+    documentary_facts = documentary_facts or {}
+    full_context_results = full_context_results or {}
 
     def add(
         severity: str,
@@ -58,9 +71,7 @@ def assess_private_readiness(
         clause: str | None = None,
         subject: str | None = None,
     ) -> None:
-        findings.append(
-            QualityFinding(severity, code, message, scenario_id, clause, subject)
-        )
+        findings.append(QualityFinding(severity, code, message, scenario_id, clause, subject))
 
     for issue in document_issues:
         add(
@@ -126,9 +137,7 @@ def assess_private_readiness(
             for rule in scenario_rules.values()
         )
         party_result = parties.get(scenario_id)
-        if requires_parties and (
-            party_result is None or party_result.threshold_percent is None
-        ):
+        if requires_parties and (party_result is None or party_result.threshold_percent is None):
             add(
                 "FAIL",
                 "unresolved_related_parties",
@@ -137,7 +146,8 @@ def assess_private_readiness(
             )
 
         unresolved_defects = [
-            entry for entry in entries
+            entry
+            for entry in entries
             if any(defect != "audit_excluded" for defect in entry.defects)
         ]
         if unresolved_defects:
@@ -169,35 +179,170 @@ def assess_private_readiness(
             rule = scenario_rules.get(clause)
             if rule is None:
                 add(
-                    "FAIL", "missing_rule", "Covenant clause was not extracted",
-                    scenario_id, clause,
+                    "FAIL",
+                    "missing_rule",
+                    "Covenant clause was not extracted",
+                    scenario_id,
+                    clause,
                 )
                 continue
             extracted_rules += 1
-            if rule.threshold is None:
+            generic = generic_formulas.get(key)
+            if rule.threshold is None and (
+                generic is None or generic.mode is not CovenantMode.DOCUMENTARY
+            ):
                 add(
-                    "FAIL", "missing_threshold", "Covenant threshold was not extracted",
-                    scenario_id, clause,
+                    "FAIL",
+                    "missing_threshold",
+                    "Covenant threshold was not extracted",
+                    scenario_id,
+                    clause,
                 )
             if rule.period is None:
                 add(
-                    "WARN", "missing_period", "Covenant period was not extracted",
-                    scenario_id, clause,
+                    "WARN",
+                    "missing_period",
+                    "Covenant period was not extracted",
+                    scenario_id,
+                    clause,
                 )
             if rule.kind in (RuleKind.RATIO, RuleKind.UNKNOWN):
                 required_formulas += 1
-                if llm_enabled and key not in formulas:
+                full_context = full_context_results.get(key)
+                full_context_accepted = bool(getattr(full_context, "accepted", False))
+                capability = capability_results.get(key)
+                capability_resolution = getattr(capability, "resolution", None)
+                if (
+                    llm_enabled
+                    and capability is not None
+                    and capability_resolution is None
+                    and key not in formulas
+                    and key not in generic_formulas
+                    and not full_context_accepted
+                ):
                     add(
-                        "FAIL", "missing_formula", "Required LLM formula is unavailable",
-                        scenario_id, clause,
+                        "FAIL",
+                        "capability_verification_failed",
+                        "Formula capability verification failed",
+                        scenario_id,
+                        clause,
+                    )
+                if (
+                    capability_resolution is not None
+                    and capability_resolution.mode is CovenantMode.UNSUPPORTED
+                    and not full_context_accepted
+                ):
+                    add(
+                        "WARN" if key in formulas else "FAIL",
+                        ("formula_capability_gap" if key in formulas else "unsupported_formula"),
+                        capability_resolution.reason,
+                        scenario_id,
+                        clause,
+                    )
+                if (
+                    llm_enabled
+                    and key not in formulas
+                    and key not in generic_formulas
+                    and not full_context_accepted
+                ):
+                    add(
+                        "FAIL",
+                        "missing_formula",
+                        "Required LLM formula is unavailable",
+                        scenario_id,
+                        clause,
+                    )
+                verification = generic_verifications.get(key)
+                verification_resolution = getattr(verification, "resolution", None)
+                if (
+                    verification is not None
+                    and (verification_resolution is None or not verification_resolution.accepted)
+                    and not full_context_accepted
+                ):
+                    issues = (
+                        ", ".join(verification_resolution.issues)
+                        if verification_resolution is not None
+                        else "verifier unavailable"
+                    )
+                    add(
+                        "WARN" if key in formulas else "FAIL",
+                        (
+                            "generic_formula_rejected_fallback_preserved"
+                            if key in formulas
+                            else "generic_formula_rejected"
+                        ),
+                        f"Generic formula verification failed: {issues}",
+                        scenario_id,
+                        clause,
+                    )
+                if generic is not None:
+                    missing_metrics = [
+                        requirement.name
+                        for requirement in generic.required_metrics
+                        if requirement.source is MetricSource.DOCUMENT
+                        and requirement.name not in external_metrics.get(key, {})
+                    ]
+                    if missing_metrics and not full_context_accepted:
+                        add(
+                            "FAIL",
+                            "missing_document_metric",
+                            f"Document metrics unavailable: {', '.join(sorted(missing_metrics))}",
+                            scenario_id,
+                            clause,
+                        )
+                    if (
+                        generic.mode is CovenantMode.DOCUMENTARY
+                        and key not in documentary_facts
+                        and not full_context_accepted
+                    ):
+                        add(
+                            "FAIL",
+                            "missing_documentary_fact",
+                            "Documentary requirement could not be resolved",
+                            scenario_id,
+                            clause,
+                        )
+                    elif (
+                        generic.mode is CovenantMode.DOCUMENTARY
+                        and documentary_facts.get(key) is False
+                    ):
+                        add(
+                            "WARN",
+                            "documentary_absence_unverifiable",
+                            "No supporting evidence was found; "
+                            "absence is not independently provable",
+                            scenario_id,
+                            clause,
+                        )
+
+                if full_context is not None and not full_context_accepted:
+                    add(
+                        "FAIL",
+                        "full_context_rejected",
+                        getattr(full_context, "error", None)
+                        or "Calculator and independent verifier did not agree",
+                        scenario_id,
+                        clause,
                     )
 
             details = evaluations.get(key)
             if details is not None:
                 for flag in details.quality_flags:
-                    severity = "FAIL" if flag in {
-                        "missing_threshold", "missing_formula", "zero_denominator"
-                    } else "WARN"
+                    severity = (
+                        "FAIL"
+                        if flag
+                        in {
+                            "missing_threshold",
+                            "missing_formula",
+                            "zero_denominator",
+                            "unsupported_formula",
+                            "missing_documentary_fact",
+                            "full_context_rejected",
+                        }
+                        or flag.startswith("missing_metric:")
+                        or flag.startswith("unsupported_operator:")
+                        else "WARN"
+                    )
                     add(severity, flag, flag.replace("_", " "), scenario_id, clause)
 
     findings = list(
@@ -222,6 +367,12 @@ def assess_private_readiness(
             "extracted_rules": extracted_rules,
             "required_formulas": required_formulas,
             "available_formulas": len(formulas),
+            "generic_formulas": len(generic_formulas),
+            "external_metrics": sum(len(values) for values in external_metrics.values()),
+            "documentary_facts": len(documentary_facts),
+            "full_context_accepted": sum(
+                bool(getattr(result, "accepted", False)) for result in full_context_results.values()
+            ),
             "category_llm_requested": category_llm_requested,
             "category_llm_resolved": category_llm_resolved,
             "document_load_issues": len(document_issues),

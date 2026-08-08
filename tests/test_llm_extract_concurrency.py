@@ -122,7 +122,7 @@ def test_failed_request_does_not_cancel_siblings(monkeypatch) -> None:
     formulas = extract_formulas(rules)
 
     assert set(formulas) == {"T/6.1", "T/6.3"}
-    assert backoffs == [1, 2]
+    assert backoffs == [1, 2, 4]
 
 
 def test_successful_async_result_still_receives_fixup(monkeypatch) -> None:

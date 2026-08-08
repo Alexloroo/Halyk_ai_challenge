@@ -84,9 +84,7 @@ def _compare_cell(
     expected_evidence = expected.get("evidence_txn_id")
     submitted_evidence = submitted.get("evidence_txn_id")
     evidence_match = (
-        expected_present
-        and submitted_present
-        and submitted_evidence == expected_evidence
+        expected_present and submitted_present and submitted_evidence == expected_evidence
     )
 
     cell_score = Decimal(0)
@@ -154,9 +152,7 @@ def compare_ground_truth(
         "cells": len(comparisons),
         "status_matches": sum(bool(row["status_match"]) for row in comparisons),
         "actual_exact_matches": sum(bool(row["actual_exact_match"]) for row in comparisons),
-        "actual_within_5_percent": sum(
-            bool(row["actual_within_5_percent"]) for row in comparisons
-        ),
+        "actual_within_5_percent": sum(bool(row["actual_within_5_percent"]) for row in comparisons),
         "evidence_matches": sum(bool(row["evidence_match"]) for row in comparisons),
         "exact_cell_matches": sum(bool(row["exact_cell_match"]) for row in comparisons),
         "unweighted_score": float(score.quantize(Decimal("0.000001"))),

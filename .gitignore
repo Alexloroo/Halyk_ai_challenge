@@ -11,3 +11,4 @@ __pycache__/
 
 trace/
 submission.json
+data/raw/

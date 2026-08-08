@@ -41,18 +41,21 @@ def test_cli_only_recreates_trace_when_fulltrace_is_enabled(tmp_path: Path) -> N
     assert normal_output.exists()
 
     traced_output = tmp_path / "traced.json"
-    assert main(
-        [
-            "--data-dir",
-            str(data_dir),
-            "--output",
-            str(traced_output),
-            "--trace-dir",
-            str(trace_dir),
-            "--no-llm",
-            "--fulltrace",
-        ]
-    ) == 0
+    assert (
+        main(
+            [
+                "--data-dir",
+                str(data_dir),
+                "--output",
+                str(traced_output),
+                "--trace-dir",
+                str(trace_dir),
+                "--no-llm",
+                "--fulltrace",
+            ]
+        )
+        == 0
+    )
     assert not sentinel.exists()
     traced_submission = json.loads(
         (trace_dir / "13_submission" / "submission.json").read_text(encoding="utf-8")
@@ -97,18 +100,21 @@ def test_ground_truth_is_post_run_only_and_cannot_change_submission(tmp_path: Pa
         ),
         encoding="utf-8",
     )
-    assert main(
-        [
-            "--data-dir",
-            str(data_dir),
-            "--output",
-            str(with_poisoned_truth),
-            "--trace-dir",
-            str(tmp_path / "poison-trace"),
-            "--no-llm",
-            "--fulltrace",
-        ]
-    ) == 0
+    assert (
+        main(
+            [
+                "--data-dir",
+                str(data_dir),
+                "--output",
+                str(with_poisoned_truth),
+                "--trace-dir",
+                str(tmp_path / "poison-trace"),
+                "--no-llm",
+                "--fulltrace",
+            ]
+        )
+        == 0
+    )
 
     assert json.loads(with_poisoned_truth.read_text(encoding="utf-8")) == json.loads(
         without_truth.read_text(encoding="utf-8")

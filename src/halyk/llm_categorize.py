@@ -100,9 +100,7 @@ def _validate_resolution(
 ) -> list[str]:
     errors: list[str] = []
     if resolution.direction is not request.direction:
-        errors.append(
-            f"direction {resolution.direction} does not match {request.direction}"
-        )
+        errors.append(f"direction {resolution.direction} does not match {request.direction}")
     if request.direction is FlowDirection.OUTFLOW and resolution.category in {
         Category.REVENUE,
         Category.FINANCING,
@@ -139,7 +137,7 @@ async def _resolve_one(
     ]
     last_error: str | None = None
     validation_feedback = ""
-    for attempt in range(max_retries):
+    for attempt in range(max_retries + 1):
         messages[-1]["content"] = payload + validation_feedback
         try:
             async with semaphore:
@@ -160,16 +158,13 @@ async def _resolve_one(
             return CategoryResolutionResult(resolution=resolution, attempts=attempt + 1)
         except Exception as exc:
             last_error = f"{type(exc).__name__}: {exc}"
-            if attempt < max_retries - 1:
-                print(
-                    f"  [category retry {attempt + 1}/{max_retries}] "
-                    f"{request.key}: {last_error}"
-                )
-                await asyncio.sleep(2 ** attempt)
-    print(f"  [category FAILED after {max_retries} attempts] {request.key}: {last_error}")
+            if attempt < max_retries:
+                print(f"  [category retry {attempt + 1}/{max_retries}] {request.key}: {last_error}")
+                await asyncio.sleep(2**attempt)
+    print(f"  [category FAILED after {max_retries + 1} attempts] {request.key}: {last_error}")
     return CategoryResolutionResult(
         resolution=None,
-        attempts=max_retries,
+        attempts=max_retries + 1,
         error=last_error,
     )
 
@@ -209,8 +204,7 @@ async def resolve_categories_async(
         await _close_llm(llm)
     by_fingerprint = dict(zip(fingerprints, completed, strict=True))
     results = {
-        key: by_fingerprint[fingerprint]
-        for key, fingerprint in request_fingerprints.items()
+        key: by_fingerprint[fingerprint] for key, fingerprint in request_fingerprints.items()
     }
     for request in requests:
         result = results[request.key]

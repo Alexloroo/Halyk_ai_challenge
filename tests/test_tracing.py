@@ -80,9 +80,7 @@ def test_artifact_path_cannot_escape_stage_directory(tmp_path: Path) -> None:
 def test_stage_context_records_the_actual_failed_stage(tmp_path: Path) -> None:
     writer = TraceWriter.create(tmp_path / "trace")
 
-    with pytest.raises(RuntimeError, match="ledger broke"), writer.stage(
-        "02_ledger_loaded"
-    ):
+    with pytest.raises(RuntimeError, match="ledger broke"), writer.stage("02_ledger_loaded"):
         writer.write_json("02_ledger_loaded", "partial.json", {"rows": 1})
         raise RuntimeError("ledger broke")
 
@@ -90,9 +88,7 @@ def test_stage_context_records_the_actual_failed_stage(tmp_path: Path) -> None:
     assert manifest["stages"][0]["name"] == "02_ledger_loaded"
     assert manifest["stages"][0]["status"] == "failed"
     assert manifest["stages"][0]["artifacts"] == ["02_ledger_loaded/partial.json"]
-    assert manifest["stages"][0]["error"] == {
-        "type": "RuntimeError", "message": "ledger broke"
-    }
+    assert manifest["stages"][0]["error"] == {"type": "RuntimeError", "message": "ledger broke"}
     assert manifest["stages"][0]["duration_seconds"] > 0
 
 

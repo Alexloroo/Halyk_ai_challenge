@@ -105,7 +105,8 @@ def test_one_category_failure_does_not_cancel_siblings(monkeypatch) -> None:
 
     assert results[requests[0].key].resolution is not None
     assert results[requests[1].key].resolution is None
-    assert results[requests[1].key].attempts == 3
+    assert results[requests[1].key].attempts == 4
+    assert structured.calls == 5
 
 
 def test_direction_conflict_is_retried_before_acceptance(monkeypatch) -> None:
@@ -125,9 +126,7 @@ def test_direction_conflict_is_retried_before_acceptance(monkeypatch) -> None:
             )
 
     structured = SequencedStructured()
-    monkeypatch.setattr(
-        "halyk.llm_extract._build_llm", lambda: FakeLLM(structured)
-    )
+    monkeypatch.setattr("halyk.llm_extract._build_llm", lambda: FakeLLM(structured))
 
     async def no_wait(delay: float) -> None:
         return None

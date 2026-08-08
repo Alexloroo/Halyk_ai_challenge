@@ -41,12 +41,21 @@ def _entry(scenario: str, account: str, txn_id: str, day: date) -> LedgerEntry:
 def test_quality_gate_reports_formula_and_denominator_failures_once() -> None:
     entry = _entry("S1", "ACC-123456", "TXN-S1-0001", date(2026, 6, 1))
     agreement = Document(
-        Path("agreement.pdf"), "agreement", DocKind.CREDIT_AGREEMENT,
-        Edition.CURRENT, ["ACC-123456"], 1,
+        Path("agreement.pdf"),
+        "agreement",
+        DocKind.CREDIT_AGREEMENT,
+        Edition.CURRENT,
+        ["ACC-123456"],
+        1,
     )
     rule = Rule(
-        scenario_id="S1", clause="6.1", heading="ratio", text="capex / revenue <= 1x",
-        kind=RuleKind.RATIO, comparator="<=", threshold=Decimal("1"),
+        scenario_id="S1",
+        clause="6.1",
+        heading="ratio",
+        text="capex / revenue <= 1x",
+        kind=RuleKind.RATIO,
+        comparator="<=",
+        threshold=Decimal("1"),
         period=(date(2026, 1, 1), date(2026, 12, 31)),
     )
     details = EvaluationTrace(quality_flags=["missing_formula", "zero_denominator"])
@@ -66,9 +75,7 @@ def test_quality_gate_reports_formula_and_denominator_failures_once() -> None:
 
     assert report.status == "FAIL"
     assert [finding.code for finding in report.findings].count("missing_formula") == 1
-    assert {finding.code for finding in report.findings} >= {
-        "missing_formula", "zero_denominator"
-    }
+    assert {finding.code for finding in report.findings} >= {"missing_formula", "zero_denominator"}
 
 
 def _write_dataset(root: Path, scenario: str, account: str, txn_rows: list[str]) -> None:
@@ -111,13 +118,19 @@ def test_private_like_identifier_format_and_row_order_changes_preserve_answer(
         Path("base.pdf"),
         "ACC-1234\nПункт 6.1 Минимальная выручка.\n"
         "За период с 2025-01-01 по 2025-12-31 выручка не менее $500.00.\nСтатья 7",
-        DocKind.CREDIT_AGREEMENT, Edition.CURRENT, ["ACC-1234"], 1,
+        DocKind.CREDIT_AGREEMENT,
+        Edition.CURRENT,
+        ["ACC-1234"],
+        1,
     )
     variant_document = Document(
         Path("variant.pdf"),
         "ACC-123456\nClause 6 . 1) Minimum revenue.\n"
         "Revenue from 01.01.2026 to 31.12.2026 must be at least 500,00 USD.\nArticle 7",
-        DocKind.CREDIT_AGREEMENT, Edition.CURRENT, ["ACC-123456"], 1,
+        DocKind.CREDIT_AGREEMENT,
+        Edition.CURRENT,
+        ["ACC-123456"],
+        1,
     )
 
     base = solve(data_dir=base_root, documents=[base_document], use_llm=False)
@@ -132,7 +145,8 @@ def test_private_like_identifier_format_and_row_order_changes_preserve_answer(
     base_answer = base.answers["BASE"]["6.1"]
     variant_answer = variant.answers["PRIVATE99"]["6.1"]
     assert (variant_answer.status, variant_answer.actual) == (
-        base_answer.status, base_answer.actual
+        base_answer.status,
+        base_answer.actual,
     )
     readiness = json.loads(
         (variant_writer.root / "private_readiness.json").read_text(encoding="utf-8")
@@ -150,10 +164,7 @@ def test_hybrid_category_resolution_is_applied_and_traced(
         root,
         "N1",
         "ACC-123456",
-        [
-            "TXN-N1-0001,2026-06-01,ACC-123456,Machine Vendor,"
-            "orbital fleet synchronization,-600,USD"
-        ],
+        ["TXN-N1-0001,2026-06-01,ACC-123456,Machine Vendor,orbital fleet synchronization,-600,USD"],
     )
     agreement = Document(
         Path("agreement.pdf"),
@@ -204,10 +215,7 @@ def test_unknown_agreement_is_classified_before_document_selection(
         root,
         "N2",
         "ACC-654321",
-        [
-            "TXN-N2-0001,2026-06-01,ACC-654321,Customer LLP,"
-            "service revenue,600,USD"
-        ],
+        ["TXN-N2-0001,2026-06-01,ACC-654321,Customer LLP,service revenue,600,USD"],
     )
     agreement = Document(
         Path("opaque.pdf"),
@@ -243,9 +251,7 @@ def test_unknown_agreement_is_classified_before_document_selection(
             for request in requests
         }
 
-    monkeypatch.setattr(
-        "halyk.run.resolve_document_classifications", fake_document_resolve
-    )
+    monkeypatch.setattr("halyk.run.resolve_document_classifications", fake_document_resolve)
     writer = TraceWriter.create(tmp_path / "trace")
 
     report = solve(
@@ -258,9 +264,7 @@ def test_unknown_agreement_is_classified_before_document_selection(
     assert report.agreements_missing == []
     assert report.answers["N2"]["6.1"].actual == Decimal("600")
     decisions = json.loads(
-        (writer.root / "05_documents_classified/decisions.json").read_text(
-            encoding="utf-8"
-        )
+        (writer.root / "05_documents_classified/decisions.json").read_text(encoding="utf-8")
     )
     assert decisions[0]["initial_kind"] == "unknown"
     assert decisions[0]["final_kind"] == "credit_agreement"

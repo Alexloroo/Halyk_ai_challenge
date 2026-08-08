@@ -35,7 +35,7 @@ class Category(StrEnum):
     INTEREST = "interest"
     MARKETING = "marketing"
     PROFESSIONAL = "professional"
-    CONTRA = "contra"          # refunds, credits, reversals — reduce a cost
+    CONTRA = "contra"  # refunds, credits, reversals — reduce a cost
     UNKNOWN = "unknown"
 
 
@@ -45,95 +45,214 @@ def _rx(*parts: str) -> re.Pattern[str]:
 
 # Tested first: these reverse a cost and must never count as revenue.
 CONTRA = _rx(
-    r"\brebate\b", r"\brefund", r"\bcredit received\b", r"\badjustment credit\b",
-    r"\bcredit note\b", r"\breturned\b", r"\breturn\b", r"\brecovered\b",
-    r"\bsweep back\b", r"\bswept back\b", r"\breversal\b", r"\breversed\b",
-    r"\bwrite-back\b", r"\bclawback\b", r"\bunearned\b", r"\bdeposit returned\b",
-    r"\bservice credit\b", r"\brate adjustment credit\b",
-    r"қайтар", r"кері аудар", r"жеңілдік", r"түзету кредит",
+    r"\brebate\b",
+    r"\brefund",
+    r"\bcredit received\b",
+    r"\badjustment credit\b",
+    r"\bcredit note\b",
+    r"\breturned\b",
+    r"\breturn\b",
+    r"\brecovered\b",
+    r"\bsweep back\b",
+    r"\bswept back\b",
+    r"\breversal\b",
+    r"\breversed\b",
+    r"\bwrite-back\b",
+    r"\bclawback\b",
+    r"\bunearned\b",
+    r"\bdeposit returned\b",
+    r"\bservice credit\b",
+    r"\brate adjustment credit\b",
+    r"қайтар",
+    r"кері аудар",
+    r"жеңілдік",
+    r"түзету кредит",
 )
 
 # Genuine trading income.
 REVENUE = _rx(
-    r"\bsales?\b", r"\brevenue\b", r"\bcustomer (?:receipt|payment|settlement)",
-    r"\bhandling and stevedoring\b", r"\bfreight (?:income|revenue)\b",
-    r"\bthroughput (?:fee|income)\b", r"\btariff income\b", r"\bservice income\b",
-    r"\bcontract income\b", r"\bmilestone (?:billing|payment)\b",
-    r"сатудан түскен түсім", r"қызметтен түскен кіріс", r"клиент төлемі",
+    r"\bsales?\b",
+    r"\brevenue\b",
+    r"\bcustomer (?:receipt|payment|settlement)",
+    r"\bhandling and stevedoring\b",
+    r"\bfreight (?:income|revenue)\b",
+    r"\bthroughput (?:fee|income)\b",
+    r"\btariff income\b",
+    r"\bservice income\b",
+    r"\bcontract income\b",
+    r"\bmilestone (?:billing|payment)\b",
+    r"сатудан түскен түсім",
+    r"қызметтен түскен кіріс",
+    r"клиент төлемі",
 )
 
 # Borrowing proceeds. These are inflows, but never trading revenue.
 FINANCING = _rx(
     r"\b(?:term\s+)?loan\s+(?:facility\s+)?(?:drawdown|proceeds|disbursement)\b",
     r"\b(?:revolver|revolving|credit)\s+facility\s+(?:drawdown|proceeds)\b",
-    r"\bborrowing\s+proceeds\b", r"\bfinancing\s+(?:receipts|proceeds)\b",
-    r"поступлен\w+\s+по\s+финансирован", r"кредитн\w+\s+средств\w+\s+получен",
-    r"қарыз\s+қаражат\w*\s+түсім", r"қаржыландырудан\s+түскен\s+қаражат",
+    r"\bborrowing\s+proceeds\b",
+    r"\bfinancing\s+(?:receipts|proceeds)\b",
+    r"поступлен\w+\s+по\s+финансирован",
+    r"кредитн\w+\s+средств\w+\s+получен",
+    r"қарыз\s+қаражат\w*\s+түсім",
+    r"қаржыландырудан\s+түскен\s+қаражат",
 )
 
 # Generic operating services are high-confidence OPEX. More specific category
 # rules below are still evaluated first.
 GENERIC_OPEX = _rx(
-    r"\boperating costs?\b", r"\boperating and maintenance\b",
-    r"\bservicing(?: contract)?\b", r"\bmaintenance\b",
-    r"\bsupport payment\b", r"\bmanagement services?\b",
-    r"\bprocurement payment\b", r"\bwarehouse service\b",
-    r"\bretainer fee\b", r"\brental payment\b",
+    r"\boperating costs?\b",
+    r"\boperating and maintenance\b",
+    r"\bservicing(?: contract)?\b",
+    r"\bmaintenance\b",
+    r"\bsupport payment\b",
+    r"\bmanagement services?\b",
+    r"\bprocurement payment\b",
+    r"\bwarehouse service\b",
+    r"\bretainer fee\b",
+    r"\brental payment\b",
     r"\bcleaning and clearance works?\b",
 )
 
 RULES: list[tuple[re.Pattern[str], Category]] = [
-    (_rx(r"\binsurance\b", r"\bpremium\b", r"\bpolicy\b", r"\bunderwrit"),
-     Category.INSURANCE),
-    (_rx(r"сақтандыру", r"сақтандыру сыйлықақы"),
-     Category.INSURANCE),
-
-    (_rx(r"\bpayroll\b", r"\bsalar", r"\bwage", r"\bstaff\b", r"\bpersonnel\b",
-         r"\bshift\b", r"\bovertime\b", r"\bseverance\b", r"\bbonus\b",
-         r"\bpension\b", r"еңбекақы", r"жалақы", r"қызметкерлер"), Category.PERSONNEL),
-
-    (_rx(r"\btax\b", r"\bvat\b", r"\bduty\b", r"\bexcise\b", r"\bcustoms\b",
-         r"\blevy\b", r"\bmineral extraction\b", r"\bwithholding\b"), Category.TAX),
+    (_rx(r"\binsurance\b", r"\bpremium\b", r"\bpolicy\b", r"\bunderwrit"), Category.INSURANCE),
+    (_rx(r"сақтандыру", r"сақтандыру сыйлықақы"), Category.INSURANCE),
+    (
+        _rx(
+            r"\bpayroll\b",
+            r"\bsalar",
+            r"\bwage",
+            r"\bstaff\b",
+            r"\bpersonnel\b",
+            r"\bshift\b",
+            r"\bovertime\b",
+            r"\bseverance\b",
+            r"\bbonus\b",
+            r"\bpension\b",
+            r"еңбекақы",
+            r"жалақы",
+            r"қызметкерлер",
+        ),
+        Category.PERSONNEL,
+    ),
+    (
+        _rx(
+            r"\btax\b",
+            r"\bvat\b",
+            r"\bduty\b",
+            r"\bexcise\b",
+            r"\bcustoms\b",
+            r"\blevy\b",
+            r"\bmineral extraction\b",
+            r"\bwithholding\b",
+        ),
+        Category.TAX,
+    ),
     (_rx(r"салық", r"қосылған құн салығы", r"кедендік баж"), Category.TAX),
-
-    (_rx(r"\binterest\b", r"\bcoupon\b", r"\bloan (?:fee|charge)", r"\bfacility fee\b",
-         r"\bfinance (?:cost|charge)"), Category.INTEREST),
+    (
+        _rx(
+            r"\binterest\b",
+            r"\bcoupon\b",
+            r"\bloan (?:fee|charge)",
+            r"\bfacility fee\b",
+            r"\bfinance (?:cost|charge)",
+        ),
+        Category.INTEREST,
+    ),
     (_rx(r"пайыздық шығын", r"сыйақы бойынша шығын"), Category.INTEREST),
-
-    (_rx(r"\brent\b", r"\blease\b", r"\bhire of\b", r"\bcharter\b", r"\btenanc",
-         r"жалдау", r"лизинг"),
-     Category.LEASE),
-
-    (_rx(r"\belectricity\b", r"\bwater\b", r"\bgas supply\b", r"\bheating\b",
-         r"\butility\b", r"\butilities\b", r"\bpower supply\b", r"\bmetering\b",
-         r"\btelecom\b", r"\binternet\b", r"\bcommunication service"),
-     Category.UTILITIES),
-    (_rx(r"коммуналдық", r"электр энергия", r"сумен жабдықтау", r"жылумен жабдықтау"),
-     Category.UTILITIES),
-
-    (_rx(r"\bmarketing\b", r"\badvertis", r"\bmedia buy\b", r"\bpromotion",
-         r"\bexhibition\b", r"\bbranding\b", r"\bsponsorship\b", r"\bnewsletter\b",
-         r"\btrade press\b", r"\bdigital media\b", r"\bcampaign\b", r"маркетинг",
-         r"жарнама"), Category.MARKETING),
-
-    (_rx(r"\bshared services? payment\b", r"\bgroup services? payment\b",
-         r"\baudit\b", r"\blegal\b", r"\bconsult", r"\badvisory\b", r"\bnotar",
-         r"\bvaluation\b", r"\bappraisal\b", r"\bengineering bureau\b",
-         r"\bremediation\b"),
-     Category.PROFESSIONAL),
-    (_rx(r"кәсіби қызмет", r"консультациялық", r"заңгерлік", r"аудиторлық"),
-     Category.PROFESSIONAL),
-
-    (_rx(r"\bcapital expenditure\b", r"\bcapex\b", r"\bconstruction\b",
-         r"\bequipment purchase\b", r"\bpurchase of\b.*\bequipment\b",
-         r"\bpurchase of\b.*\bcontrol system\b", r"\bfurnace control system\b",
-         r"\btransfer of\b.*\bequipment\b",
-         r"\bplant and machinery\b", r"\bacquisition of\b",
-         r"\binstallation of\b", r"\bmodernisation\b", r"\bmodernization\b",
-         r"\bupgrade of\b", r"\brefurbish", r"\boverhaul\b", r"\bfixed asset"),
-     Category.CAPEX),
-    (_rx(r"күрделі шығын", r"капиталдық шығын", r"жабдық сатып алу", r"негізгі құрал"),
-     Category.CAPEX),
+    (
+        _rx(
+            r"\brent\b",
+            r"\blease\b",
+            r"\bhire of\b",
+            r"\bcharter\b",
+            r"\btenanc",
+            r"жалдау",
+            r"лизинг",
+        ),
+        Category.LEASE,
+    ),
+    (
+        _rx(
+            r"\belectricity\b",
+            r"\bwater\b",
+            r"\bgas supply\b",
+            r"\bheating\b",
+            r"\butility\b",
+            r"\butilities\b",
+            r"\bpower supply\b",
+            r"\bmetering\b",
+            r"\btelecom\b",
+            r"\binternet\b",
+            r"\bcommunication service",
+        ),
+        Category.UTILITIES,
+    ),
+    (
+        _rx(r"коммуналдық", r"электр энергия", r"сумен жабдықтау", r"жылумен жабдықтау"),
+        Category.UTILITIES,
+    ),
+    (
+        _rx(
+            r"\bmarketing\b",
+            r"\badvertis",
+            r"\bmedia buy\b",
+            r"\bpromotion",
+            r"\bexhibition\b",
+            r"\bbranding\b",
+            r"\bsponsorship\b",
+            r"\bnewsletter\b",
+            r"\btrade press\b",
+            r"\bdigital media\b",
+            r"\bcampaign\b",
+            r"маркетинг",
+            r"жарнама",
+        ),
+        Category.MARKETING,
+    ),
+    (
+        _rx(
+            r"\bshared services? payment\b",
+            r"\bgroup services? payment\b",
+            r"\baudit\b",
+            r"\blegal\b",
+            r"\bconsult",
+            r"\badvisory\b",
+            r"\bnotar",
+            r"\bvaluation\b",
+            r"\bappraisal\b",
+            r"\bengineering bureau\b",
+            r"\bremediation\b",
+        ),
+        Category.PROFESSIONAL,
+    ),
+    (_rx(r"кәсіби қызмет", r"консультациялық", r"заңгерлік", r"аудиторлық"), Category.PROFESSIONAL),
+    (
+        _rx(
+            r"\bcapital expenditure\b",
+            r"\bcapex\b",
+            r"\bconstruction\b",
+            r"\bequipment purchase\b",
+            r"\bpurchase of\b.*\bequipment\b",
+            r"\bpurchase of\b.*\bcontrol system\b",
+            r"\bfurnace control system\b",
+            r"\btransfer of\b.*\bequipment\b",
+            r"\bplant and machinery\b",
+            r"\bacquisition of\b",
+            r"\binstallation of\b",
+            r"\bmodernisation\b",
+            r"\bmodernization\b",
+            r"\bupgrade of\b",
+            r"\brefurbish",
+            r"\boverhaul\b",
+            r"\bfixed asset",
+        ),
+        Category.CAPEX,
+    ),
+    (
+        _rx(r"күрделі шығын", r"капиталдық шығын", r"жабдық сатып алу", r"негізгі құрал"),
+        Category.CAPEX,
+    ),
 ]
 
 

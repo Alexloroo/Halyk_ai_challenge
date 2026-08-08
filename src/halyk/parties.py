@@ -73,7 +73,7 @@ def extract_related_parties(scenario_id: str, kyc_text: str) -> RelatedParties:
     pledge = PLEDGE_SECTION.search(kyc_text)
     if pledge:
         section = pledge.group(0)
-        kyc_text = kyc_text[: pledge.start()] + kyc_text[pledge.end():]
+        kyc_text = kyc_text[: pledge.start()] + kyc_text[pledge.end() :]
         pledge_thr = PLEDGE_THRESHOLD.search(section)
         if pledge_thr:
             limit = _number(pledge_thr.group(1) or pledge_thr.group(2))
@@ -87,8 +87,7 @@ def extract_related_parties(scenario_id: str, kyc_text: str) -> RelatedParties:
     threshold = _number(next(group for group in match.groups() if group)) if match else None
 
     holdings = [
-        (" ".join(name.split()), _number(share))
-        for name, share in HOLDING.findall(kyc_text)
+        (" ".join(name.split()), _number(share)) for name, share in HOLDING.findall(kyc_text)
     ]
     names = (
         frozenset(name for name, share in holdings if share >= threshold)
@@ -111,9 +110,7 @@ def _key(name: str) -> str:
     substantive extra words (for example ``Advisory``) are not aliases.
     """
     name = re.sub(r"\([^)]*\)", "", name)
-    text = re.sub(
-        r"\b(L\.?L\.?P\.?|JSC|LLC|Ltd|АО|ТОО|ООО|ЖШС|АҚ)\b", "", name, flags=re.I
-    )
+    text = re.sub(r"\b(L\.?L\.?P\.?|JSC|LLC|Ltd|АО|ТОО|ООО|ЖШС|АҚ)\b", "", name, flags=re.I)
     return " ".join(re.sub(r"[^a-zа-яё0-9 ]", " ", text.casefold()).split())
 
 

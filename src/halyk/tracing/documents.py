@@ -72,8 +72,7 @@ def trace_classified(
         writer.write_json("05_documents_classified", "decisions.json", decisions)
     requested = sum(bool(record.get("llm_requested")) for record in decisions or [])
     resolved = sum(
-        bool(record.get("llm_requested"))
-        and record.get("final_kind") != record.get("initial_kind")
+        bool(record.get("llm_requested")) and record.get("final_kind") != record.get("initial_kind")
         for record in decisions or []
     )
     writer.update_stage(

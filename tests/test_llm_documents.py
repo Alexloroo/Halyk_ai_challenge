@@ -95,7 +95,7 @@ def test_one_document_failure_does_not_cancel_siblings(monkeypatch) -> None:
 
     assert results[requests[0].key].resolution is not None
     assert results[requests[1].key].resolution is None
-    assert results[requests[1].key].attempts == 3
+    assert results[requests[1].key].attempts == 4
 
 
 def test_non_binding_training_memo_cannot_be_promoted_to_agreement(monkeypatch) -> None:

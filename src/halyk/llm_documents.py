@@ -192,7 +192,7 @@ async def _resolve_one(
     ]
     last_error: str | None = None
     validation_feedback = ""
-    for attempt in range(max_retries):
+    for attempt in range(max_retries + 1):
         messages[-1]["content"] = payload + validation_feedback
         try:
             async with semaphore:
@@ -213,11 +213,11 @@ async def _resolve_one(
             return DocumentClassificationResult(resolution, attempt + 1)
         except Exception as exc:
             last_error = f"{type(exc).__name__}: {exc}"
-            if attempt < max_retries - 1:
+            if attempt < max_retries:
                 print(f"  [document retry {attempt + 1}/{max_retries}] {request.key}: {last_error}")
                 await asyncio.sleep(2**attempt)
-    print(f"  [document FAILED after {max_retries} attempts] {request.key}: {last_error}")
-    return DocumentClassificationResult(None, max_retries, last_error)
+    print(f"  [document FAILED after {max_retries + 1} attempts] {request.key}: {last_error}")
+    return DocumentClassificationResult(None, max_retries + 1, last_error)
 
 
 async def resolve_document_classifications_async(
@@ -278,7 +278,7 @@ async def _resolve_entity_link_one(
     ]
     last_error: str | None = None
     validation_feedback = ""
-    for attempt in range(max_retries):
+    for attempt in range(max_retries + 1):
         messages[-1]["content"] = payload + validation_feedback
         try:
             async with semaphore:
@@ -299,11 +299,11 @@ async def _resolve_entity_link_one(
             return EntityLinkResult(resolution, attempt + 1)
         except Exception as exc:
             last_error = f"{type(exc).__name__}: {exc}"
-            if attempt < max_retries - 1:
+            if attempt < max_retries:
                 print(f"  [entity retry {attempt + 1}/{max_retries}] {request.key}: {last_error}")
                 await asyncio.sleep(2**attempt)
-    print(f"  [entity FAILED after {max_retries} attempts] {request.key}: {last_error}")
-    return EntityLinkResult(None, max_retries, last_error)
+    print(f"  [entity FAILED after {max_retries + 1} attempts] {request.key}: {last_error}")
+    return EntityLinkResult(None, max_retries + 1, last_error)
 
 
 async def resolve_entity_links_async(
