@@ -1,15 +1,20 @@
+# Halyk AI Challenge — Covenant Solver
+
+Гибридный pipeline для автоматического расчёта финансовых ковенантов по ledger и набору PDF-документов. Простые и надёжно формализуемые части решаются детерминированно, а DeepSeek используется только там, где требуется интерпретация текста или сложной формулы.
+
 ## Быстрый запуск
 
 ### Требования
 
 - Docker с Compose plugin;
 - GNU Make;
-- ключ DeepSeek для интерпретации сложных формул.
+- DeepSeek API key.
 
 Создайте `.env` в корне проекта:
 
 ```dotenv
 DEEPSEEK_API_KEY=your_key
+HALYK_PDF_WORKERS=16
 ```
 
 Положите датасет в `data/raw/`:
@@ -18,7 +23,7 @@ DEEPSEEK_API_KEY=your_key
 data/raw/
 ├── master_ledger_2025.csv
 ├── submission_template.json
-├── ground_truth.json          # необязателен
+├── ground_truth.json          # необязателен, только для локальной проверки
 ├── CASE.ru.md                 # необязателен для pipeline
 ├── CASE.kz.md                 # необязателен для pipeline
 └── documents/
@@ -27,114 +32,148 @@ data/raw/
     └── ...
 ```
 
-Обычный запуск:
+Запуск:
 
 ```bash
 # Linux
 make run PYTHON=python3
 
-# Windows (GNU Make из Git Bash/MSYS2)
+# Windows: GNU Make из Git Bash/MSYS2
 make run PYTHON=python
 ```
 
-Результат появится в:
+Результат:
 
 ```text
 submission.json
 ```
 
-Запуск с полной трассировкой всех стадий:
+Для другого пути к данным:
 
 ```bash
-# Linux
-make fulltrace PYTHON=python3
-
-# Windows (GNU Make из Git Bash/MSYS2)
-make fulltrace PYTHON=python
-```
-
-Результаты:
-
-```text
-submission.json
-trace/
-├── manifest.json
-├── 01_template/
-├── 02_ledger_loaded/
-├── ...
-├── 13_submission/
-└── 14_ground_truth/
-```
-
-`make run` и `make fulltrace` сами собирают Docker-образ. В образ уже включены
-Tesseract и языковые пакеты `rus`, `kaz`, `eng`.
-
-Переменная `PYTHON` задаёт имя Python-интерпретатора для Makefile. В Linux обычно
-используется `PYTHON=python3`, в Windows — `PYTHON=python`. Значение по умолчанию
-в Makefile — `python3`.
-
-## Как указать другой путь к данным
-
-Путь можно передать непосредственно Makefile:
-
-```bash
-make run DATA_DIR=/absolute/path/to/dataset OUTPUT=/absolute/path/submission.json
-```
-
-Для fulltrace:
-
-```bash
-make fulltrace \
+make run \
   DATA_DIR=/absolute/path/to/dataset \
-  OUTPUT=/absolute/path/submission.json \
-  TRACE_DIR=/absolute/path/trace
+  OUTPUT=/absolute/path/submission.json
 ```
 
-Дополнительные CLI-аргументы передаются через `ARGS`:
+Дополнительные CLI-параметры передаются через `ARGS`:
 
 ```bash
 make run ARGS="--team my-team --contact-email team@example.com"
 ```
 
-Диагностический запуск без LLM:
+`make run` собирает Docker-образ и запускает solver в изолированном окружении. В образ уже включены Tesseract и языковые пакеты `rus`, `kaz`, `eng`.
 
-```bash
-make fulltrace ARGS="--no-llm"
-```
+---
 
-В этом режиме простые правила продолжат считаться, однако сложные ratio и
-conditional clauses могут получить fallback-интерпретацию.
+## Как работает pipeline
 
-## Контракт входных данных
+Pipeline строится вокруг одного принципа: **LLM интерпретирует только то, что действительно требует языкового понимания; все деньги, периоды, агрегаты, сравнения и финальный verdict считаются Python-кодом**.
 
-### Ledger
+Основной orchestration находится в `src/halyk/run.py`.
 
-`master_ledger_2025.csv` должен содержать:
+### 1. Template задаёт пространство задачи
+
+`submission_template.json` читается первым и определяет:
+
+- какие scenario должны быть обработаны;
+- какие clauses должны присутствовать в ответе;
+- сколько ячеек необходимо заполнить.
+
+Pipeline не создаёт новые scenario/clauses и не удаляет существующие. Даже если отдельное правило не удалось разобрать, ячейка всё равно получает best-effort ответ вместо пропуска.
 
 ```text
-txn_id,date,account_id,counterparty,description,amount,currency
+submission_template.json
+        ↓
+scenario → [6.1, 6.2, 6.3, ...]
 ```
 
-Принятые соглашения:
+### 2. Ledger загружается и связывается со scenario
 
-- scenario извлекается из `txn_id`: `TXN-P1-0039 → P1`;
-- расходы имеют отрицательный знак, поступления — положительный;
-- `actual` в submission всегда положительный;
-- положительная сумма автоматически не считается revenue;
-- пустые и повреждённые суммы не удаляются, а получают defect marker;
-- `account_id` связывает scenario с документами;
-- `counterparty` используется для exact KYC matching.
+`master_ledger_2025.csv` преобразуется в `LedgerEntry[]`.
 
-### PDF-документы
+На этом этапе:
 
-Имена PDF могут быть непрозрачными. Pipeline определяет по содержимому:
+- scenario извлекается из `txn_id`, например `TXN-P1-0039 → P1`;
+- `account_id` связывает ledger с PDF-документами;
+- сохраняются повреждённые или отсутствующие amounts как defects вместо тихого удаления;
+- знак суммы определяет направление движения денег, но не экономический смысл транзакции.
 
-- тип документа;
-- основной `ACC-*`;
-- текущую, устаревшую или draft-редакцию;
-- юридическую значимость документа.
+Положительный inflow **не считается revenue автоматически**: loan drawdown, refund и interest income должны отличаться от операционной выручки.
 
-Поддерживаемые типы:
+### 3. Категоризация транзакций: deterministic first, LLM fallback
+
+Каждая ledger description сначала проходит RU/KZ/EN правила в `categorize.py`.
+
+Если формулировка однозначна:
+
+```text
+"Insurance premium" → insurance
+"Заработная плата"  → personnel
+"Коммуналдық төлем" → utilities
+```
+
+результат остаётся полностью детерминированным.
+
+Если description новая или неоднозначная, создаётся короткий запрос в DeepSeek через `llm_categorize.py`. Модель получает только данные, необходимые для классификации транзакции: description, counterparty и направление платежа. После ответа выполняется semantic validation, и только затем категория попадает в ledger.
+
+```text
+LedgerEntry
+    ↓
+regex / aliases
+    ├── confidence enough ───────────────→ category
+    └── ambiguous / unknown → DeepSeek ─→ validated category
+```
+
+### 4. PDF загружаются параллельно и при необходимости проходят OCR
+
+Все PDF имеют непрозрачные имена, поэтому pipeline не полагается на filename.
+
+`docs.py` обрабатывает документы **параллельно на уровне PDF** через `ProcessPoolExecutor`. Каждый worker самостоятельно открывает и закрывает свой файл, а итоговый список документов остаётся в детерминированном порядке.
+
+Для каждой страницы сначала используется native PyMuPDF extraction:
+
+```text
+PDF page
+   ↓
+PyMuPDF native text
+   ├── текста достаточно → использовать native text
+   └── текста мало       → Tesseract OCR (rus+kaz+eng)
+```
+
+OCR включается только для страниц, где native text короче заданного порога. Это позволяет одинаково обрабатывать обычные PDF и image-only сканы.
+
+Количество PDF workers задаётся через:
+
+```dotenv
+HALYK_PDF_WORKERS=16
+```
+
+Основные OCR-настройки:
+
+```text
+HALYK_OCR_ENABLED=1
+HALYK_OCR_LANGUAGE=rus+kaz+eng
+HALYK_OCR_DPI=300
+HALYK_OCR_MIN_NATIVE_CHARS=20
+```
+
+### 5. Определяется тип и юридическая версия документа
+
+После extraction каждый PDF превращается в `Document` с полями:
+
+```text
+Document
+├── text
+├── kind
+├── edition
+├── account_ids
+├── native_pages
+├── ocr_pages
+└── ocr_failed_pages
+```
+
+Поддерживаемые document kinds:
 
 ```text
 credit_agreement
@@ -145,241 +184,362 @@ operations
 unknown
 ```
 
-Длинный учебный меморандум не получает приоритет над коротким подписанным
-договором. Документы вспомогательных субсчетов (`ACC-8819-02`) не смешиваются с
-документами основного счёта (`ACC-8819`).
+Pipeline также различает:
+
+```text
+current
+superseded
+draft
+unknown
+```
+
+Выбор документа основан не на длине текста, а прежде всего на юридической значимости. Training memo, informational-only документы и тексты, явно не создающие обязательств, не должны вытеснять действующий договор только потому, что они длиннее.
+
+Если релевантный account-linked PDF остаётся `unknown`, `llm_documents.py` используется как fallback-классификатор. После LLM-ответа kind/edition снова проходят контролируемую обработку до выбора документа.
+
+### 6. Scenario связывается с правильным agreement, KYC и audit docs
+
+Из ledger строится mapping:
+
+```text
+scenario_id → account_id
+```
+
+Для каждого scenario выбираются только документы его account:
+
+```text
+account
+  ├── current credit agreement
+  ├── current KYC
+  └── actionable current audit notes
+```
+
+Это защищает pipeline от смешивания разных счетов, superseded agreements, draft audit reports и вспомогательных subaccounts.
+
+### 7. Audit notes изменяют рабочий ledger до расчёта ковенантов
+
+`audit.py` извлекает только actionable corrections и применяет их к scenario ledger.
+
+Поддерживаются, в частности:
+
+- transaction reclassification;
+- исключение операции из периода;
+- восстановление missing amount/entry;
+- FX rates и конвертация суммы в USD.
+
+```text
+raw scenario ledger
+       +
+current audit notes
+       ↓
+corrected scenario ledger
+```
+
+Таким образом дальнейшая KYC/rule/evaluation логика работает уже с финансово скорректированным набором операций.
+
+### 8. KYC определяет related parties и unrestricted subsidiaries
+
+`parties.py` читает ownership / coverage information из KYC.
+
+Для related-party логики используются нормализованные юридические имена и KYC threshold, после чего соответствующие ledger entries получают флаги.
+
+Отдельно отмечаются переводы в unrestricted subsidiaries: это другой бизнес-смысл и он не смешивается с обычной related-party ownership логикой.
+
+```text
+KYC
+ ↓
+related legal entities / unrestricted entities
+ ↓
+flags on LedgerEntry
+```
+
+### 9. Из действующего agreement извлекаются правила
+
+`rules.py` разбирает clauses из выбранного current agreement.
+
+Детерминированно извлекаются:
+
+- clause id;
+- heading и исходный текст;
+- период действия;
+- threshold;
+- comparator;
+- известные категории;
+- простой тип правила, если его можно определить без LLM.
+
+Поддерживаются русские и казахские конструкции, включая `Пункт 6.1`, `6.1-тармақ`, периоды `с … по …` / `… бастап … дейін` и RU/KZ/EN category aliases.
+
+### 10. Сложные формулы интерпретируются DeepSeek в `FormulaSpec`
+
+Regex хорошо извлекает threshold и период, но сложные ковенанты могут описывать формулу естественным языком:
+
+- `interest / EBITDA`;
+- `financing inflow / revenue`;
+- `revenue - max(personnel, tax)`;
+- maximum category total;
+- maximum individual transaction;
+- conditional/springing covenant;
+- unrestricted transfers;
+- revenue + financing proceeds.
+
+Для таких clauses DeepSeek возвращает **не ответ ковенанта**, а только структурированное описание вычисления:
+
+```text
+FormulaSpec
+├── output_kind
+├── numerator_agg
+├── numerator_categories
+├── denominator_agg
+├── denominator_categories
+├── comparator
+├── is_conditional
+├── condition_agg
+├── condition_categories
+└── condition_threshold_dollars
+```
+
+Все независимые FormulaSpec-запросы выполняются асинхронно и параллельно. Лимит задаётся через:
+
+```dotenv
+HALYK_LLM_CONCURRENCY=50
+```
+
+После ответа модели выполняются deterministic fixups и semantic validation: неподдерживаемые категории, конфликт comparator и некорректный тип формулы не должны молча попасть в evaluator.
+
+### 11. Внешние финансовые значения связываются отдельно
+
+Некоторые ковенанты используют значение не из transaction ledger, например group-level CAPEX из consolidated financial statements.
+
+Pipeline сначала пытается найти такой документ детерминированно по borrower/account context. Если подходящих financial statements несколько и прямой match недостаточен, LLM может выбрать **документ**, но само числовое значение извлекается детерминированным кодом.
+
+То есть модель помогает решить entity-linking задачу, но не придумывает финансовый показатель.
+
+### 12. Финальный расчёт полностью детерминирован
+
+`evaluate.py` получает:
+
+```text
+Rule
++ corrected LedgerEntry[]
++ optional FormulaSpec
++ KYC/audit flags
++ optional external audited value
+```
+
+и дальше Python:
+
+1. ограничивает ledger периодом ковенанта;
+2. выбирает нужные категории и специальные flags;
+3. считает агрегаты через `Decimal`;
+4. рассчитывает numerator/denominator;
+5. проверяет conditional trigger отдельно от tested metric;
+6. сравнивает неокруглённый `actual` с threshold;
+7. определяет `COMPLIANT` / `BREACH`;
+8. ищет допустимый `evidence_txn_id`;
+9. округляет `actual` только при сериализации submission.
+
+LLM не получает ledger total и не принимает финальное решение `COMPLIANT/BREACH`.
+
+### 13. Формируется `submission.json` и выполняется readiness-check
+
+Финальный payload сохраняет структуру исходного template:
+
+```json
+{
+  "answers": {
+    "P1": {
+      "6.1": {
+        "status": "COMPLIANT",
+        "actual": 123.45,
+        "evidence_txn_id": null
+      }
+    }
+  }
+}
+```
+
+Дополнительно pipeline собирает `private_readiness` diagnostics: наличие agreements, качество rule/formula coverage, document/OCR issues и другие сигналы, которые помогают заметить деградацию на неизвестном датасете до отправки ответа.
+
+---
+
+## Архитектура data flow
+
+```text
+submission_template.json
+          │
+          ├──────────────→ required scenarios / clauses
+          │
+master_ledger_2025.csv
+          │
+          ↓
+      LedgerEntry[]
+          │
+          ├── deterministic categorization
+          │       └── DeepSeek fallback for ambiguous descriptions
+          │
+documents/*.pdf
+          │
+          ↓
+parallel PyMuPDF extraction
+          │
+          └── selective Tesseract OCR
+          │
+          ↓
+Document(kind, edition, account_ids, text)
+          │
+          ├── agreement ──→ Rule[] ──→ FormulaSpec (when needed)
+          ├── KYC ────────→ related / unrestricted flags
+          └── audit ──────→ adjustments / missing amounts / FX
+                              │
+                              ↓
+                    corrected scenario ledger
+                              │
+             Rule + FormulaSpec + ledger
+                              │
+                              ↓
+                   deterministic evaluator
+                              │
+                              ↓
+              status + actual + evidence_txn_id
+                              │
+                              ↓
+                     submission.json
+```
+
+## Почему pipeline гибридный
+
+Полностью regex-based подход быстро ломается на новых формулировках private dataset. Полностью LLM-based подход, наоборот, хуже контролируется в финансовой арифметике и сложнее отлаживается.
+
+Здесь граница проведена так:
+
+| Задача | Подход |
+|---|---|
+| CSV parsing, periods, sums, ratios, FX arithmetic | deterministic Python |
+| известные transaction categories | deterministic RU/KZ/EN rules |
+| неизвестные/неоднозначные transaction descriptions | DeepSeek fallback |
+| native PDF text / OCR | PyMuPDF + Tesseract |
+| известные document markers | deterministic classifier |
+| неизвестный релевантный document type | DeepSeek fallback |
+| threshold/comparator/period | deterministic rule parser |
+| сложная естественно-языковая формула | DeepSeek → validated `FormulaSpec` |
+| final actual/status | deterministic evaluator |
+
+Главная идея: **модель преобразует неструктурированный текст в ограниченную структуру, а критическая финансовая логика остаётся воспроизводимой**.
+
+## Контракт входных данных
+
+### Ledger
+
+Минимальные поля `master_ledger_2025.csv`:
+
+```text
+txn_id,date,account_id,counterparty,description,amount,currency
+```
+
+Основные соглашения:
+
+- расходы имеют отрицательный знак, поступления — положительный;
+- `actual` в submission сериализуется положительным значением;
+- `account_id` связывает scenario с документами;
+- `counterparty` участвует в KYC matching;
+- пустые/повреждённые суммы сохраняются как defects;
+- положительная сумма сама по себе не означает revenue.
+
+### PDF
+
+Имена файлов могут быть любыми. Идентичность документа определяется его содержимым: account IDs, document kind, edition и authority markers.
 
 ### Submission template
 
-`submission_template.json` является контрактом полноты. Pipeline заполняет только
-существующие scenario и clauses, не создаёт новые ячейки и не меняет их имена.
+`submission_template.json` — source of truth по ожидаемым scenario и clauses. Solver заполняет существующие ячейки и не меняет схему.
 
 ### Ground truth
 
-`ground_truth.json` необязателен и никогда не участвует в расчёте ответа. Он
-читается только после формирования submission на стадии `14_ground_truth` для
-локальной диагностики.
-
-Если файла нет, стадия помечается `skipped`, а основной pipeline успешно
-завершается.
-
-### Синтетический stress-набор X25–X44
-
-В `data/raw` добавлены 20 RU/EN сценариев по четыре PDF на каждый. Набор
-проверяет неизвестные document layouts, current/superseded selection, KYC,
-audit reclassification, financing conditions, unrestricted subsidiaries,
-group capex из consolidated statements и сложные составные формулы.
-
-Набор воспроизводимо пересоздаётся командой:
-
-```bash
-python3 tools/generate_x25_x44_stress_fixtures.py
-```
-
-Подробная карта документов и ожидаемых результатов находится в
-`data/raw/stress_fixture_manifest.json`. Новые сценарии добавляют 80 PDF,
-135 ledger rows и 60 submission cells; все 60 clauses требуют FormulaSpec от
-DeepSeek, а 20 уникальных descriptions предназначены для category fallback.
-Четыре действующих договора (два RU и два EN) являются image-only и проходят
-полную цепочку OCR → document LLM → formula LLM.
-
-## Архитектура
-
-```text
-submission_template.json ──→ ожидаемые scenario / clauses
-                                   │
-master_ledger_2025.csv ──→ LedgerEntry[] ──→ regex categorization
-                                   │             └─→ DeepSeek fallback
-                                   │
-documents/*.pdf ──→ PyMuPDF / OCR ─┤
-                                   │
-                  ┌────────────────┼─────────────────┐
-                  │                │                 │
-             agreement           KYC              audit
-                  │                │                 │
-               Rule[]       related parties   adjustments / FX
-                  │                │                 │
-                  └────────────────┼─────────────────┘
-                                   │
-                         structured FormulaSpec
-                                   │
-                         deterministic evaluator
-                                   │
-                    actual + status + evidence_txn_id
-                                   │
-                            submission.json
-```
-
-Orchestration находится в `src/halyk/run.py` и разделена на 14 наблюдаемых
-стадий:
-
-| Стадия | Что сохраняется в fulltrace |
-|---|---|
-| `01_template` | scenario и ожидаемые clauses |
-| `02_ledger_loaded` | исходный ledger и defects |
-| `03_ledger_categorized` | категории всех транзакций и линейдж deterministic/LLM решений |
-| `04_pymupdf` | текст каждого PDF, native/OCR pages и ошибки OCR |
-| `05_documents_classified` | тип, edition, account IDs и lineage LLM fallback |
-| `06_account_mapping` | связь scenario → account |
-| `07_documents_selected` | выбранные agreement, KYC и audit docs |
-| `08_audit_and_fx` | ledger до/после adjustment и FX |
-| `09_related_parties` | KYC threshold, holdings и отмеченные txn |
-| `10_rules` | извлечённые clauses, thresholds, periods, categories |
-| `11_formulas` | prompt и структурированные FormulaSpec |
-| `12_evaluation` | scope, aggregates, comparator, basis и evidence trials |
-| `13_submission` | финальный JSON |
-| `14_ground_truth` | локальное сравнение, если эталон существует |
+`ground_truth.json` необязателен и **не используется для расчёта**. Если файл присутствует, он применяется только после формирования submission для локальной regression-проверки.
 
 ## Основные модули
 
 | Модуль | Ответственность |
 |---|---|
-| `ledger.py` | CSV → `LedgerEntry`, scenario mapping и defects |
-| `categorize.py` | высокоточная RU/KZ/EN regex-категоризация |
-| `llm_categorize.py` | DeepSeek fallback для новых и неоднозначных формулировок ledger |
-| `docs.py` | PyMuPDF, OCR, document kind, edition и authority ranking |
-| `llm_documents.py` | DeepSeek fallback для релевантных PDF с неизвестным типом |
-| `rules.py` | RU/KZ clauses `6.1–6.3`, period, threshold и comparator |
-| `parties.py` | KYC ownership threshold и exact legal-name matching |
-| `audit.py` | transaction-scoped reclassify, exclude, missing entry и FX |
-| `llm_extract.py` | DeepSeek → валидированный `FormulaSpec` |
-| `evaluate.py` | детерминированные actual, status и evidence |
-| `tracing/` | сериализация каждого промежуточного состояния |
+| `ledger.py` | CSV → `LedgerEntry`, scenario mapping, defects |
+| `categorize.py` | deterministic RU/KZ/EN categorization |
+| `llm_categorize.py` | DeepSeek fallback для неоднозначных ledger descriptions |
+| `docs.py` | parallel PDF loading, PyMuPDF, OCR, document metadata, authority ranking |
+| `llm_documents.py` | fallback document classification и entity linking |
+| `rules.py` | clause, period, threshold, comparator, categories |
+| `parties.py` | KYC ownership, related-party и unrestricted flags |
+| `audit.py` | reclassification, exclusion, missing amount/entry, FX |
+| `llm_extract.py` | concurrent DeepSeek parsing → validated `FormulaSpec` |
+| `evaluate.py` | deterministic financial calculation и evidence |
+| `quality.py` | private-dataset readiness checks |
+| `tracing/` | diagnostic snapshots и stage timings |
 | `run.py` | end-to-end orchestration |
 
-## Поддержка русского и казахского языков
+## Мультиязычность
 
-Мультиязычность работает на нескольких уровнях:
+Pipeline рассчитан на RU/KZ/EN входные данные:
 
-1. Tesseract OCR запускается с `rus+kaz+eng`.
-2. Document classifier понимает, например:
-   - `ДОГОВОР БАНКОВСКОГО ЗАЙМА`;
-   - `БАНКТІК ҚАРЫЗ ШАРТЫ`;
-   - `ИСПОЛНИТЕЛЬНЫЙ ЭКЗЕМПЛЯР`;
-   - `ОРЫНДАУ ДАНАСЫ`.
-3. Rule parser поддерживает `Пункт 6.1` и `6.1-тармақ`.
-4. Периоды распознаются как `с … по …` и `… бастап … дейін`.
-5. Категории имеют RU/KZ/EN aliases: revenue/түсім, capex/күрделі шығындар,
-   personnel/еңбекақы, utilities/коммуналдық и другие.
-6. KYC поддерживает `LLP/JSC/ТОО/АО/ЖШС/АҚ` и казахские threshold-фразы.
-7. DeepSeek получает явную инструкцию интерпретировать русские и казахские clauses.
+- OCR: `rus+kaz+eng`;
+- document markers для русских и казахских договоров;
+- `Пункт 6.1` и `6.1-тармақ`;
+- периоды `с … по …` и `… бастап … дейін`;
+- RU/KZ/EN aliases для revenue, capex, personnel, utilities и других категорий;
+- KYC entities: `LLP/JSC/ТОО/АО/ЖШС/АҚ`;
+- DeepSeek получает инструкции для интерпретации русских и казахских clauses.
 
-## Fallback-классификация документов
+## Fulltrace — кратко
 
-Если PDF связан с account из текущего template, но его тип не распознан
-детерминированными маркерами, stage 05 отправляет его текст в DeepSeek. Модель
-определяет тип и edition до выбора agreement/KYC/audit документа. Явно
-необязательные training memo и документы, которые не создают обязательств,
-не могут быть повышены до действующего кредитного договора.
+Для диагностики:
 
-```text
-HALYK_DOCUMENT_LLM_CONCURRENCY=20
+```bash
+make fulltrace PYTHON=python3
 ```
 
-Исходная и итоговая классификация, число попыток и ошибки сохраняются в
-`trace/05_documents_classified/decisions.json`.
+или напрямую:
 
-## Гибридная категоризация ledger
-
-Сначала применяются высокоточные RU/KZ/EN правила. Только новые
-или неоднозначные descriptions передаются DeepSeek. Это сохраняет
-детерминированные результаты на известных данных и даёт fallback для
-незнакомых формулировок приватного датасета.
-
-LLM получает только description, counterparty и направление платежа. Сумма,
-scenario, covenant, ground truth и ожидаемый ответ в запрос не входят. Ответ
-проходит semantic validation; ошибка одного запроса не отменяет остальные.
-Одинаковые транзакции дедуплицируются, а запросы выполняются параллельно.
-
-Лимит параллельных запросов:
-
-```text
-HALYK_CATEGORY_LLM_CONCURRENCY=50
+```bash
+python3 -m halyk \
+  --data-dir "data/raw" \
+  --output "submission.json" \
+  --trace-dir "trace" \
+  --fulltrace
 ```
 
-В fulltrace решение по каждой транзакции записывается в
-`trace/03_ledger_categorized/decisions.json`: initial/final category, причина,
-LLM status и validation errors.
+`trace/manifest.json` содержит status и `duration_seconds` для стадий pipeline, а trace-папки сохраняют промежуточные данные для debugging. `private_readiness.json` показывает проблемы, важные для запуска на неизвестном датасете. Если присутствует `ground_truth.json`, fulltrace также выполняет локальное сравнение после создания submission.
 
-## OCR
+Для обычного финального запуска trace не требуется.
 
-OCR применяется постранично и только тогда, когда native PyMuPDF extraction
-вернул меньше заданного числа символов. Это сохраняет скорость для обычных PDF
-и позволяет обрабатывать image-only документы.
+## Настройки производительности
 
-Настройки:
+```dotenv
+# Параллельная обработка PDF/OCR
+HALYK_PDF_WORKERS=16
 
-```text
+# Параллельная интерпретация сложных covenant formulas
+HALYK_LLM_CONCURRENCY=50
+
+# Selective OCR
 HALYK_OCR_ENABLED=1
 HALYK_OCR_LANGUAGE=rus+kaz+eng
 HALYK_OCR_DPI=300
 HALYK_OCR_MIN_NATIVE_CHARS=20
 ```
 
-В `trace/04_pymupdf/index.json` видны:
+PDF parallelism и LLM concurrency решают разные bottlenecks: первый ускоряет CPU/native OCR path, второй скрывает network/model latency независимых FormulaSpec-запросов.
 
-```text
-native_pages
-ocr_pages
-ocr_failed_pages
-ocr_language
-ocr_dpi
+## Диагностический запуск без LLM
+
+```bash
+make fulltrace ARGS="--no-llm"
 ```
 
-## Формулы и детерминированный расчёт
+Deterministic части продолжат работать, но unknown categories/documents и сложные ratio/conditional clauses могут остаться без полноценной интерпретации. Этот режим предназначен для debugging, а не для финального submission.
 
-Для сложных clauses LLM возвращает только структурированную спецификацию:
+## Запуск без Docker
 
-```text
-FormulaSpec
-├── output_kind
-├── numerator_agg / numerator_categories
-├── denominator_agg / denominator_categories
-├── comparator
-├── is_conditional
-├── condition_agg / condition_categories
-└── condition_threshold_dollars
-```
-
-Поддерживаются revenue, EBITDA, financing inflow, related-party outflow,
-unrestricted transfers, largest category, largest transaction и составные
-агрегаты.
-
-После этого Python:
-
-1. ограничивает ledger ковенантным периодом;
-2. выбирает категории и специальные KYC/audit flags;
-3. считает numerator и denominator через `Decimal`;
-4. сравнивает неокруглённый actual с threshold;
-5. округляет actual только при сериализации submission.
-
-## Evidence
-
-Evidence ищется counterfactual-проверкой:
-
-```text
-BREACH
-  ↓
-удалить один eligible txn
-  ↓
-пересчитать тот же covenant
-  ↓
-COMPLIANT
-```
-
-Транзакция возвращается только когда она единственная определяет результат.
-Lineage сохраняет происхождение изменений: audit reclassification, restored
-missing amount, exclusion, FX conversion, KYC relation и unrestricted transfer.
-
-## Запуск без Docker и Make
-
-Для прямого запуска необходимы Python 3.12+, Tesseract OCR и языковые данные
-`rus`, `kaz`, `eng`. В отличие от Docker-режима, системные OCR-зависимости нужно
-установить самостоятельно.
+Нужны Python 3.12+, Tesseract OCR и языковые данные `rus`, `kaz`, `eng`.
 
 ### Linux
-
-Установите Tesseract, создайте виртуальное окружение и установите проект:
 
 ```bash
 sudo apt-get update
@@ -391,7 +551,7 @@ python3 -m pip install --upgrade pip
 python3 -m pip install -e ".[dev]"
 ```
 
-Создайте `.env` с `DEEPSEEK_API_KEY`, затем запустите обычный pipeline:
+После создания `.env`:
 
 ```bash
 python3 -m halyk \
@@ -399,55 +559,31 @@ python3 -m halyk \
   --output "submission.json"
 ```
 
-Прямой запуск с полной трассировкой:
-
-```bash
-python3 -m halyk \
-  --data-dir "data/raw" \
-  --output "submission.json" \
-  --trace-dir "trace" \
-  --fulltrace
-```
-
 ### Windows PowerShell
 
-Установите Tesseract с языками `rus`, `kaz`, `eng` и убедитесь, что каталог с
-исполняемым файлом Tesseract доступен через `PATH`. Если языковые данные лежат
-не в стандартном месте, задайте `TESSDATA_PREFIX`, указывающий на каталог
-`tessdata`.
-
-Создание окружения и установка проекта:
+Установите Tesseract с языками `rus`, `kaz`, `eng` и убедитесь, что executable доступен через `PATH`. При нестандартном расположении language data задайте `TESSDATA_PREFIX`.
 
 ```powershell
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 python -m pip install --upgrade pip
 python -m pip install -e ".[dev]"
-```
 
-Ключ можно сохранить в `.env` или установить для текущего PowerShell-сеанса:
-
-```powershell
 $env:DEEPSEEK_API_KEY = "your_key"
-```
 
-Обычный запуск:
-
-```powershell
 python -m halyk `
   --data-dir "data/raw" `
   --output "submission.json"
 ```
 
-Запуск с полной трассировкой:
+## Локальный stress-набор
 
-```powershell
-python -m halyk `
-  --data-dir "data/raw" `
-  --output "submission.json" `
-  --trace-dir "trace" `
-  --fulltrace
+В репозитории есть синтетические сценарии для проверки document selection, OCR, KYC, audit corrections, financing conditions, unrestricted subsidiaries, group CAPEX и сложных формул.
+
+Stress fixtures X25–X44 воспроизводимо пересоздаются:
+
+```bash
+python3 tools/generate_x25_x44_stress_fixtures.py
 ```
 
-Для диагностического запуска без DeepSeek добавьте `--no-llm` к любой прямой
-команде.
+Они предназначены для regression testing и проверки поведения на новых RU/EN layouts, а не участвуют в логике solver.
