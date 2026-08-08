@@ -1,5 +1,5 @@
 {
-  "note": "X1/X2 PDFs are not included because they are already in the target system. Copy documents_new_X3_X22 into the existing documents folder, then replace ledger/template/ground_truth.",
+  "note": "X1/X2 PDFs are not included because they are already in the target system. X23/X24 add native-text DeepSeek formula fixtures and non-binding document distractors.",
   "previous_comparison": {
     "cells": 6,
     "status_matches": 6,
@@ -313,6 +313,37 @@
         "39d868809d99.pdf",
         "15ed00fb939a.pdf",
         "692ce359a2f0.pdf"
+      ]
+    },
+    {
+      "scenario_id": "X23",
+      "account_id": "ACC-8823",
+      "borrower": "Altai Renewable Systems JSC",
+      "difficulty": "deepseek-fixture",
+      "focus": [
+        "LLM document classification without regex markers",
+        "English ratio formula",
+        "revenue minus largest category",
+        "non-binding training-memo distractor"
+      ],
+      "pdf_files": [
+        "a3f07c91b4d2.pdf",
+        "c9d2e7a184f0.pdf"
+      ]
+    },
+    {
+      "scenario_id": "X24",
+      "account_id": "ACC-8824",
+      "borrower": "Zhetysu Solar Components JSC",
+      "difficulty": "deepseek-fixture",
+      "focus": [
+        "Kazakh ratio formula",
+        "Kazakh category-limit clause",
+        "non-binding operations-note distractor"
+      ],
+      "pdf_files": [
+        "b7e1490c6fa8.pdf",
+        "d4a8f1e903bc.pdf"
       ]
     }
   ]

@@ -55,11 +55,29 @@ class FakeLLM:
     def __init__(self, structured: FakeStructured) -> None:
         self.structured = structured
         self.structured_builds = 0
+        self.root_async_client = FakeAsyncClient()
+        self.root_client = FakeSyncClient()
 
     def with_structured_output(self, schema):
         assert schema is FormulaSpec
         self.structured_builds += 1
         return self.structured
+
+
+class FakeAsyncClient:
+    def __init__(self) -> None:
+        self.close_calls = 0
+
+    async def close(self) -> None:
+        self.close_calls += 1
+
+
+class FakeSyncClient:
+    def __init__(self) -> None:
+        self.close_calls = 0
+
+    def close(self) -> None:
+        self.close_calls += 1
 
 
 def test_default_concurrency_is_fifty(monkeypatch) -> None:
@@ -82,6 +100,8 @@ def test_extract_formulas_bounds_concurrency_and_builds_runnable_once(
     assert len(formulas) == 6
     assert structured.max_active == 2
     assert llm.structured_builds == 1
+    assert llm.root_async_client.close_calls == 1
+    assert llm.root_client.close_calls == 1
 
 
 def test_failed_request_does_not_cancel_siblings(monkeypatch) -> None:

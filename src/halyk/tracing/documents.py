@@ -58,10 +58,28 @@ def trace_pymupdf(
     )
 
 
-def trace_classified(writer: TraceWriter, documents: list[Document]) -> None:
+def trace_classified(
+    writer: TraceWriter,
+    documents: list[Document],
+    decisions: list[dict[str, object]] | None = None,
+) -> None:
     writer.write_json(
         "05_documents_classified",
         "documents.json",
         [document_record(document) for document in documents],
     )
-    writer.update_stage("05_documents_classified", documents=len(documents), status="completed")
+    if decisions is not None:
+        writer.write_json("05_documents_classified", "decisions.json", decisions)
+    requested = sum(bool(record.get("llm_requested")) for record in decisions or [])
+    resolved = sum(
+        bool(record.get("llm_requested"))
+        and record.get("final_kind") != record.get("initial_kind")
+        for record in decisions or []
+    )
+    writer.update_stage(
+        "05_documents_classified",
+        documents=len(documents),
+        document_llm_requested=requested,
+        document_llm_reclassified=resolved,
+        status="completed",
+    )

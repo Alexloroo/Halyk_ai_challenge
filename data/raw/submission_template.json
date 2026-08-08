@@ -580,6 +580,40 @@
         "actual": null,
         "evidence_txn_id": null
       }
+    },
+    "X23": {
+      "6.1": {
+        "status": null,
+        "actual": null,
+        "evidence_txn_id": null
+      },
+      "6.2": {
+        "status": null,
+        "actual": null,
+        "evidence_txn_id": null
+      },
+      "6.3": {
+        "status": null,
+        "actual": null,
+        "evidence_txn_id": null
+      }
+    },
+    "X24": {
+      "6.1": {
+        "status": null,
+        "actual": null,
+        "evidence_txn_id": null
+      },
+      "6.2": {
+        "status": null,
+        "actual": null,
+        "evidence_txn_id": null
+      },
+      "6.3": {
+        "status": null,
+        "actual": null,
+        "evidence_txn_id": null
+      }
     }
   }
 }

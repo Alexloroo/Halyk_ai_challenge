@@ -34,6 +34,10 @@ from .docs import DocKind, Document, DocumentLoadIssue, Edition, load_documents,
 from .evaluate import Answer, EvaluationTrace, evaluate, find_evidence
 from .ledger import LedgerEntry, by_scenario, load_ledger
 from .llm_categorize import CategoryRequest, FlowDirection, resolve_categories
+from .llm_documents import (
+    DocumentClassificationRequest,
+    resolve_document_classifications,
+)
 from .llm_extract import FormulaSpec, extract_formulas
 from .parties import extract_related_parties, mark_related, mark_unrestricted
 from .quality import PrivateReadinessReport, assess_private_readiness
@@ -211,8 +215,60 @@ def solve(
             trace_pymupdf(trace, docs, document_issues)
 
     with _trace_stage(trace, "05_documents_classified"):
+        target_accounts = {entry.account_id for entry in entries if entry.account_id}
+        document_records: list[dict[str, object]] = []
+        document_requests: list[DocumentClassificationRequest] = []
+        documents_by_key: dict[str, Document] = {}
+        records_by_document_key: dict[str, dict[str, object]] = {}
+        for document in docs:
+            key = str(document.path)
+            needs_llm = (
+                document.kind is DocKind.UNKNOWN
+                and bool(target_accounts.intersection(document.account_ids))
+                and not is_actionable_audit_text(document.text)
+            )
+            record: dict[str, object] = {
+                "key": key,
+                "name": document.name,
+                "initial_kind": document.kind,
+                "initial_edition": document.edition,
+                "needs_llm": needs_llm,
+                "llm_requested": needs_llm and use_llm,
+                "llm_result": None,
+                "final_kind": document.kind,
+                "final_edition": document.edition,
+            }
+            document_records.append(record)
+            records_by_document_key[key] = record
+            documents_by_key[key] = document
+            if needs_llm and use_llm:
+                document_requests.append(
+                    DocumentClassificationRequest(key=key, text=document.text)
+                )
+
+        document_results = (
+            resolve_document_classifications(document_requests)
+            if document_requests
+            else {}
+        )
+        for key, result in document_results.items():
+            record = records_by_document_key[key]
+            record["llm_result"] = result
+            if result.resolution is None:
+                continue
+            document = documents_by_key[key]
+            document.kind = result.resolution.kind
+            if result.resolution.edition is not Edition.UNKNOWN:
+                document.edition = result.resolution.edition
+            record["final_kind"] = document.kind
+            record["final_edition"] = document.edition
+        report.notes.append(
+            f"Document LLM resolutions: "
+            f"{sum(result.resolution is not None for result in document_results.values())}/"
+            f"{len(document_results)}"
+        )
         if trace is not None:
-            trace_classified(trace, docs)
+            trace_classified(trace, docs, document_records)
 
     with _trace_stage(trace, "06_account_mapping"):
         accounts = account_map(entries)

@@ -14,6 +14,10 @@ from halyk.llm_categorize import (
     FlowDirection,
     TransactionCategorySpec,
 )
+from halyk.llm_documents import (
+    DocumentClassificationResult,
+    DocumentClassificationSpec,
+)
 from halyk.quality import assess_private_readiness
 from halyk.rules import Rule, RuleKind
 from halyk.run import solve
@@ -189,3 +193,78 @@ def test_hybrid_category_resolution_is_applied_and_traced(
     assert decisions[0]["initial_category"] == "opex"
     assert decisions[0]["final_category"] == "capex"
     assert decisions[0]["llm_requested"] is True
+
+
+def test_unknown_agreement_is_classified_before_document_selection(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    root = tmp_path / "raw"
+    _write_dataset(
+        root,
+        "N2",
+        "ACC-654321",
+        [
+            "TXN-N2-0001,2026-06-01,ACC-654321,Customer LLP,"
+            "service revenue,600,USD"
+        ],
+    )
+    agreement = Document(
+        Path("opaque.pdf"),
+        "CREDIT AGREEMENT\nEXECUTION COPY\nACC-654321\n"
+        "Clause 6.1 Minimum revenue.\n"
+        "Revenue from 2026-01-01 to 2026-12-31 must be at least USD 500.\n"
+        "Article 7",
+        DocKind.UNKNOWN,
+        Edition.CURRENT,
+        ["ACC-654321"],
+        1,
+    )
+    actionable_audit = Document(
+        Path("opaque-audit.pdf"),
+        "ACC-654321\nAudit working note: 1 EUR equals $ 1.10.",
+        DocKind.UNKNOWN,
+        Edition.CURRENT,
+        ["ACC-654321"],
+        1,
+    )
+
+    def fake_document_resolve(requests):
+        assert [request.key for request in requests] == ["opaque.pdf"]
+        return {
+            request.key: DocumentClassificationResult(
+                resolution=DocumentClassificationSpec(
+                    kind=DocKind.CREDIT_AGREEMENT,
+                    edition=Edition.CURRENT,
+                    matched_terms=["CREDIT AGREEMENT", "EXECUTION COPY"],
+                ),
+                attempts=1,
+            )
+            for request in requests
+        }
+
+    monkeypatch.setattr(
+        "halyk.run.resolve_document_classifications", fake_document_resolve
+    )
+    writer = TraceWriter.create(tmp_path / "trace")
+
+    report = solve(
+        data_dir=root,
+        documents=[agreement, actionable_audit],
+        use_llm=True,
+        trace=writer,
+    )
+
+    assert report.agreements_missing == []
+    assert report.answers["N2"]["6.1"].actual == Decimal("600")
+    decisions = json.loads(
+        (writer.root / "05_documents_classified/decisions.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    assert decisions[0]["initial_kind"] == "unknown"
+    assert decisions[0]["final_kind"] == "credit_agreement"
+    assert decisions[0]["llm_requested"] is True
+    assert decisions[1]["initial_kind"] == "unknown"
+    assert decisions[1]["final_kind"] == "unknown"
+    assert decisions[1]["llm_requested"] is False

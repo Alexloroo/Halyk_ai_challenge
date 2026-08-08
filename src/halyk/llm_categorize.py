@@ -180,7 +180,7 @@ async def resolve_categories_async(
     if not requests:
         return {}
 
-    from .llm_extract import _build_llm
+    from .llm_extract import _build_llm, _close_llm
 
     unique: dict[tuple[str, str, FlowDirection], CategoryRequest] = {}
     request_fingerprints: dict[str, tuple[str, str, FlowDirection]] = {}
@@ -198,9 +198,15 @@ async def resolve_categories_async(
     structured = llm.with_structured_output(TransactionCategorySpec)
     semaphore = asyncio.Semaphore(_category_concurrency())
     fingerprints = list(unique)
-    completed = await asyncio.gather(
-        *(_resolve_one(structured, unique[fingerprint], semaphore) for fingerprint in fingerprints)
-    )
+    try:
+        completed = await asyncio.gather(
+            *(
+                _resolve_one(structured, unique[fingerprint], semaphore)
+                for fingerprint in fingerprints
+            )
+        )
+    finally:
+        await _close_llm(llm)
     by_fingerprint = dict(zip(fingerprints, completed, strict=True))
     results = {
         key: by_fingerprint[fingerprint]
