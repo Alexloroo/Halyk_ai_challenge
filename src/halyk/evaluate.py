@@ -54,6 +54,7 @@ class EvaluationTrace:
     actual: Decimal | None = None
     status: str = ""
     note: str = ""
+    quality_flags: list[str] = field(default_factory=list)
 
 
 def _complete_trace(
@@ -174,23 +175,11 @@ def _agg(
                 best_cat_entries = cat_entries
         return rev - best_total, rev_entries + best_cat_entries
     if agg == AggKind.FINANCING_INFLOW:
-        chosen = [
-            e for e in entries
-            if e.is_inflow and e.category not in (
-                Category.REVENUE, Category.CONTRA, Category.INTEREST,
-                Category.INSURANCE, Category.LEASE, Category.MARKETING,
-            )
-        ]
+        chosen = [e for e in entries if e.is_inflow and e.category is Category.FINANCING]
         return _sum(chosen), chosen
     if agg == AggKind.REVENUE_PLUS_FINANCING:
         rev = _revenue(entries)
-        fin = [
-            e for e in entries
-            if e.is_inflow and e.category not in (
-                Category.REVENUE, Category.CONTRA, Category.INTEREST,
-                Category.INSURANCE, Category.LEASE, Category.MARKETING,
-            )
-        ]
+        fin = [e for e in entries if e.is_inflow and e.category is Category.FINANCING]
         chosen = rev + fin
         return _sum(chosen), chosen
     if agg == AggKind.RELATED_PARTY_OUTFLOW:
@@ -281,6 +270,8 @@ def _evaluate_with_formula(
 
     denominator, den_entries = _agg(scope, formula.denominator_agg, den_cats)
     actual = (numerator / denominator) if denominator else Decimal(0)
+    if trace is not None and not denominator:
+        trace.quality_flags.append("zero_denominator")
     chosen = list({e.txn_id: e for e in num_entries + den_entries}.values())
 
     answer = Answer(
@@ -314,6 +305,10 @@ def evaluate(
     scope = _select(entries, rule)
     if trace is not None:
         trace.scope_txn_ids = [entry.txn_id for entry in scope]
+        if rule.threshold is None:
+            trace.quality_flags.append("missing_threshold")
+        if formula is None and rule.kind in (RuleKind.RATIO, RuleKind.UNKNOWN):
+            trace.quality_flags.append("missing_formula")
 
     if formula is not None and rule.kind in (RuleKind.RATIO, RuleKind.UNKNOWN):
         return _evaluate_with_formula(
@@ -349,6 +344,8 @@ def evaluate(
             base = _sum(_revenue(scope))
             base_name = "revenue_total"
         actual = (related / base) if base else Decimal(0)
+        if trace is not None and not base:
+            trace.quality_flags.append("zero_denominator")
         aggregates = {"related_total": related, base_name: base}
 
     elif rule.kind is RuleKind.RATIO:
@@ -361,6 +358,8 @@ def evaluate(
             denominator = _sum(_revenue(scope))
         chosen = _spend(scope, rule.categories)
         actual = (numerator / denominator) if denominator else Decimal(0)
+        if trace is not None and not denominator:
+            trace.quality_flags.append("zero_denominator")
         aggregates = {"numerator": numerator, "denominator": denominator}
 
     else:

@@ -18,11 +18,13 @@ looks like the very category they reverse.
 from __future__ import annotations
 
 import re
+from dataclasses import dataclass
 from enum import StrEnum
 
 
 class Category(StrEnum):
     REVENUE = "revenue"
+    FINANCING = "financing"
     CAPEX = "capex"
     OPEX = "opex"
     LEASE = "lease"
@@ -58,6 +60,26 @@ REVENUE = _rx(
     r"\bthroughput (?:fee|income)\b", r"\btariff income\b", r"\bservice income\b",
     r"\bcontract income\b", r"\bmilestone (?:billing|payment)\b",
     r"сатудан түскен түсім", r"қызметтен түскен кіріс", r"клиент төлемі",
+)
+
+# Borrowing proceeds. These are inflows, but never trading revenue.
+FINANCING = _rx(
+    r"\b(?:term\s+)?loan\s+(?:facility\s+)?(?:drawdown|proceeds|disbursement)\b",
+    r"\b(?:revolver|revolving|credit)\s+facility\s+(?:drawdown|proceeds)\b",
+    r"\bborrowing\s+proceeds\b", r"\bfinancing\s+(?:receipts|proceeds)\b",
+    r"поступлен\w+\s+по\s+финансирован", r"кредитн\w+\s+средств\w+\s+получен",
+    r"қарыз\s+қаражат\w*\s+түсім", r"қаржыландырудан\s+түскен\s+қаражат",
+)
+
+# Generic operating services are high-confidence OPEX. More specific category
+# rules below are still evaluated first.
+GENERIC_OPEX = _rx(
+    r"\boperating costs?\b", r"\boperating and maintenance\b",
+    r"\bservicing(?: contract)?\b", r"\bmaintenance\b",
+    r"\bsupport payment\b", r"\bmanagement services?\b",
+    r"\bprocurement payment\b", r"\bwarehouse service\b",
+    r"\bretainer fee\b", r"\brental payment\b",
+    r"\bcleaning and clearance works?\b",
 )
 
 RULES: list[tuple[re.Pattern[str], Category]] = [
@@ -115,27 +137,59 @@ RULES: list[tuple[re.Pattern[str], Category]] = [
 ]
 
 
+@dataclass(frozen=True)
+class CategorizationAssessment:
+    category: Category
+    candidates: tuple[Category, ...]
+    reason: str
+    needs_llm: bool
+
+
+def assess_category(
+    description: str,
+    *,
+    is_inflow: bool = False,
+) -> CategorizationAssessment:
+    """Classify high-confidence text and identify cases needing semantic fallback."""
+    text = description or ""
+
+    if CONTRA.search(text):
+        return CategorizationAssessment(Category.CONTRA, (Category.CONTRA,), "contra", False)
+
+    if is_inflow and FINANCING.search(text):
+        return CategorizationAssessment(
+            Category.FINANCING, (Category.FINANCING,), "financing", False
+        )
+
+    if is_inflow and REVENUE.search(text):
+        return CategorizationAssessment(Category.REVENUE, (Category.REVENUE,), "revenue", False)
+
+    candidates = tuple(
+        dict.fromkeys(category for pattern, category in RULES if pattern.search(text))
+    )
+    if is_inflow:
+        if candidates:
+            return CategorizationAssessment(
+                candidates[0], candidates, "inflow_nontrading_match", False
+            )
+        return CategorizationAssessment(Category.UNKNOWN, (), "unmatched_inflow", True)
+
+    if len(candidates) == 1:
+        return CategorizationAssessment(candidates[0], candidates, "single_match", False)
+    if len(candidates) > 1:
+        return CategorizationAssessment(candidates[0], candidates, "ordered_match", False)
+    if GENERIC_OPEX.search(text):
+        return CategorizationAssessment(Category.OPEX, (Category.OPEX,), "generic_opex", False)
+    return CategorizationAssessment(Category.OPEX, (), "default_opex", True)
+
+
 def categorize(description: str, *, is_inflow: bool = False) -> Category:
     """Classify one ledger line from its description.
 
     `is_inflow` only guards revenue: an inflow that matches no revenue wording
     is not assumed to be a sale, and an outflow is never revenue.
     """
-    text = description or ""
-
-    if CONTRA.search(text):
-        return Category.CONTRA
-
-    if REVENUE.search(text):
-        return Category.REVENUE if is_inflow else Category.UNKNOWN
-
-    for pattern, category in RULES:
-        if pattern.search(text):
-            return category
-
-    # An unmatched outflow is still an operating cost; an unmatched inflow is not
-    # revenue just because it is positive — that is the trap this module exists for.
-    return Category.OPEX if not is_inflow else Category.UNKNOWN
+    return assess_category(description, is_inflow=is_inflow).category
 
 
 #: Categories that make up operating expenditure when a covenant says "opex".

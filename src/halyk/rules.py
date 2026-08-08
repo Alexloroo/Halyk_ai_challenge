@@ -22,16 +22,27 @@ from enum import StrEnum
 from .categorize import Category
 
 CLAUSE_BLOCK = re.compile(
-    r"^\s*(?:Пункт\s+)?(6\.\d)(?:\s*[-–—]?\s*тарма(?:қ|ғы))?\s*"
-    r"(.{0,120}?)[.\n](.*?)"
-    r"(?=^\s*(?:Пункт\s+)?6\.\d(?:\s*[-–—]?\s*тарма(?:қ|ғы))?|"
-    r"^\s*(?:Статья\s+7|7\s*[-–—]?\s*бап)|\Z)",
+    r"^\s*(?:(?:Пункт|Clause)\s+)?(6\s*\.\s*\d+)"
+    r"(?:\s*[-–—]?\s*тарма(?:қ|ғы|қтың))?(?:\s*[.)]\s*)?\s*"
+    r"(.{0,120}?)[.:\n](.*?)"
+    r"(?=^\s*(?:(?:Пункт|Clause)\s+)?6\s*\.\s*\d+"
+    r"(?:\s*[-–—]?\s*тарма(?:қ|ғы|қтың))?|"
+    r"^\s*(?:(?:Статья|Пункт|Article|Section)\s+7|7\s*[-–—]?\s*бап)|\Z)",
     re.S | re.M | re.I,
 )
-PERIOD = re.compile(r"с\s*(\d{4}-\d{2}-\d{2})\s*по\s*(\d{4}-\d{2}-\d{2})")
+PERIOD = re.compile(
+    r"(?:с|from)\s*(\d{4}-\d{2}-\d{2})\s*(?:по|to|[-–—])\s*"
+    r"(\d{4}-\d{2}-\d{2})",
+    re.I,
+)
 KZ_PERIOD = re.compile(
     r"(\d{4}-\d{2}-\d{2})(?:\s*[-–—]?(?:ден|нан|тен)|\s+бастап)\s*"
     r"(\d{4}-\d{2}-\d{2})(?:\s*[-–—]?(?:ге|ға|ке|қа))?\s+дейін",
+    re.I,
+)
+EU_PERIOD = re.compile(
+    r"(?:(?:с|from)\s*)?(\d{2}[./]\d{2}[./]\d{4})\s*(?:по|to|[-–—])\s*"
+    r"(\d{2}[./]\d{2}[./]\d{4})",
     re.I,
 )
 QUARTER = re.compile(
@@ -40,9 +51,15 @@ QUARTER = re.compile(
     re.I | re.S,
 )
 QUARTER_WORDS = {"первый": 1, "второй": 2, "третий": 3, "четвёртый": 4, "четвертый": 4}
-MONEY = re.compile(r"\$\s*([\d,]+(?:\.\d{2})?)")
-RATIO = re.compile(r"(\d+(?:\.\d+)?)\s*[xх×]", re.I)
-PERCENT = re.compile(r"(\d+(?:\.\d+)?)\s*%")
+NUMBER = r"\d(?:[\d\s\u00a0]*\d)?(?:[.,]\d+)*"
+MONEY = re.compile(
+    rf"(?:\$|US\$)\s*({NUMBER})|"
+    rf"(?:USD|доллар(?:ов|а|ы)?\s+США)\s*({NUMBER})|"
+    rf"({NUMBER})\s*(?:USD|US\s*dollars?|доллар(?:ов|а|ы)?\s+США)",
+    re.I,
+)
+RATIO = re.compile(r"(\d+(?:[.,]\d+)?)\s*[xх×]", re.I)
+PERCENT = re.compile(r"(\d+(?:[.,]\d+)?)\s*%")
 
 
 class RuleKind(StrEnum):
@@ -76,11 +93,19 @@ HEADING_RULES: list[tuple[re.Pattern[str], RuleKind, str, frozenset[Category]]] 
      RuleKind.UNKNOWN, ">=", frozenset()),
     (re.compile(r"минимальн\w*\s+выручк", re.I),
      RuleKind.MIN_REVENUE, ">=", frozenset({Category.REVENUE})),
+    (re.compile(r"minimum\s+revenue|revenue\s+minimum", re.I),
+     RuleKind.MIN_REVENUE, ">=", frozenset({Category.REVENUE})),
     (re.compile(r"максимальн\w*\s+платеж\w*\s+связанн", re.I),
+     RuleKind.MAX_RELATED_PARTY, "<=", frozenset()),
+    (re.compile(
+        r"maximum\s+related[- ]party\s+payments?\b(?!\s+as\s+a\s+proportion)", re.I
+    ),
      RuleKind.MAX_RELATED_PARTY, "<=", frozenset()),
     (re.compile(r"related-party payments as a proportion|дол\w*\s+платеж\w*\s+связанн", re.I),
      RuleKind.RELATED_PARTY_SHARE, "<=", frozenset()),
     (re.compile(r"максимальн\w*\s+расход\w*\s+по\s+категории", re.I),
+     RuleKind.MAX_CATEGORY_SPEND, "<=", frozenset()),
+    (re.compile(r"maximum\s+(?:category\s+)?spend|category\s+spend\s+ceiling", re.I),
      RuleKind.MAX_CATEGORY_SPEND, "<=", frozenset()),
     (re.compile(r"ratio|коэффициент|отношени|рентабельност|покрыти|leverage|intensity", re.I),
      RuleKind.RATIO, "<=", frozenset()),
@@ -125,8 +150,16 @@ CATEGORY_WORDS: list[tuple[re.Pattern[str], Category]] = [
     (re.compile(r"түсім|кіріс", re.I), Category.REVENUE),
 ]
 
-MINIMUM_WORDS = re.compile(r"не\s+менее|кем\s+емес|төмен\s+емес", re.I)
-MAXIMUM_WORDS = re.compile(r"не\s+выше|не\s+более|аспау|артық\s+емес|жоғары\s+емес", re.I)
+MINIMUM_WORDS = re.compile(
+    r"не\s+менее|не\s+ниже|at\s+least|not\s+less\s+than|must\s+not\s+fall\s+below|"
+    r"кем\s+емес|төмен\s+емес",
+    re.I,
+)
+MAXIMUM_WORDS = re.compile(
+    r"не\s+выше|не\s+более|не\s+превыш|must\s+not\s+exceed|not\s+more\s+than|"
+    r"аспау|артық\s+емес|жоғары\s+емес",
+    re.I,
+)
 
 
 def _quarter_period(text: str) -> tuple[date, date] | None:
@@ -155,6 +188,33 @@ def _quarter_period(text: str) -> tuple[date, date] | None:
     return None
 
 
+def _decimal_number(text: str) -> Decimal:
+    return Decimal(text.replace(",", "."))
+
+
+def _money_number(text: str) -> Decimal:
+    compact = re.sub(r"[\s\u00a0]", "", text)
+    if "," in compact and "." in compact:
+        decimal_separator = "," if compact.rfind(",") > compact.rfind(".") else "."
+        thousands_separator = "." if decimal_separator == "," else ","
+        compact = compact.replace(thousands_separator, "").replace(decimal_separator, ".")
+    elif "," in compact:
+        pieces = compact.split(",")
+        compact = (
+            ".".join(pieces)
+            if len(pieces) == 2 and len(pieces[-1]) <= 2
+            else "".join(pieces)
+        )
+    elif compact.count(".") > 1:
+        pieces = compact.split(".")
+        compact = (
+            "".join(pieces[:-1]) + "." + pieces[-1]
+            if len(pieces[-1]) <= 2
+            else "".join(pieces)
+        )
+    return Decimal(compact)
+
+
 def _threshold(text: str, kind: RuleKind = RuleKind.UNKNOWN) -> Decimal | None:
     ratio = RATIO.search(text)
     percent = PERCENT.search(text)
@@ -162,18 +222,18 @@ def _threshold(text: str, kind: RuleKind = RuleKind.UNKNOWN) -> Decimal | None:
 
     if kind in (RuleKind.RATIO, RuleKind.UNKNOWN):
         if ratio:
-            return Decimal(ratio.group(1))
+            return _decimal_number(ratio.group(1))
         if percent:
-            return Decimal(percent.group(1)) / Decimal(100)
+            return _decimal_number(percent.group(1)) / Decimal(100)
         if money:
-            return Decimal(money.group(1).replace(",", ""))
+            return _money_number(next(group for group in money.groups() if group))
     else:
         if money:
-            return Decimal(money.group(1).replace(",", ""))
+            return _money_number(next(group for group in money.groups() if group))
         if ratio:
-            return Decimal(ratio.group(1))
+            return _decimal_number(ratio.group(1))
         if percent:
-            return Decimal(percent.group(1)) / Decimal(100)
+            return _decimal_number(percent.group(1)) / Decimal(100)
     return None
 
 
@@ -194,9 +254,15 @@ def _categories(text: str) -> frozenset[Category]:
 
 def _period(text: str) -> tuple[date, date] | None:
     match = PERIOD.search(text) or KZ_PERIOD.search(text)
+    if match:
+        return date.fromisoformat(match.group(1)), date.fromisoformat(match.group(2))
+    match = EU_PERIOD.search(text)
     if not match:
         return None
-    return date.fromisoformat(match.group(1)), date.fromisoformat(match.group(2))
+    return tuple(
+        date(int(raw[-4:]), int(raw[3:5]), int(raw[:2]))
+        for raw in match.groups()
+    )
 
 
 def extract_rules(scenario_id: str, agreement_text: str) -> dict[str, Rule]:
@@ -205,6 +271,7 @@ def extract_rules(scenario_id: str, agreement_text: str) -> dict[str, Rule]:
 
     rules: dict[str, Rule] = {}
     for clause, heading, body in CLAUSE_BLOCK.findall(agreement_text):
+        clause = re.sub(r"\s+", "", clause)
         heading = " ".join(heading.split())
         kind, comparator, categories = _kind(heading, body)
         clause_text = heading + " " + body

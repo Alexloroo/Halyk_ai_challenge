@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
+from datetime import date
 from decimal import Decimal
 from enum import StrEnum
 
@@ -100,6 +101,15 @@ EXCLUDE_TXN = re.compile(
 CUTOFF_TXN = re.compile(
     r"[Оо]перация\s+(TXN-\w+-\d+).*?относится\s+к\s+услугам.*?период\s+с\s+(\d{4})",
     re.S | re.I,
+)
+COVENANT_YEAR = re.compile(
+    r"ковенантн\w*\s+период\w*[^.\n]{0,80}?(\d{4})\s*(?:год|жыл)?",
+    re.I,
+)
+FINANCIAL_YEAR = re.compile(
+    r"(\d{4})\s*(?:ФИН\.?\s*ГОД|FINANCIAL\s+YEAR)|"
+    r"(?:за\s+год,?\s+закончившийся|year\s+ended)[^\n]{0,40}?(\d{4})",
+    re.I,
 )
 
 MISSING_TXN = re.compile(
@@ -208,6 +218,13 @@ def extract_adjustments(audit_text: str) -> list[AuditAdjustment]:
                 description=m.group(0)[:200],
             ))
 
+    covenant_year_match = COVENANT_YEAR.search(audit_text) or FINANCIAL_YEAR.search(audit_text)
+    covenant_year = (
+        int(next(group for group in covenant_year_match.groups() if group))
+        if covenant_year_match
+        else None
+    )
+
     for block in _operation_blocks(audit_text):
         if not skip_reclass:
             reclass = RECLASS_TXN.search(block) or RECLASS_TXN_KZ.search(block)
@@ -224,7 +241,9 @@ def extract_adjustments(audit_text: str) -> list[AuditAdjustment]:
                 ))
             exclude = EXCLUDE_TXN.search(block)
             cutoff = CUTOFF_TXN.search(block)
-            if exclude or (cutoff and int(cutoff.group(2)) > 2025):
+            if exclude or (
+                cutoff and covenant_year is not None and int(cutoff.group(2)) > covenant_year
+            ):
                 match = exclude or cutoff
                 assert match is not None
                 adjustments.append(AuditAdjustment(
@@ -266,6 +285,11 @@ def extract_adjustments(audit_text: str) -> list[AuditAdjustment]:
         ))
 
     return adjustments
+
+
+def is_actionable_audit_text(text: str) -> bool:
+    """Whether an unclassified document contains an executable audit instruction."""
+    return bool(extract_adjustments(text) or extract_fx_rates(text))
 
 
 def _find_entry_by_amount(
@@ -320,13 +344,16 @@ def apply_adjustments(
                     existing.audit_corrected = True
                     existing.defects = [d for d in existing.defects if d != "missing_amount"]
             elif adj.txn_id is None and adj.amount is not None:
-                from datetime import date as dt_date
                 ref = result[0] if result else None
+                year = max(
+                    (entry.day.year for entry in result if entry.day.year > 1970),
+                    default=ref.day.year if ref else 1970,
+                )
                 synthetic = LedgerEntry(
                     txn_id=f"SYNTH-{adj.description[:20].replace(' ', '-')}",
                     scenario_id=ref.scenario_id if ref else "",
                     account_id=ref.account_id if ref else "",
-                    day=dt_date(2025, 12, 31),
+                    day=date(year, 12, 31),
                     counterparty=adj.description,
                     description=adj.description,
                     amount=-adj.amount,

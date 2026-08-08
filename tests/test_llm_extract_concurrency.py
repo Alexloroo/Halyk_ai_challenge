@@ -120,3 +120,36 @@ def test_successful_async_result_still_receives_fixup(monkeypatch) -> None:
 
     assert set(formulas) == {"T/6.1"}
     assert formulas["T/6.1"].numerator_agg is AggKind.REVENUE_PLUS_FINANCING
+
+
+def test_semantically_invalid_formula_is_retried(monkeypatch) -> None:
+    valid = _spec()
+    invalid = FormulaSpec(
+        output_kind=OutputKind.DOLLAR_AMOUNT,
+        numerator_agg=AggKind.SUM_INFLOW,
+        numerator_categories=[],
+        comparator="<=",
+    )
+
+    class SequencedStructured:
+        def __init__(self) -> None:
+            self.results = [invalid, valid]
+            self.calls = 0
+
+        async def ainvoke(self, messages):
+            result = self.results[self.calls]
+            self.calls += 1
+            return result
+
+    structured = SequencedStructured()
+    llm = FakeLLM(structured)
+    monkeypatch.setattr("halyk.llm_extract._build_llm", lambda: llm)
+
+    async def no_wait(delay: float) -> None:
+        return None
+
+    monkeypatch.setattr("halyk.llm_extract.asyncio.sleep", no_wait)
+    formulas = extract_formulas({"T": {"6.1": _rule("ratio must not exceed 1x")}})
+
+    assert structured.calls == 2
+    assert formulas["T/6.1"].output_kind is OutputKind.RATIO

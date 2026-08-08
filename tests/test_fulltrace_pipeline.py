@@ -63,6 +63,11 @@ def test_solve_fulltrace_writes_every_pipeline_stage(tmp_path: Path) -> None:
         (writer.root / "12_evaluation" / "P1" / "6_1.json").read_text(encoding="utf-8")
     )
     assert evaluation["answer"]["note"] == "no rule extracted"
+    readiness = json.loads(
+        (writer.root / "private_readiness.json").read_text(encoding="utf-8")
+    )
+    assert readiness["status"] == "FAIL"
+    assert "missing_rule" in {finding["code"] for finding in readiness["findings"]}
 
 
 def test_solve_marks_the_business_stage_that_failed(tmp_path: Path) -> None:

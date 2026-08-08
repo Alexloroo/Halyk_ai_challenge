@@ -1,20 +1,3 @@
-# Halyk AI Challenge — Covenant Solver
-
-Система обрабатывает общий ledger и архив PDF-документов, находит действующие
-финансовые ковенанты каждого заёмщика и формирует `submission.json` с полями:
-
-- `status`: `COMPLIANT` или `BREACH`;
-- `actual`: рассчитанное значение;
-- `evidence_txn_id`: определяющая транзакция, если она существует.
-
-Решение поддерживает документы на русском, казахском и английском языках,
-включая отсканированные PDF без текстового слоя.
-
-Главный принцип архитектуры:
-
-> LLM интерпретирует формулу сложного ковенанта. Все выборки транзакций,
-> арифметика, verdict и evidence выполняются детерминированным Python-кодом.
-
 ## Быстрый запуск
 
 ### Требования
@@ -47,7 +30,11 @@ data/raw/
 Обычный запуск:
 
 ```bash
-make run
+# Linux
+make run PYTHON=python3
+
+# Windows (GNU Make из Git Bash/MSYS2)
+make run PYTHON=python
 ```
 
 Результат появится в:
@@ -59,7 +46,11 @@ submission.json
 Запуск с полной трассировкой всех стадий:
 
 ```bash
-make fulltrace
+# Linux
+make fulltrace PYTHON=python3
+
+# Windows (GNU Make из Git Bash/MSYS2)
+make fulltrace PYTHON=python
 ```
 
 Результаты:
@@ -77,6 +68,10 @@ trace/
 
 `make run` и `make fulltrace` сами собирают Docker-образ. В образ уже включены
 Tesseract и языковые пакеты `rus`, `kaz`, `eng`.
+
+Переменная `PYTHON` задаёт имя Python-интерпретатора для Makefile. В Linux обычно
+используется `PYTHON=python3`, в Windows — `PYTHON=python`. Значение по умолчанию
+в Makefile — `python3`.
 
 ## Как указать другой путь к данным
 
@@ -173,7 +168,8 @@ unknown
 ```text
 submission_template.json ──→ ожидаемые scenario / clauses
                                    │
-master_ledger_2025.csv ──→ LedgerEntry[] ──→ categorization
+master_ledger_2025.csv ──→ LedgerEntry[] ──→ regex categorization
+                                   │             └─→ DeepSeek fallback
                                    │
 documents/*.pdf ──→ PyMuPDF / OCR ─┤
                                    │
@@ -201,7 +197,7 @@ Orchestration находится в `src/halyk/run.py` и разделена н�
 |---|---|
 | `01_template` | scenario и ожидаемые clauses |
 | `02_ledger_loaded` | исходный ledger и defects |
-| `03_ledger_categorized` | категории всех транзакций |
+| `03_ledger_categorized` | категории всех транзакций и линейдж deterministic/LLM решений |
 | `04_pymupdf` | текст каждого PDF, native/OCR pages и ошибки OCR |
 | `05_documents_classified` | тип, edition, account IDs |
 | `06_account_mapping` | связь scenario → account |
@@ -219,7 +215,8 @@ Orchestration находится в `src/halyk/run.py` и разделена н�
 | Модуль | Ответственность |
 |---|---|
 | `ledger.py` | CSV → `LedgerEntry`, scenario mapping и defects |
-| `categorize.py` | RU/KZ/EN description → финансовая категория |
+| `categorize.py` | высокоточная RU/KZ/EN regex-категоризация |
+| `llm_categorize.py` | DeepSeek fallback для новых и неоднозначных формулировок ledger |
 | `docs.py` | PyMuPDF, OCR, document kind, edition и authority ranking |
 | `rules.py` | RU/KZ clauses `6.1–6.3`, period, threshold и comparator |
 | `parties.py` | KYC ownership threshold и exact legal-name matching |
@@ -245,6 +242,28 @@ Orchestration находится в `src/halyk/run.py` и разделена н�
    personnel/еңбекақы, utilities/коммуналдық и другие.
 6. KYC поддерживает `LLP/JSC/ТОО/АО/ЖШС/АҚ` и казахские threshold-фразы.
 7. DeepSeek получает явную инструкцию интерпретировать русские и казахские clauses.
+
+## Гибридная категоризация ledger
+
+Сначала применяются высокоточные RU/KZ/EN правила. Только новые
+или неоднозначные descriptions передаются DeepSeek. Это сохраняет
+детерминированные результаты на известных данных и даёт fallback для
+незнакомых формулировок приватного датасета.
+
+LLM получает только description, counterparty и направление платежа. Сумма,
+scenario, covenant, ground truth и ожидаемый ответ в запрос не входят. Ответ
+проходит semantic validation; ошибка одного запроса не отменяет остальные.
+Одинаковые транзакции дедуплицируются, а запросы выполняются параллельно.
+
+Лимит параллельных запросов:
+
+```text
+HALYK_CATEGORY_LLM_CONCURRENCY=50
+```
+
+В fulltrace решение по каждой транзакции записывается в
+`trace/03_ledger_categorized/decisions.json`: initial/final category, причина,
+LLM status и validation errors.
 
 ## OCR
 
@@ -316,4 +335,83 @@ COMPLIANT
 Lineage сохраняет происхождение изменений: audit reclassification, restored
 missing amount, exclusion, FX conversion, KYC relation и unrestricted transfer.
 
+## Запуск без Docker и Make
+
+Для прямого запуска необходимы Python 3.12+, Tesseract OCR и языковые данные
+`rus`, `kaz`, `eng`. В отличие от Docker-режима, системные OCR-зависимости нужно
+установить самостоятельно.
+
+### Linux
+
+Установите Tesseract, создайте виртуальное окружение и установите проект:
+
+```bash
+sudo apt-get update
+sudo apt-get install -y tesseract-ocr tesseract-ocr-rus tesseract-ocr-kaz tesseract-ocr-eng
+
+python3 -m venv .venv
+source .venv/bin/activate
+python3 -m pip install --upgrade pip
+python3 -m pip install -e ".[dev]"
 ```
+
+Создайте `.env` с `DEEPSEEK_API_KEY`, затем запустите обычный pipeline:
+
+```bash
+python3 -m halyk \
+  --data-dir "data/raw" \
+  --output "submission.json"
+```
+
+Прямой запуск с полной трассировкой:
+
+```bash
+python3 -m halyk \
+  --data-dir "data/raw" \
+  --output "submission.json" \
+  --trace-dir "trace" \
+  --fulltrace
+```
+
+### Windows PowerShell
+
+Установите Tesseract с языками `rus`, `kaz`, `eng` и убедитесь, что каталог с
+исполняемым файлом Tesseract доступен через `PATH`. Если языковые данные лежат
+не в стандартном месте, задайте `TESSDATA_PREFIX`, указывающий на каталог
+`tessdata`.
+
+Создание окружения и установка проекта:
+
+```powershell
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip
+python -m pip install -e ".[dev]"
+```
+
+Ключ можно сохранить в `.env` или установить для текущего PowerShell-сеанса:
+
+```powershell
+$env:DEEPSEEK_API_KEY = "your_key"
+```
+
+Обычный запуск:
+
+```powershell
+python -m halyk `
+  --data-dir "data/raw" `
+  --output "submission.json"
+```
+
+Запуск с полной трассировкой:
+
+```powershell
+python -m halyk `
+  --data-dir "data/raw" `
+  --output "submission.json" `
+  --trace-dir "trace" `
+  --fulltrace
+```
+
+Для диагностического запуска без DeepSeek добавьте `--no-llm` к любой прямой
+команде.
