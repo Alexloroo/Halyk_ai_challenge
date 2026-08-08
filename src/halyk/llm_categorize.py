@@ -63,6 +63,9 @@ Allowed categories:
 - interest: interest expense or interest income; interest income is not a loan drawdown;
 - marketing: advertising, campaigns, promotions, branding and marketing materials;
 - professional: legal, audit, advisory, consulting, valuation and similar services;
+- debt_principal: repayments of loan or borrowing principal;
+- asset_transfer: transfers of equipment, machinery, collateral, or other assets;
+- distribution: dividends, restricted payments, or intercompany distributions;
 - unknown: only when the description does not contain enough evidence.
 
 Rules:
@@ -80,7 +83,8 @@ Respond only with JSON matching the schema."""
 _FINANCING_EVIDENCE = re.compile(
     r"loan|borrow|debt|credit\s+facility|revolver|revolving\s+facility|"
     r"facility\s+(?:drawdown|proceeds)|"
-    r"bond\s+proceeds|financing\s+(?:receipt|proceed)|кредит|қарыз|қаржыландыру",
+    r"bond\s+proceeds|promissory\s+note|financing\s+(?:receipt|proceed)|"
+    r"кредит|қарыз|қаржыландыру",
     re.I,
 )
 

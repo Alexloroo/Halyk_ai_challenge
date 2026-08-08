@@ -65,7 +65,8 @@ is_documentary=true; only then may rule_evidence omit a numeric threshold.
 
 Allowed kinds: min_revenue, max_category_spend, max_related_party, \
 related_party_share, ratio, unknown. Allowed categories: revenue, financing, capex, \
-opex, lease, personnel, utilities, tax, insurance, interest, marketing, professional. \
+opex, lease, personnel, utilities, tax, insurance, interest, marketing, professional, \
+debt_principal, asset_transfer, distribution. \
 Use unknown when none of the more specific kinds is justified. Respond only with JSON \
 matching the schema."""
 
@@ -82,6 +83,9 @@ _ALLOWED_CATEGORIES = {
     Category.INTEREST,
     Category.MARKETING,
     Category.PROFESSIONAL,
+    Category.DEBT_PRINCIPAL,
+    Category.ASSET_TRANSFER,
+    Category.DISTRIBUTION,
 }
 
 
@@ -127,8 +131,13 @@ def _validate_and_build(
     combined = f"{resolution.heading_evidence} {resolution.rule_evidence}"
     if _clause_marker(request.clause).search(combined) is None:
         errors.append("evidence does not contain the requested clause marker")
+    resolved_categories = [
+        category for category in resolution.categories if category is not Category.UNKNOWN
+    ]
     invalid_categories = sorted(
-        category.value for category in resolution.categories if category not in _ALLOWED_CATEGORIES
+        category.value
+        for category in resolution.categories
+        if category not in _ALLOWED_CATEGORIES and category is not Category.UNKNOWN
     )
     if invalid_categories:
         errors.append(f"unsupported categories: {invalid_categories}")
@@ -152,7 +161,7 @@ def _validate_and_build(
         request.agreement_text,
         kind=resolution.kind,
         comparator=resolution.comparator,
-        categories=resolution.categories,
+        categories=resolved_categories,
     )
     if resolution.is_documentary and resolution.kind is not RuleKind.UNKNOWN:
         errors.append("documentary rule must use unknown kind")

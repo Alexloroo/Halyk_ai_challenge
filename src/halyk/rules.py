@@ -59,7 +59,10 @@ MONEY = re.compile(
     re.I,
 )
 RATIO = re.compile(r"(\d+(?:[.,]\d+)?)\s*[xх×]", re.I)
-PERCENT = re.compile(r"(\d+(?:[.,]\d+)?)\s*%")
+PERCENT = re.compile(
+    r"(\d+(?:[.,]\d+)?)\s*(?:%|процент(?:а|ов)?|percent(?:age)?|пайыз)",
+    re.I,
+)
 
 
 class RuleKind(StrEnum):
@@ -190,6 +193,18 @@ CATEGORY_WORDS: list[tuple[re.Pattern[str], Category]] = [
         ),
         Category.PROFESSIONAL,
     ),
+    (
+        re.compile(r"principal repayment|погашен\w+\s+основн\w+\s+долг", re.I),
+        Category.DEBT_PRINCIPAL,
+    ),
+    (
+        re.compile(r"asset transfer|equipment transfer|передач\w+\s+актив", re.I),
+        Category.ASSET_TRANSFER,
+    ),
+    (
+        re.compile(r"distribution|dividend|restricted payment|дивиденд|распределен\w+", re.I),
+        Category.DISTRIBUTION,
+    ),
     (re.compile(r"выручк|\brevenue\b", re.I), Category.REVENUE),
     (re.compile(r"сақтандыру", re.I), Category.INSURANCE),
     (re.compile(r"жалдау|лизинг", re.I), Category.LEASE),
@@ -210,8 +225,14 @@ MINIMUM_WORDS = re.compile(
     re.I,
 )
 MAXIMUM_WORDS = re.compile(
-    r"не\s+выше|не\s+более|не\s+превыш|must\s+not\s+exceed|not\s+more\s+than|"
+    r"не\s+выше|не\s+более|не\s+превыш|не\s+допуска\w*\s+превыш|"
+    r"must\s+not\s+exceed|not\s+more\s+than|"
     r"аспау|артық\s+емес|жоғары\s+емес",
+    re.I,
+)
+CONDITIONAL_WORDS = re.compile(r"^\s*(?:если|if|егер)\b", re.I)
+OBLIGATION_WORDS = re.compile(
+    r"обязует\w*|должен\w*|shall\b|must\b|undertakes?\b|міндеттен\w*|тиіс\b",
     re.I,
 )
 
@@ -268,6 +289,26 @@ def _threshold(text: str, kind: RuleKind = RuleKind.UNKNOWN) -> Decimal | None:
     percent = PERCENT.search(text)
     money = MONEY.search(text)
 
+    # A springing covenant states the trigger first and the tested obligation
+    # second.  Rule.threshold is the obligation threshold; FormulaSpec carries
+    # the trigger separately.
+    if CONDITIONAL_WORDS.search(text):
+        obligation = OBLIGATION_WORDS.search(text)
+        if obligation is not None:
+            candidates = [
+                match
+                for pattern in (RATIO, PERCENT, MONEY)
+                if (match := pattern.search(text, obligation.end())) is not None
+            ]
+            if candidates:
+                selected = min(candidates, key=lambda match: match.start())
+                raw = next(group for group in selected.groups() if group)
+                if selected.re is PERCENT:
+                    return _decimal_number(raw) / Decimal(100)
+                if selected.re is RATIO:
+                    return _decimal_number(raw)
+                return _money_number(raw)
+
     if kind in (RuleKind.RATIO, RuleKind.UNKNOWN):
         if ratio:
             return _decimal_number(ratio.group(1))
@@ -283,6 +324,38 @@ def _threshold(text: str, kind: RuleKind = RuleKind.UNKNOWN) -> Decimal | None:
         if percent:
             return _decimal_number(percent.group(1)) / Decimal(100)
     return None
+
+
+def _threshold_comparator(text: str, threshold: Decimal | None, default: str) -> str:
+    """Resolve the comparator nearest to the selected numeric threshold."""
+    if threshold is None:
+        return default
+    matches = [*RATIO.finditer(text), *PERCENT.finditer(text), *MONEY.finditer(text)]
+    selected = None
+    for match in matches:
+        raw = next((group for group in match.groups() if group), None)
+        if raw is None:
+            continue
+        value = _money_number(raw)
+        if match.re is PERCENT:
+            value /= Decimal(100)
+        if value == threshold:
+            selected = match
+            break
+    if selected is None:
+        return default
+    context = text[max(0, selected.start() - 180) : selected.end() + 80]
+    if MAXIMUM_WORDS.search(context) or re.search(
+        r"превышени\w*|excess\s+of|exceeding", context, re.I
+    ):
+        return "<="
+    if MINIMUM_WORDS.search(context) or re.search(
+        r"не\s+допускать\s+снижен|must\s+not\s+fall\s+below|төмендеуіне\s+жол\s+берме",
+        context,
+        re.I,
+    ):
+        return ">="
+    return default
 
 
 def _kind(heading: str, body: str) -> tuple[RuleKind, str, frozenset[Category]]:
@@ -329,6 +402,8 @@ def extract_rules(scenario_id: str, agreement_text: str) -> dict[str, Rule]:
         clause_period = _quarter_period(clause_text)
         if clause_period is None:
             clause_period = _period(body) or period
+        threshold = _threshold(body, kind)
+        comparator = _threshold_comparator(clause_text, threshold, comparator)
         rules[clause] = Rule(
             scenario_id=scenario_id,
             clause=clause,
@@ -336,7 +411,7 @@ def extract_rules(scenario_id: str, agreement_text: str) -> dict[str, Rule]:
             text=" ".join(body.split())[:4000],
             kind=kind,
             comparator=comparator,
-            threshold=_threshold(body, kind),
+            threshold=threshold,
             period=clause_period,
             categories=categories,
         )
@@ -357,6 +432,12 @@ def rule_from_evidence(
     """Build an executable rule from validated agreement evidence."""
     resolved_categories = frozenset(categories) or _categories(f"{heading} {text}")
     period = _quarter_period(text) or _period(text) or _period(agreement_text)
+    threshold = _threshold(text, kind)
+    comparator = _threshold_comparator(f"{heading} {text}", threshold, comparator)
+    if Category.ASSET_TRANSFER in resolved_categories and re.search(
+        r"unrestricted\s+subsidiar|неограниченн\w+\s+дочерн", text, re.I
+    ):
+        kind = RuleKind.UNKNOWN
     return Rule(
         scenario_id=scenario_id,
         clause=clause,
@@ -364,7 +445,7 @@ def rule_from_evidence(
         text=" ".join(text.split())[:4000],
         kind=kind,
         comparator=comparator,
-        threshold=_threshold(text, kind),
+        threshold=threshold,
         period=period,
         categories=resolved_categories,
     )

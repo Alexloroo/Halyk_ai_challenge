@@ -164,6 +164,139 @@ def test_trailing_reconciliation_steps_are_removed_after_complete_actual() -> No
     assert validate_full_context_calculation(canonical, _request()) == []
 
 
+def test_canonicalization_recomputes_model_arithmetic_and_financial_sign_mode() -> None:
+    request = _request()
+    request.rule.text = "Financing proceeds reduced by interest must be at least 700000."
+    request.rule.comparator = ">="
+    request.rule.threshold = Decimal("700000")
+    request.rule.categories = frozenset({Category.FINANCING, Category.INTEREST})
+    request = replace(
+        request,
+        ledger=(
+            _entry("TXN-X51-001", "1000000", Category.FINANCING),
+            _entry("TXN-X51-004", "-200000", Category.INTEREST),
+        ),
+    )
+    calculation = FullContextCalculation(
+        actual=Decimal("1000000"),
+        status="COMPLIANT",
+        comparator=">=",
+        threshold=Decimal("700000"),
+        period_start=date(2025, 1, 1),
+        period_end=date(2025, 12, 31),
+        calculation_steps=[
+            FullContextStep(
+                operation="sum",
+                inputs=["txn:TXN-X51-001"],
+                input_mode="signed",
+                result=Decimal("1000000"),
+            ),
+            FullContextStep(
+                operation="subtract",
+                inputs=["step:1", "txn:TXN-X51-004"],
+                input_mode="signed",
+                result=Decimal("800000"),
+            ),
+        ],
+        used_txn_ids=["TXN-X51-001", "TXN-X51-004"],
+        document_evidence=[],
+        reasoning_summary="Financing less paid interest.",
+    )
+
+    canonical = canonicalize_full_context_calculation(calculation, request)
+
+    assert canonical.calculation_steps[1].input_mode == "magnitude"
+    assert canonical.calculation_steps[1].result == Decimal("800000")
+    assert canonical.actual == Decimal("800000")
+    assert canonical.status == "COMPLIANT"
+    assert validate_full_context_calculation(canonical, request) == []
+
+
+def test_conditional_calculation_keeps_primary_actual_when_later_step_checks_proviso() -> None:
+    request = _request()
+    request.rule.text = "Rent above $1,000,000 is not a default if insurance is at least $200,000."
+    request.rule.threshold = Decimal("1000000")
+    request = replace(
+        request,
+        ledger=(
+            _entry("TXN-X51-001", "-1200000", Category.LEASE),
+            _entry("TXN-X51-004", "-250000", Category.INSURANCE),
+        ),
+    )
+    calculation = FullContextCalculation(
+        actual=Decimal("1200000"),
+        status="COMPLIANT",
+        comparator="<=",
+        threshold=Decimal("1000000"),
+        period_start=date(2025, 1, 1),
+        period_end=date(2025, 12, 31),
+        calculation_steps=[
+            FullContextStep(
+                operation="sum",
+                inputs=["txn:TXN-X51-001"],
+                input_mode="magnitude",
+                result=Decimal("1200000"),
+            ),
+            FullContextStep(
+                operation="sum",
+                inputs=["txn:TXN-X51-004"],
+                input_mode="magnitude",
+                result=Decimal("250000"),
+            ),
+        ],
+        used_txn_ids=["TXN-X51-001", "TXN-X51-004"],
+        document_evidence=[],
+        reasoning_summary="Insurance proviso is satisfied.",
+    )
+
+    canonical = canonicalize_full_context_calculation(calculation, request)
+
+    assert canonical.actual == Decimal("1200000")
+    assert validate_full_context_calculation(canonical, request) == []
+
+
+def test_canonicalization_repairs_safe_transaction_and_decimal_prefixes() -> None:
+    request = _request()
+    calculation = _calculation().model_copy(deep=True)
+    calculation.calculation_steps[0].inputs = ["txn:X51-001"]
+    calculation.calculation_steps[1].inputs = ["txn:X51-004"]
+    calculation.used_txn_ids = ["txn:X51-001", "txn:X51-004"]
+
+    canonical = canonicalize_full_context_calculation(calculation, request)
+
+    assert canonical.used_txn_ids == ["TXN-X51-001", "TXN-X51-004"]
+    assert canonical.calculation_steps[0].inputs == ["txn:TXN-X51-001"]
+    assert validate_full_context_calculation(canonical, request) == []
+
+
+def test_conditional_full_context_can_select_an_explicit_obligation_threshold() -> None:
+    request = _request()
+    request.rule.text = (
+        "If capital expenditure exceeds $1,500,000, insurance premiums must be at least $250,000."
+    )
+    request.rule.threshold = Decimal("1500000")
+    request = replace(
+        request,
+        ledger=(_entry("TXN-X51-001", "-300000", Category.INSURANCE),),
+    )
+    calculation = _calculation().model_copy(deep=True)
+    calculation.actual = Decimal("300000")
+    calculation.status = "COMPLIANT"
+    calculation.comparator = ">="
+    calculation.threshold = Decimal("250000")
+    calculation.calculation_steps = [
+        FullContextStep(
+            operation="sum",
+            inputs=["txn:TXN-X51-001"],
+            input_mode="magnitude",
+            result=Decimal("300000"),
+        )
+    ]
+    calculation.used_txn_ids = ["TXN-X51-001"]
+
+    assert validate_full_context_calculation(calculation, request) == []
+
+
 def test_full_context_rejects_wrong_arithmetic_and_out_of_period_transaction() -> None:
     request = _request()
     bad_entry = _entry(
@@ -222,6 +355,30 @@ def test_document_quote_allows_only_pdf_whitespace_normalization() -> None:
     assert validate_full_context_calculation(calculation, request) == []
 
 
+def test_document_quote_ignores_standalone_pdf_page_number() -> None:
+    request = _request()
+    request = replace(
+        request,
+        candidates=(
+            EvidenceCandidate(
+                candidate_id="candidate-002",
+                source="statement.pdf",
+                text="Net Debt means debt less cash\n4\nand EBITDA means revenue less expenses.",
+            ),
+        ),
+        external_metrics={},
+    )
+    calculation = _calculation().model_copy(deep=True)
+    calculation.document_evidence = [
+        FullContextEvidence(
+            candidate_id="candidate-002",
+            quote="Net Debt means debt less cash and EBITDA means revenue less expenses.",
+        )
+    ]
+
+    assert validate_full_context_calculation(calculation, request) == []
+
+
 def test_independent_verifier_must_match_calculator_sources_and_result() -> None:
     calculation = _calculation()
     accepted = FullContextVerification(
@@ -238,6 +395,404 @@ def test_independent_verifier_must_match_calculator_sources_and_result() -> None
     assert validate_full_context_verification(mismatch, calculation) == [
         "verifier actual differs from calculator"
     ]
+
+
+def test_verifier_confirmation_is_accepted_when_only_compound_actual_format_is_disputed() -> None:
+    calculation = _calculation()
+    verification = FullContextVerification(
+        accepted=False,
+        actual=calculation.actual,
+        status=calculation.status,
+        used_txn_ids=calculation.used_txn_ids,
+        document_candidate_ids=[],
+        issues=[
+            "The status is correct and the calculation is correct, but actual reports "
+            "the primary metric rather than a joint metric."
+        ],
+    )
+
+    assert validate_full_context_verification(verification, calculation) == []
+
+
+def test_verifier_rejection_remains_authoritative_for_missing_trigger_data() -> None:
+    calculation = _calculation()
+    verification = FullContextVerification(
+        accepted=False,
+        actual=calculation.actual,
+        status=calculation.status,
+        used_txn_ids=calculation.used_txn_ids,
+        document_candidate_ids=[],
+        issues=["The conditional trigger cannot be established from supplied evidence."],
+    )
+
+    assert validate_full_context_verification(verification, calculation) == [
+        "independent verifier rejected calculation"
+    ]
+
+
+def test_conditional_compliant_is_accepted_when_verifier_confirms_primary_amount() -> None:
+    request = _request()
+    request.rule.text = (
+        "If an unavailable leverage ratio exceeds 3.00x, marketing payments must not "
+        "exceed $835,000.00. While it does not exceed 3.00x, the limit does not apply."
+    )
+    calculation = _calculation().model_copy(
+        update={"actual": Decimal("835000"), "status": "COMPLIANT"}, deep=True
+    )
+    calculation.calculation_steps = calculation.calculation_steps[:1]
+    calculation.used_txn_ids = ["TXN-X51-001"]
+    verification = FullContextVerification(
+        accepted=False,
+        actual=calculation.actual,
+        status=calculation.status,
+        used_txn_ids=calculation.used_txn_ids,
+        document_candidate_ids=[],
+        issues=[
+            "The conditional trigger cannot be established from supplied evidence. "
+            "The proposal's actual amount is correctly computed from TXN-X51-001, but "
+            "the status rests on the unavailable trigger."
+        ],
+    )
+
+    assert validate_full_context_verification(verification, calculation, request) == []
+
+
+def test_conditional_breach_requires_a_separate_trigger_calculation() -> None:
+    request = _request()
+    request.rule.text = "If leverage exceeds 3.00x, marketing payments must not exceed $800,000.00."
+    calculation = _calculation().model_copy(
+        update={"actual": Decimal("835000"), "status": "BREACH"}, deep=True
+    )
+    calculation.calculation_steps = calculation.calculation_steps[:1]
+    calculation.used_txn_ids = ["TXN-X51-001"]
+
+    assert "conditional breach has no independently calculated trigger" in (
+        validate_full_context_calculation(calculation, request)
+    )
+
+
+def test_unavailable_conditional_trigger_preserves_amount_but_disables_limit() -> None:
+    request = _request()
+    request.rule.text = (
+        "If an unavailable leverage ratio exceeds 3.00x, marketing payments must not "
+        "exceed $800,000.00."
+    )
+    calculation = _calculation().model_copy(
+        update={
+            "actual": Decimal("835000"),
+            "status": "BREACH",
+            "reasoning_summary": (
+                "The supplied data does not provide the leverage ratio, so the trigger "
+                "cannot be independently established."
+            ),
+        },
+        deep=True,
+    )
+    calculation.calculation_steps = calculation.calculation_steps[:1]
+    calculation.used_txn_ids = ["TXN-X51-001"]
+
+    canonical = canonicalize_full_context_calculation(calculation, request)
+
+    assert canonical.actual == Decimal("835000")
+    assert canonical.status == "COMPLIANT"
+    assert validate_full_context_calculation(canonical, request) == []
+
+    verification = FullContextVerification(
+        accepted=False,
+        actual=canonical.actual,
+        status="BREACH",
+        used_txn_ids=canonical.used_txn_ids,
+        document_candidate_ids=[],
+        issues=["The primary amount exceeds the cap."],
+    )
+    assert validate_full_context_verification(verification, canonical, request) == []
+
+
+def test_springing_net_leverage_trigger_is_rebuilt_from_defined_ledger_metrics() -> None:
+    request = _request()
+    request.rule.text = (
+        "When the Net Leverage Ratio exceeds 2.50x, transfers to an Unrestricted "
+        "Subsidiary must not exceed $500.00."
+    )
+    request.rule.threshold = Decimal("500")
+    request.rule.comparator = ">="
+    request.rule.categories = frozenset({Category.ASSET_TRANSFER})
+    transfer = _entry("TXN-X51-001", "-600", Category.ASSET_TRANSFER)
+    transfer.is_unrestricted_transfer = True
+    request = replace(
+        request,
+        agreement_text=(
+            "Net Leverage Ratio means Net Debt divided by EBITDA. Net Debt means financing "
+            "drawn less scheduled principal repayments. EBITDA means Revenue less Operating "
+            "Expenses."
+        ),
+        ledger=(
+            transfer,
+            _entry("TXN-X51-002", "900", Category.FINANCING),
+            _entry("TXN-X51-003", "-100", Category.DEBT_PRINCIPAL),
+            _entry("TXN-X51-004", "500", Category.REVENUE),
+            _entry("TXN-X51-005", "-200", Category.OPEX),
+        ),
+        external_metrics={},
+    )
+    calculation = FullContextCalculation(
+        actual=Decimal("600"),
+        status="BREACH",
+        comparator="<=",
+        threshold=Decimal("500"),
+        period_start=date(2025, 1, 1),
+        period_end=date(2025, 12, 31),
+        calculation_steps=[
+            FullContextStep(
+                operation="sum",
+                inputs=["txn:TXN-X51-001"],
+                input_mode="magnitude",
+                result=Decimal("600"),
+            )
+        ],
+        used_txn_ids=["TXN-X51-001"],
+        document_evidence=[],
+        reasoning_summary="Incomplete model calculation.",
+    )
+
+    canonical = canonicalize_full_context_calculation(calculation, request)
+
+    assert canonical.actual == Decimal("600")
+    assert canonical.status == "BREACH"
+    assert canonical.calculation_steps[-1].result == Decimal("800") / Decimal("300")
+    assert validate_full_context_calculation(canonical, request) == []
+
+
+def test_conditional_insurance_actual_is_rebuilt_from_insurance_not_capex() -> None:
+    request = _request()
+    request.rule.text = (
+        "If aggregate Capital Expenditure exceeds $1,500,000.00, the Borrower must "
+        "maintain Insurance premiums of at least $250,000.00."
+    )
+    request.rule.threshold = Decimal("250000")
+    request.rule.comparator = ">="
+    request.rule.categories = frozenset({Category.CAPEX, Category.INSURANCE})
+    request = replace(
+        request,
+        ledger=(
+            _entry("TXN-X51-001", "-1831339.05", Category.CAPEX),
+            _entry("TXN-X51-004", "-284617.42", Category.INSURANCE),
+        ),
+        external_metrics={},
+    )
+    calculation = _calculation().model_copy(
+        update={"actual": Decimal("1831339.05"), "status": "COMPLIANT"}, deep=True
+    )
+    calculation.calculation_steps = [
+        FullContextStep(
+            operation="sum",
+            inputs=["txn:TXN-X51-001"],
+            input_mode="magnitude",
+            result=Decimal("1831339.05"),
+        )
+    ]
+    calculation.used_txn_ids = ["TXN-X51-001"]
+
+    canonical = canonicalize_full_context_calculation(calculation, request)
+
+    assert canonical.actual == Decimal("284617.42")
+    assert canonical.status == "COMPLIANT"
+    assert validate_full_context_calculation(canonical, request) == []
+
+
+def test_adjusted_debt_with_guarantee_uses_ledger_ebitda() -> None:
+    request = _request()
+    request.rule.text = (
+        "Adjusted debt leverage must not exceed 3.00x. Adjusted total debt includes "
+        "financing drawn plus all guarantees, and EBITDA means Revenue less Operating expenses."
+    )
+    request.rule.threshold = Decimal("3.00")
+    request.rule.comparator = "<="
+    request.rule.categories = frozenset({Category.OPEX, Category.REVENUE})
+    request = replace(
+        request,
+        ledger=(
+            _entry("TXN-X51-001", "7212928.03", Category.FINANCING),
+            _entry("TXN-X51-002", "9358965.30", Category.REVENUE),
+            _entry("TXN-X51-003", "-6399342.83", Category.OPEX),
+        ),
+        candidates=(
+            EvidenceCandidate(
+                candidate_id="candidate-004",
+                source="audit.pdf",
+                text="Guarantees outstanding at period end were $1,743,286.47.",
+            ),
+        ),
+        external_metrics={},
+    )
+    calculation = _calculation().model_copy(deep=True)
+    calculation.document_evidence = [
+        FullContextEvidence(
+            candidate_id="candidate-004",
+            quote="Guarantees outstanding at period end were $1,743,286.47.",
+        )
+    ]
+
+    canonical = canonicalize_full_context_calculation(calculation, request)
+
+    assert canonical.actual.quantize(Decimal("0.000001")) == Decimal("3.026134")
+    assert canonical.status == "BREACH"
+    assert validate_full_context_calculation(canonical, request) == []
+
+
+def test_full_context_rejects_zero_placeholder_when_reasoning_admits_missing_trigger() -> None:
+    request = _request()
+    request.rule.text = "If a missing group ratio exceeds 3.4x, distributions are capped."
+    calculation = _calculation().model_copy(deep=True)
+    calculation.actual = Decimal(0)
+    calculation.status = "COMPLIANT"
+    calculation.calculation_steps = [
+        FullContextStep(operation="sum", inputs=["0"], input_mode="signed", result=Decimal(0))
+    ]
+    calculation.used_txn_ids = []
+    calculation.reasoning_summary = (
+        "No group metrics are supplied, so the trigger condition cannot be established "
+        "from supplied evidence and actual is reported as zero."
+    )
+
+    assert "calculation admits that required trigger data is unavailable" in (
+        validate_full_context_calculation(calculation, request)
+    )
+
+
+def test_python_enforces_satisfied_insurance_proviso() -> None:
+    request = _request()
+    request.rule.text = (
+        "Rent above $1,000,000 does not itself cause a breach if insurance premiums "
+        "are at least $200,000. Both conditions are tested together."
+    )
+    request.rule.threshold = Decimal("1000000")
+    request.rule.categories = frozenset({Category.LEASE, Category.INSURANCE})
+    request = replace(
+        request,
+        ledger=(
+            _entry("TXN-X51-001", "-1200000", Category.LEASE),
+            _entry("TXN-X51-004", "-250000", Category.INSURANCE),
+        ),
+    )
+    calculation = FullContextCalculation(
+        actual=Decimal("1200000"),
+        status="BREACH",
+        comparator="<=",
+        threshold=Decimal("1000000"),
+        period_start=date(2025, 1, 1),
+        period_end=date(2025, 12, 31),
+        calculation_steps=[
+            FullContextStep(
+                operation="sum",
+                inputs=["txn:TXN-X51-001"],
+                input_mode="magnitude",
+                result=Decimal("1200000"),
+            )
+        ],
+        used_txn_ids=["TXN-X51-001"],
+        document_evidence=[],
+        reasoning_summary="Rent exceeds the cap.",
+    )
+
+    errors = validate_full_context_calculation(calculation, request)
+
+    assert "status contradicts the satisfied minimum proviso" in errors
+    assert "calculation omits transactions used by the minimum proviso" in errors
+
+
+def test_capped_adjusted_ebitda_is_rebuilt_as_python_verifiable_steps() -> None:
+    request = _request()
+    request.rule.text = (
+        "Total debt means financing proceeds. Adjusted EBITDA means Revenue less Operating "
+        "expenses plus restructuring items added back by auditors, provided that aggregate "
+        "add-backs do not exceed 5% of Revenue. The ratio must not exceed 3.00x."
+    )
+    request.rule.threshold = Decimal("3.00")
+    request.rule.categories = frozenset({Category.OPEX, Category.REVENUE})
+    request = replace(
+        request,
+        ledger=(
+            _entry("TXN-X51-001", "9617432.88", Category.FINANCING),
+            _entry("TXN-X51-002", "8240517.36", Category.REVENUE),
+            _entry("TXN-X51-003", "-4500060.59", Category.OPEX),
+            _entry("TXN-X51-004", "-690314.22", Category.OPEX),
+        ),
+        candidates=(
+            EvidenceCandidate(
+                candidate_id="candidate-002",
+                source="audit.pdf",
+                text=(
+                    "Restructuring item added back by auditors: $690,314.22. "
+                    "Only items of at least $500,000 qualify."
+                ),
+            ),
+        ),
+        external_metrics={},
+    )
+    calculation = FullContextCalculation(
+        actual=Decimal(0),
+        status="COMPLIANT",
+        comparator="<=",
+        threshold=Decimal("3.00"),
+        period_start=date(2025, 1, 1),
+        period_end=date(2025, 12, 31),
+        calculation_steps=[
+            FullContextStep(operation="sum", inputs=["0"], input_mode="signed", result=Decimal(0))
+        ],
+        used_txn_ids=[],
+        document_evidence=[
+            FullContextEvidence(
+                candidate_id="candidate-002",
+                quote="Restructuring item added back by auditors: $690,314.22.",
+            )
+        ],
+        reasoning_summary="The model emitted an unusable placeholder.",
+    )
+
+    canonical = canonicalize_full_context_calculation(calculation, request)
+
+    assert canonical.actual.quantize(Decimal("0.000001")) == Decimal("2.777864")
+    assert canonical.status == "COMPLIANT"
+    assert canonical.used_txn_ids == [
+        "TXN-X51-001",
+        "TXN-X51-002",
+        "TXN-X51-003",
+        "TXN-X51-004",
+    ]
+    assert validate_full_context_calculation(canonical, request) == []
+
+
+def test_verifier_may_use_additional_supplied_document_context() -> None:
+    calculation = _calculation().model_copy(deep=True)
+    calculation.document_evidence = [
+        FullContextEvidence(candidate_id="candidate-002", quote="exact")
+    ]
+    verification = FullContextVerification(
+        accepted=True,
+        actual=calculation.actual,
+        status=calculation.status,
+        used_txn_ids=calculation.used_txn_ids,
+        document_candidate_ids=["candidate-002", "candidate-003"],
+        issues=[],
+    )
+
+    assert validate_full_context_verification(verification, calculation) == []
+
+
+def test_verifier_may_confirm_primary_sources_of_python_rebuilt_calculation() -> None:
+    calculation = _calculation().model_copy(deep=True)
+    calculation.reasoning_summary = "Python rebuilt the full trigger from scoped ledger data."
+    verification = FullContextVerification(
+        accepted=True,
+        actual=calculation.actual,
+        status=calculation.status,
+        used_txn_ids=["TXN-X51-001"],
+        document_candidate_ids=[],
+        issues=[],
+    )
+
+    assert validate_full_context_verification(verification, calculation) == []
 
 
 def test_full_context_uses_independent_calculator_and_verifier_without_real_api(
@@ -322,6 +877,47 @@ def test_calculator_and_verifier_disagreement_repeats_whole_pair_once(monkeypatc
     assert result.rounds == 2
     assert calculator.calls == 2
     assert verifier.calls == 2
+
+
+def test_second_calculator_round_receives_verifier_feedback(monkeypatch) -> None:
+    calculation = _calculation()
+
+    class Calculator:
+        def __init__(self) -> None:
+            self.messages = []
+
+        async def ainvoke(self, messages):
+            self.messages.append(messages)
+            return calculation
+
+    class Verifier:
+        def __init__(self) -> None:
+            self.calls = 0
+
+        async def ainvoke(self, messages):
+            self.calls += 1
+            return FullContextVerification(
+                accepted=self.calls == 2,
+                actual=calculation.actual,
+                status=calculation.status,
+                used_txn_ids=calculation.used_txn_ids,
+                document_candidate_ids=[],
+                issues=[] if self.calls == 2 else ["include the conditional obligation"],
+            )
+
+    calculator = Calculator()
+    verifier = Verifier()
+
+    class FakeLLM:
+        def with_structured_output(self, schema):
+            return calculator if schema is FullContextCalculation else verifier
+
+    monkeypatch.setattr("halyk.llm_extract._build_llm", lambda: FakeLLM())
+
+    result = resolve_full_context([_request()])["X51/6.1"]
+
+    assert result.accepted is True
+    assert "include the conditional obligation" in calculator.messages[1][-1]["content"]
 
 
 def test_accepted_full_context_calculation_becomes_auditable_answer() -> None:
@@ -447,6 +1043,40 @@ def test_deterministic_rule_is_never_eligible_for_full_context() -> None:
             generic_formulas={},
             capability_results={},
             generic_verifications={},
+            external_metrics={},
         )
         is None
+    )
+
+
+def test_missing_required_document_metric_uses_full_context_instead_of_zero() -> None:
+    rule = _request().rule
+    generic = GenericFormulaSpec(
+        mode=CovenantMode.GENERIC_NUMERIC,
+        supported=True,
+        reason="Debt divided by EBITDA",
+        clause_evidence=rule.text,
+        expression={"op": "metric", "metric": "total_debt"},
+        comparator="<=",
+        required_metrics=[
+            {
+                "name": "total_debt",
+                "source": "document",
+                "description": "Total debt",
+                "evidence_terms": ["Total debt"],
+            }
+        ],
+    )
+
+    assert (
+        _full_context_reason(
+            "X51/6.1",
+            rule=rule,
+            formulas={},
+            generic_formulas={"X51/6.1": generic},
+            capability_results={},
+            generic_verifications={},
+            external_metrics={},
+        )
+        == "missing_document_metrics"
     )

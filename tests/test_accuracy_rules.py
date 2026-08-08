@@ -11,7 +11,7 @@ from halyk.evaluate import evaluate
 from halyk.ledger import LedgerEntry
 from halyk.llm_documents import EntityLinkResult, EntityLinkSpec
 from halyk.llm_extract import AggKind, FormulaSpec, OutputKind
-from halyk.parties import extract_related_parties, mark_unrestricted
+from halyk.parties import extract_related_parties, mark_related, mark_unrestricted
 from halyk.rules import Rule, RuleKind
 from halyk.run import _resolve_group_capex_values
 
@@ -84,6 +84,51 @@ Parent Holdings LLP
 
     assert parties.unrestricted == frozenset({"Outside Perimeter LLP"})
     assert entries[0].is_unrestricted_transfer is True
+
+
+def test_related_parties_support_worded_fraction_and_explicit_affiliate_records() -> None:
+    worded = extract_related_parties(
+        "P1",
+        """
+Astyk Trans Export JSC
+4.9%
+Syrdarya Capital LLP
+27.8%
+Организации, в которых Группе принадлежит не менее одной пятой голосующих прав,
+признаются связанными сторонами для целей Договора.
+""",
+    )
+    explicit = extract_related_parties(
+        "P2",
+        "Контрагент «Altyn Capital L.L.P.» классифицирован как АФФИЛИРОВАННОЕ ЛИЦО Заёмщика.",
+    )
+    entry = _entry("TXN-P1-2", "-25", Category.OPEX, counterparty="Altyn Capital LLP")
+
+    assert worded.threshold_percent == Decimal("20")
+    assert worded.names == frozenset({"Syrdarya Capital LLP"})
+    assert explicit.resolved is True
+    assert explicit.names == frozenset({"Altyn Capital L.L.P."})
+    assert mark_related([entry], explicit) == 1
+
+
+def test_related_parties_support_one_quarter_and_explicit_unrestricted_record() -> None:
+    parties = extract_related_parties(
+        "P1",
+        """
+Small Vendor LLP
+9.8%
+Syrdarya Capital LLP
+32.1%
+Организации, в которых Группе принадлежит не менее одной четверти голосующих прав,
+признаются связанными сторонами.
+Entry 2. Counterparty "Altai Ore Processing LLP" is a designated UNRESTRICTED SUBSIDIARY
+of the Borrower.
+""",
+    )
+
+    assert parties.threshold_percent == Decimal("25")
+    assert parties.names == frozenset({"Syrdarya Capital LLP"})
+    assert parties.unrestricted == frozenset({"Altai Ore Processing LLP"})
 
 
 def test_group_capex_and_document_numerator_are_used_in_ratio() -> None:

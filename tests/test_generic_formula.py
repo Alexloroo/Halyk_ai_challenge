@@ -175,6 +175,110 @@ def test_document_metric_value_and_scale_are_parsed_locally_from_exact_evidence(
     assert metric.source_document == "statement.pdf"
 
 
+def test_explicit_debt_definition_reuses_ledger_financing_inflow() -> None:
+    formula = GenericFormulaSpec(
+        mode=CovenantMode.GENERIC_NUMERIC,
+        supported=True,
+        reason="conditional cap",
+        clause_evidence="conditional cap",
+        expression=ExpressionSpec(
+            op=ExpressionOp.SUM_OUTFLOW,
+            categories=[Category.CAPEX],
+        ),
+        condition=ExpressionSpec(
+            op=ExpressionOp.DIVIDE,
+            args=[
+                ExpressionSpec(op=ExpressionOp.METRIC, metric="total_debt"),
+                ExpressionSpec(op=ExpressionOp.METRIC, metric="ebitda"),
+            ],
+        ),
+        condition_threshold=Decimal("2.4"),
+        required_metrics=[
+            MetricRequirement(
+                name="total_debt",
+                source=MetricSource.DOCUMENT,
+                description="total debt",
+                evidence_terms=["total debt"],
+            ),
+            MetricRequirement(
+                name="ebitda",
+                source=MetricSource.LEDGER,
+                description="EBITDA",
+            ),
+        ],
+    )
+
+    normalized = run_module._normalize_defined_ledger_metrics(
+        formula,
+        "Total debt for this purpose means Financing proceeds received during the period.",
+    )
+
+    assert normalized.condition is not None
+    assert normalized.condition.args[0].metric == "financing_inflow"
+    assert {(item.name, item.source) for item in normalized.required_metrics} == {
+        ("financing_inflow", MetricSource.LEDGER),
+        ("ebitda", MetricSource.LEDGER),
+    }
+
+
+def test_absolute_document_metric_rejects_covenant_ratio_threshold() -> None:
+    candidate = EvidenceCandidate(
+        candidate_id="candidate-001",
+        source="agreement.pdf",
+        text="Total debt to EBITDA must not exceed 3.00x.",
+    )
+    request = DocumentMetricRequest(
+        key="N1/6.1::total_debt",
+        metric="total_debt",
+        description="total debt amount",
+        evidence_terms=("Total debt",),
+        candidates=(candidate,),
+    )
+    spec = DocumentMetricSpec(
+        metric="total_debt",
+        matched_candidate_id="candidate-001",
+        evidence=candidate.text,
+        value_text="3.00x",
+        scale="one",
+    )
+
+    errors, metric = _validate_metric(spec, request)
+
+    assert metric is None
+    assert "absolute financial metric cannot use a ratio or percentage value" in errors
+
+
+def test_ratio_document_metric_rejects_value_copied_from_covenant_condition() -> None:
+    covenant = (
+        "If the Leverage Ratio exceeds 3.00x, Capital Expenditure must not exceed $2,500,000."
+    )
+    candidate = EvidenceCandidate(
+        candidate_id="candidate-001",
+        source="agreement.pdf",
+        text="Section 6.1. " + covenant,
+    )
+    request = DocumentMetricRequest(
+        key="N1/6.1::leverage_ratio",
+        metric="leverage_ratio",
+        description="measured leverage ratio",
+        evidence_terms=("Leverage Ratio",),
+        candidates=(candidate,),
+        covenant_text=covenant,
+    )
+    spec = DocumentMetricSpec(
+        metric="leverage_ratio",
+        matched_candidate_id="candidate-001",
+        evidence="Section 6.1. " + covenant,
+        value_text="3.00x",
+        scale="one",
+    )
+
+    errors, metric = _validate_metric(spec, request)
+
+    assert metric is None
+    assert "covenant threshold cannot be used as an observed document metric" in errors
+
+
 def test_documentary_covenant_returns_boolean_actual_without_llm_arithmetic() -> None:
     formula = GenericFormulaSpec(
         mode=CovenantMode.DOCUMENTARY,

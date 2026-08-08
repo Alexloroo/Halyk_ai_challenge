@@ -62,6 +62,14 @@ class AuditAdjustment:
     description: str
 
 
+@dataclass(frozen=True)
+class FXSettlement:
+    counterparty: str
+    currency: str
+    foreign_amount: Decimal
+    usd_amount: Decimal
+
+
 def _match_category(text: str) -> Category | None:
     lower = text.lower().strip()
     for phrase, cat in CATEGORY_MAP.items():
@@ -136,6 +144,12 @@ FX_RATE = re.compile(
     r"\$\s*([\d,]+(?:\.\d{2})?)",
     re.S | re.I,
 )
+FX_SETTLEMENT = re.compile(
+    r"контрагент(?:ом|у)?\s+[«\"]([^»\"]+)[»\"].*?"
+    r"([\d,]+(?:\.\d{2})?)\s*(EUR|GBP|KZT).*?"
+    r"(?:\$|USD)\s*([\d,]+(?:\.\d{2})?)",
+    re.S | re.I,
+)
 
 
 def extract_fx_rates(text: str) -> dict[str, Decimal]:
@@ -147,6 +161,42 @@ def extract_fx_rates(text: str) -> dict[str, Decimal]:
         if eur > 0:
             rates["EUR"] = usd / eur
     return rates
+
+
+def extract_fx_settlements(text: str) -> list[FXSettlement]:
+    """Extract transaction-specific audited USD settlement amounts."""
+    return [
+        FXSettlement(
+            counterparty=" ".join(match.group(1).split()),
+            currency=match.group(3).upper(),
+            foreign_amount=Decimal(match.group(2).replace(",", "")),
+            usd_amount=Decimal(match.group(4).replace(",", "")),
+        )
+        for match in FX_SETTLEMENT.finditer(text)
+    ]
+
+
+def apply_fx_settlements(entries: list[LedgerEntry], settlements: list[FXSettlement]) -> set[str]:
+    """Apply an exact audited settlement only when it identifies one ledger row."""
+    corrected: set[str] = set()
+    for settlement in settlements:
+        name = " ".join(settlement.counterparty.casefold().split())
+        matches = [
+            entry
+            for entry in entries
+            if entry.currency.upper() == settlement.currency
+            and " ".join(entry.counterparty.casefold().split()) == name
+            and entry.amount is not None
+        ]
+        if len(matches) != 1:
+            continue
+        entry = matches[0]
+        entry.amount = settlement.usd_amount.copy_sign(entry.amount)
+        entry.currency = "USD"
+        entry.audit_corrected = True
+        entry.fx_converted = True
+        corrected.add(entry.txn_id)
+    return corrected
 
 
 #: Group-level capex is not in any ledger: it is derived from the PP&E note of

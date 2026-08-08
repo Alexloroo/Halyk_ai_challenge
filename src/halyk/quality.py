@@ -83,6 +83,8 @@ def assess_private_readiness(
     for record in categorization_records:
         if not record.get("needs_llm"):
             continue
+        if not record.get("usable", True):
+            continue
         if record.get("llm_requested"):
             category_llm_requested += 1
             result = record.get("llm_result")
@@ -134,10 +136,11 @@ def assess_private_readiness(
         scenario_rules = rules.get(scenario_id, {})
         requires_parties = any(
             rule.kind in (RuleKind.MAX_RELATED_PARTY, RuleKind.RELATED_PARTY_SHARE)
+            and Category.ASSET_TRANSFER not in rule.categories
             for rule in scenario_rules.values()
         )
         party_result = parties.get(scenario_id)
-        if requires_parties and (party_result is None or party_result.threshold_percent is None):
+        if requires_parties and (party_result is None or not party_result.resolved):
             add(
                 "FAIL",
                 "unresolved_related_parties",

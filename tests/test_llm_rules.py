@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from halyk.categorize import Category
 from halyk.llm_rules import (
     RuleExtractionRequest,
     RuleExtractionSpec,
@@ -61,3 +62,56 @@ def test_numeric_missing_rule_still_requires_supported_threshold() -> None:
 
     assert rule is None
     assert "rule_evidence contains no supported threshold" in errors
+
+
+def test_unknown_category_from_llm_does_not_block_unknown_clause_recovery() -> None:
+    agreement = (
+        "Section 5.1 Springing transfer limitation. "
+        "If leverage exceeds 2.50x, transfers must not exceed USD 500,000."
+    )
+    request = RuleExtractionRequest(
+        key="J4/5.1",
+        scenario_id="J4",
+        clause="5.1",
+        agreement_text=agreement,
+    )
+    resolution = RuleExtractionSpec(
+        clause="5.1",
+        heading_evidence="Section 5.1 Springing transfer limitation.",
+        rule_evidence="If leverage exceeds 2.50x, transfers must not exceed USD 500,000.",
+        kind=RuleKind.UNKNOWN,
+        comparator="<=",
+        categories=[Category.UNKNOWN],
+    )
+
+    errors, rule = _validate_and_build(resolution, request)
+
+    assert errors == []
+    assert rule is not None
+    assert rule.categories == frozenset()
+
+
+def test_new_semantic_category_does_not_block_missing_clause_recovery() -> None:
+    agreement = (
+        "Section 5.2 Debt service. Scheduled debt principal repayments must not exceed USD 500,000."
+    )
+    request = RuleExtractionRequest(
+        key="J4/5.2",
+        scenario_id="J4",
+        clause="5.2",
+        agreement_text=agreement,
+    )
+    resolution = RuleExtractionSpec(
+        clause="5.2",
+        heading_evidence="Section 5.2 Debt service.",
+        rule_evidence="Scheduled debt principal repayments must not exceed USD 500,000.",
+        kind=RuleKind.UNKNOWN,
+        comparator="<=",
+        categories=[Category.DEBT_PRINCIPAL],
+    )
+
+    errors, rule = _validate_and_build(resolution, request)
+
+    assert errors == []
+    assert rule is not None
+    assert rule.categories == frozenset({Category.DEBT_PRINCIPAL})

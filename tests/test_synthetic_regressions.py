@@ -7,7 +7,9 @@ from pathlib import Path
 from halyk.audit import (
     AdjustmentKind,
     apply_adjustments,
+    apply_fx_settlements,
     extract_adjustments,
+    extract_fx_settlements,
     is_actionable_audit_text,
 )
 from halyk.categorize import Category, assess_category, categorize
@@ -80,6 +82,13 @@ def test_category_classifier_handles_control_system_and_shared_service_payment()
     assert categorize("Group warehouse service") is Category.OPEX
 
 
+def test_private_debt_and_transfer_transactions_get_semantic_categories() -> None:
+    assert categorize("Promissory note proceeds", is_inflow=True) is Category.FINANCING
+    assert categorize("Term loan principal repayment 2025") is Category.DEBT_PRINCIPAL
+    assert categorize("Processing equipment transfer to group entity") is Category.ASSET_TRANSFER
+    assert categorize("Intercompany distribution settlement") is Category.DISTRIBUTION
+
+
 def test_category_assessment_resolves_known_conflicts_and_routes_novel_text_to_llm() -> None:
     financing = assess_category("Term loan facility drawdown", is_inflow=True)
     marketing = assess_category("Point-of-sale marketing materials", is_inflow=False)
@@ -139,6 +148,10 @@ def test_subaccount_identifier_does_not_match_primary_account() -> None:
     assert ACCOUNT.findall("KYC-ACC Account ID: ACC-123456") == ["ACC-123456"]
 
 
+def test_non_acc_account_identifier_is_linked_to_its_documents() -> None:
+    assert ACCOUNT.findall("Account TELE-4471") == ["TELE-4471"]
+
+
 def test_rule_parser_accepts_private_like_formatting_and_currency() -> None:
     agreement = """
 Clause 6 . 1) Minimum revenue.
@@ -154,6 +167,48 @@ Article 7
     assert rules["6.1"].comparator == ">="
     assert rules["6.2"].threshold == Decimal("0.30")
     assert rules["6.2"].comparator == "<="
+
+
+def test_rule_parser_supports_worded_percent_and_nearest_comparator() -> None:
+    agreement = """
+Пункт 6.1 Условный лимит.
+Если выручка окажется менее $4,000,000.00, капитальные затраты не должны превышать
+80 процентов совокупной выручки.
+Пункт 6.2 Минимальная квартальная выручка.
+Заёмщик обязуется не допускать снижения выручки ниже $3,000,000.00.
+Статья 7
+"""
+
+    rules = extract_rules("PRIVATE", agreement)
+
+    assert rules["6.1"].threshold == Decimal("0.8")
+    assert rules["6.1"].comparator == "<="
+    assert rules["6.2"].threshold == Decimal("3000000")
+    assert rules["6.2"].comparator == ">="
+
+
+def test_conditional_rule_uses_obligation_threshold_not_trigger_threshold() -> None:
+    agreement = """
+Пункт 6.1 Условный лимит капитальных затрат.
+Если Коэффициент долговой нагрузки превышает 3.00x, то Заёмщик обязуется не
+допускать превышения капитальными затратами величины $2,500,000.00.
+Пункт 6.2 Insurance Cover Linked to Capital Expenditure.
+Если капитальные затраты превышают $1,500,000.00, Заёмщик обязуется поддерживать
+страховые премии в размере не менее $250,000.00.
+Пункт 6.3 Conditional capital intensity.
+If quarterly revenue is below $4,000,000.00, the Borrower must ensure that capex to
+revenue does not exceed 0.32x.
+Статья 7
+"""
+
+    rules = extract_rules("PRIVATE", agreement)
+
+    assert rules["6.1"].threshold == Decimal("2500000.00")
+    assert rules["6.1"].comparator == "<="
+    assert rules["6.2"].threshold == Decimal("250000.00")
+    assert rules["6.2"].comparator == ">="
+    assert rules["6.3"].threshold == Decimal("0.32")
+    assert rules["6.3"].comparator == "<="
 
 
 def test_only_actionable_unknown_documents_are_audit_candidates() -> None:
@@ -188,6 +243,21 @@ def test_audit_adjustments_do_not_cross_transaction_blocks() -> None:
         (AdjustmentKind.RECLASSIFY, "TXN-X-0006"),
         (AdjustmentKind.EXCLUDE, "TXN-X-0007"),
     ]
+
+
+def test_exact_audited_fx_settlement_overrides_ambiguous_ledger_amount() -> None:
+    ledger_entry = entry("TXN-J5-0002", "-668678.14", Category.CAPEX)
+    ledger_entry.counterparty = "Nordwerk Aufbereitungstechnik GmbH"
+    ledger_entry.currency = "EUR"
+    settlements = extract_fx_settlements(
+        "Расчёты с контрагентом «Nordwerk Aufbereitungstechnik GmbH»: счёт на сумму "
+        "81,627.50 EUR урегулирован платежом в долларах США в размере $93,055.35."
+    )
+
+    assert apply_fx_settlements([ledger_entry], settlements) == {"TXN-J5-0002"}
+    assert ledger_entry.amount == Decimal("-93055.35")
+    assert ledger_entry.currency == "USD"
+    assert ledger_entry.audit_corrected is True
 
 
 def test_audit_document_without_operation_blocks_is_valid() -> None:

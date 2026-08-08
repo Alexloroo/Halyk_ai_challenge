@@ -140,6 +140,7 @@ class DocumentMetricRequest:
     description: str
     evidence_terms: tuple[str, ...]
     candidates: tuple[EvidenceCandidate, ...]
+    covenant_text: str = ""
 
 
 @dataclass(frozen=True)
@@ -491,10 +492,32 @@ def _validate_metric(
         _normalized(term) in _normalized(spec.evidence) for term in request.evidence_terms
     ):
         errors.append("evidence contains none of the declared metric labels")
+    if (
+        request.covenant_text
+        and (
+            _excerpt(spec.evidence, request.covenant_text)
+            or _excerpt(request.covenant_text, spec.evidence)
+        )
+        and re.search(
+            r"\bif\b|\bwhen\b|must\s+not\s+exceed|shall\s+not\s+exceed|"
+            r"если|когда|превыша\w*|не\s+(?:должен|должна|должно|должны)\s+превыш",
+            spec.evidence,
+            re.I,
+        )
+    ):
+        errors.append("covenant threshold cannot be used as an observed document metric")
     if spec.scale not in _SCALES:
         errors.append("unsupported scale")
     elif spec.scale != "one" and _SCALE_EVIDENCE[spec.scale].search(spec.evidence) is None:
         errors.append("scale is not supported by evidence")
+    absolute_metric = re.search(
+        r"debt|cash|equity|asset|liabilit|inventory|capex|ebitda|"
+        r"долг|денеж|капитал|актив|обязательств|запас",
+        request.metric,
+        re.I,
+    )
+    if absolute_metric and re.search(r"(?:[xх×]|%)\s*$", spec.value_text.strip(), re.I):
+        errors.append("absolute financial metric cannot use a ratio or percentage value")
     if errors or candidate is None:
         return errors, None
     try:

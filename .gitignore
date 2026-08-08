@@ -10,5 +10,5 @@ __pycache__/
 !.env.example
 
 trace/
-submission.json
+#submission.json
 data/raw/

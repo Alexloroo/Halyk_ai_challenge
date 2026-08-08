@@ -35,6 +35,9 @@ class Category(StrEnum):
     INTEREST = "interest"
     MARKETING = "marketing"
     PROFESSIONAL = "professional"
+    DEBT_PRINCIPAL = "debt_principal"
+    ASSET_TRANSFER = "asset_transfer"
+    DISTRIBUTION = "distribution"
     CONTRA = "contra"  # refunds, credits, reversals — reduce a cost
     UNKNOWN = "unknown"
 
@@ -92,10 +95,33 @@ FINANCING = _rx(
     r"\b(?:revolver|revolving|credit)\s+facility\s+(?:drawdown|proceeds)\b",
     r"\bborrowing\s+proceeds\b",
     r"\bfinancing\s+(?:receipts|proceeds)\b",
+    r"\bpromissory\s+note\s+proceeds\b",
     r"поступлен\w+\s+по\s+финансирован",
     r"кредитн\w+\s+средств\w+\s+получен",
     r"қарыз\s+қаражат\w*\s+түсім",
     r"қаржыландырудан\s+түскен\s+қаражат",
+)
+
+DEBT_PRINCIPAL = _rx(
+    r"\b(?:term\s+)?loan\s+principal\s+(?:repayment|payment)\b",
+    r"\b(?:debt|borrowing)\s+principal\s+(?:repayment|payment)\b",
+    r"\bprincipal\s+repayment\b",
+    r"погашен\w+\s+основн\w+\s+(?:долг|сумм)",
+    r"негізгі\s+борышты\s+өтеу",
+)
+ASSET_TRANSFER = _rx(
+    r"\b(?:asset|equipment|machinery)\s+transfer\b",
+    r"\btransfer\s+of\s+(?:an?\s+)?(?:asset|equipment|machinery)\b",
+    r"передач\w+\s+(?:актив|оборудован)",
+    r"активтерді\s+беру",
+)
+DISTRIBUTION = _rx(
+    r"\b(?:intercompany\s+)?distribution\b",
+    r"\bdividend\b",
+    r"\brestricted\s+payment\b",
+    r"распределен\w+\s+(?:прибы|доход)",
+    r"дивиденд",
+    r"бөлінбеген\s+пайда",
 )
 
 # Generic operating services are high-confidence OPEX. More specific category
@@ -282,6 +308,28 @@ def assess_category(
 
     if is_inflow and REVENUE.search(text):
         return CategorizationAssessment(Category.REVENUE, (Category.REVENUE,), "revenue", False)
+
+    if not is_inflow and DEBT_PRINCIPAL.search(text):
+        return CategorizationAssessment(
+            Category.DEBT_PRINCIPAL,
+            (Category.DEBT_PRINCIPAL,),
+            "debt_principal",
+            False,
+        )
+    if not is_inflow and ASSET_TRANSFER.search(text):
+        return CategorizationAssessment(
+            Category.ASSET_TRANSFER,
+            (Category.ASSET_TRANSFER,),
+            "asset_transfer",
+            False,
+        )
+    if not is_inflow and DISTRIBUTION.search(text):
+        return CategorizationAssessment(
+            Category.DISTRIBUTION,
+            (Category.DISTRIBUTION,),
+            "distribution",
+            False,
+        )
 
     candidates = tuple(
         dict.fromkeys(category for pattern, category in RULES if pattern.search(text))

@@ -26,6 +26,43 @@ THRESHOLD = re.compile(
     r"немесе\s+одан\s+көп)",
     re.I,
 )
+WORDED_THRESHOLDS = (
+    (
+        re.compile(
+            r"не\s+менее\s+одной\s+пятой|at\s+least\s+one\s+fifth|кемінде\s+бестен\s+бір",
+            re.I,
+        ),
+        Decimal("20"),
+    ),
+    (
+        re.compile(
+            r"не\s+менее\s+одной\s+четверти|at\s+least\s+one\s+quarter|кемінде\s+төрттен\s+бір",
+            re.I,
+        ),
+        Decimal("25"),
+    ),
+    (
+        re.compile(
+            r"не\s+менее\s+одной\s+трети|at\s+least\s+one\s+third|кемінде\s+үштен\s+бір",
+            re.I,
+        ),
+        Decimal("33.3333333333"),
+    ),
+)
+EXPLICIT_RELATED = re.compile(
+    r"Контрагент\s+[«\"]([^»\"]+)[»\"]\s+классифицирован\s+как\s+"
+    r"(?:АФФИЛИРОВАННОЕ\s+ЛИЦО|СВЯЗАННАЯ\s+СТОРОНА)|"
+    r"Counterparty\s+[«\"]([^»\"]+)[»\"]\s+is\s+classified\s+as\s+"
+    r"(?:an?\s+)?(?:affiliate|related\s+party)",
+    re.I,
+)
+EXPLICIT_UNRESTRICTED = re.compile(
+    r"(?:Entry\s+\d+\.\s*)?Counterparty\s+[«\"]([^»\"]+)[»\"]\s+is\s+(?:a\s+)?"
+    r"designated\s+UNRESTRICTED\s+SUBSIDIARY|"
+    r"Контрагент\s+[«\"]([^»\"]+)[»\"]\s+(?:признан|определ[её]н)\s+как\s+"
+    r"НЕОГРАНИЧЕННАЯ\s+ДОЧЕРНЯЯ\s+ОРГАНИЗАЦИЯ",
+    re.I,
+)
 #: Some dossiers carry a second table — the share of each subsidiary's assets
 #: pledged as security. Subsidiaries below the stated pledge threshold sit
 #: outside the security perimeter and count as *unrestricted* for the
@@ -61,7 +98,7 @@ class RelatedParties:
 
     @property
     def resolved(self) -> bool:
-        return self.threshold_percent is not None
+        return self.threshold_percent is not None or bool(self.names)
 
 
 def _number(text: str) -> Decimal:
@@ -85,21 +122,35 @@ def extract_related_parties(scenario_id: str, kyc_text: str) -> RelatedParties:
 
     match = THRESHOLD.search(kyc_text)
     threshold = _number(next(group for group in match.groups() if group)) if match else None
+    if threshold is None:
+        threshold = next(
+            (value for pattern, value in WORDED_THRESHOLDS if pattern.search(kyc_text)),
+            None,
+        )
 
     holdings = [
         (" ".join(name.split()), _number(share)) for name, share in HOLDING.findall(kyc_text)
     ]
-    names = (
+    threshold_names = (
         frozenset(name for name, share in holdings if share >= threshold)
         if threshold is not None
         else frozenset()
+    )
+    explicit_names = frozenset(
+        " ".join(next(group for group in match if group).split())
+        for match in EXPLICIT_RELATED.findall(kyc_text)
+    )
+    names = threshold_names | explicit_names
+    explicit_unrestricted = frozenset(
+        " ".join(next(group for group in match if group).split())
+        for match in EXPLICIT_UNRESTRICTED.findall(kyc_text)
     )
     return RelatedParties(
         scenario_id=scenario_id,
         threshold_percent=threshold,
         holdings=holdings,
         names=names,
-        unrestricted=unrestricted,
+        unrestricted=unrestricted | explicit_unrestricted,
     )
 
 

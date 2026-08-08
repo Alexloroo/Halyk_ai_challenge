@@ -25,8 +25,10 @@ from . import paths
 from .audit import (
     AuditAdjustment,
     apply_adjustments,
+    apply_fx_settlements,
     extract_adjustments,
     extract_fx_rates,
+    extract_fx_settlements,
     extract_group_capex,
     is_actionable_audit_text,
 )
@@ -124,6 +126,7 @@ def _full_context_reason(
     generic_formulas: dict[str, GenericFormulaSpec],
     capability_results: dict[str, object],
     generic_verifications: dict[str, object],
+    external_metrics: dict[str, dict[str, ExternalMetric]],
 ) -> str | None:
     if rule.kind not in (RuleKind.RATIO, RuleKind.UNKNOWN):
         return None
@@ -137,6 +140,16 @@ def _full_context_reason(
         verification_resolution is None or not verification_resolution.accepted
     ):
         return "generic_verification_failed"
+    generic = generic_formulas.get(key)
+    if generic is not None and generic.mode is CovenantMode.GENERIC_NUMERIC:
+        available = external_metrics.get(key, {})
+        missing = {
+            requirement.name
+            for requirement in generic.required_metrics
+            if requirement.source is MetricSource.DOCUMENT and requirement.name not in available
+        }
+        if missing:
+            return "missing_document_metrics"
     if key not in formulas and key not in generic_formulas:
         return "formula_unavailable"
     return None
@@ -195,6 +208,54 @@ _CONSOLIDATED_STATEMENT = re.compile(
     r"шоғырландырылған\s+қаржылық\s+есептілік",
     re.I,
 )
+_DEBT_DEFINED_AS_FINANCING = re.compile(
+    r"(?:совокупн\w*\s+долг|total\s+debt).{0,240}?"
+    r"(?:означа\w*|means?|defined\s+as).{0,240}?"
+    r"(?:поступлен\w*\s+от\s+финансирован|financing\s+(?:proceeds?|inflows?))",
+    re.I | re.S,
+)
+
+
+def _normalize_defined_ledger_metrics(
+    formula: GenericFormulaSpec,
+    agreement_text: str,
+) -> GenericFormulaSpec:
+    """Use a ledger metric only when the agreement explicitly defines the alias."""
+    if _DEBT_DEFINED_AS_FINANCING.search(agreement_text) is None:
+        return formula
+
+    def replace(expression):
+        if expression is None:
+            return None
+        args = [replace(arg) for arg in expression.args]
+        metric = "financing_inflow" if expression.metric == "total_debt" else expression.metric
+        return expression.model_copy(update={"args": args, "metric": metric})
+
+    requirements = []
+    seen = set()
+    for requirement in formula.required_metrics:
+        item = (
+            requirement.model_copy(
+                update={
+                    "name": "financing_inflow",
+                    "source": MetricSource.LEDGER,
+                    "evidence_terms": [],
+                }
+            )
+            if requirement.name == "total_debt"
+            else requirement
+        )
+        if item.name not in seen:
+            requirements.append(item)
+            seen.add(item.name)
+    return formula.model_copy(
+        update={
+            "expression": replace(formula.expression),
+            "condition": replace(formula.condition),
+            "required_metrics": requirements,
+        },
+        deep=True,
+    )
 
 
 def _group_capex_for(rule_text: str, documents: list[Document]) -> Decimal | None:
@@ -385,6 +446,7 @@ def solve(
                 "candidate_categories": assessment.candidates,
                 "reason": assessment.reason,
                 "needs_llm": assessment.needs_llm,
+                "usable": entry.usable,
                 "llm_requested": False,
                 "llm_result": None,
                 "final_category": assessment.category,
@@ -532,14 +594,18 @@ def solve(
                 trace_audit_input(trace, scenario_id, scenario_entries)
             all_adjs = []
             fx_rates: dict[str, object] = {}
+            fx_settlements = []
             for audit_document in audit_docs:
                 all_adjs.extend(extract_adjustments(audit_document.text))
                 fx_rates.update(extract_fx_rates(audit_document.text))
+                fx_settlements.extend(extract_fx_settlements(audit_document.text))
             total_adjustments += len(all_adjs)
             audit_adjustments_by_scenario[scenario_id] = tuple(all_adjs)
             if all_adjs:
                 scenario_entries = apply_adjustments(scenario_entries, all_adjs)
                 grouped[scenario_id] = scenario_entries
+            if fx_settlements:
+                apply_fx_settlements(scenario_entries, fx_settlements)
             if fx_rates:
                 from decimal import Decimal
 
@@ -693,7 +759,12 @@ def solve(
                 capability_records[request.key]["generic_verification"] = verification
                 accepted = verification.resolution is not None and verification.resolution.accepted
                 if accepted:
-                    generic_formulas[request.key] = request.plan
+                    scenario_id = request.key.split("/", maxsplit=1)[0]
+                    agreement = selected_agreements.get(scenario_id)
+                    generic_formulas[request.key] = _normalize_defined_ledger_metrics(
+                        request.plan,
+                        agreement.text if agreement is not None else "",
+                    )
                     formulas.pop(request.key, None)
                     capability_records[request.key]["effective_path"] = request.plan.mode
                 else:
@@ -721,6 +792,7 @@ def solve(
                                 description=requirement.description,
                                 evidence_terms=tuple(requirement.evidence_terms),
                                 candidates=candidates,
+                                covenant_text=capability_requests_by_key[key].rule.text,
                             )
                         )
                 elif spec.mode is CovenantMode.DOCUMENTARY and spec.documentary_requirement:
@@ -819,6 +891,7 @@ def solve(
                         generic_formulas=generic_formulas,
                         capability_results=capability_results,
                         generic_verifications=generic_verifications,
+                        external_metrics=external_metrics,
                     )
                     if reason is None or rule.threshold is None:
                         continue
