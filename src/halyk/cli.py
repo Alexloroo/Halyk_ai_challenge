@@ -20,7 +20,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--output", type=Path, default=Path("submission.json"))
     parser.add_argument("--team", default="ML Empire")
     parser.add_argument("--contact-email", default="voronkoleha00@gmail.com")
-    parser.add_argument("--model", default="deepseek-chat")
+    parser.add_argument("--model", default="deepseek-v4-flash")
     parser.add_argument("--no-llm", dest="use_llm", action="store_false")
     parser.add_argument("--fulltrace", action="store_true", help="recreate a complete trace")
     parser.add_argument("--trace-dir", type=Path, default=Path("trace"))

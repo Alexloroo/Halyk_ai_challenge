@@ -1,33 +1,13 @@
 
-# Local dev virtualenvs
 .venv/
 .venv311/
 __pycache__/
 *.py[cod]
 
-# Demo output
-2_ARCHITECTURE_COVENANT_MVP/data/demo/
-
-# Secrets — never commit
 .env
 .env.local
 *.env
 !.env.example
 
-# Live-run output
-2_ARCHITECTURE_COVENANT_MVP/data/live/
-
-# User data
-2_ARCHITECTURE_COVENANT_MVP/input/documents/*
-!2_ARCHITECTURE_COVENANT_MVP/input/documents/.gitkeep
-2_ARCHITECTURE_COVENANT_MVP/input/transactions/*
-!2_ARCHITECTURE_COVENANT_MVP/input/transactions/.gitkeep
-2_ARCHITECTURE_COVENANT_MVP/input/questions.json
-
-# Run outputs
 trace/
 submission.json
-2_ARCHITECTURE_COVENANT_MVP/data/answers.html
-2_ARCHITECTURE_COVENANT_MVP/data/results.json
-2_ARCHITECTURE_COVENANT_MVP/data/confidence.json
-2_ARCHITECTURE_COVENANT_MVP/data/*.duckdb

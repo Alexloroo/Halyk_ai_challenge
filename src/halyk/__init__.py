@@ -1,10 +1,4 @@
-"""Halyk AI Challenge — covenant compliance from dirty financial documents.
-
-Reads the ledger and the document archive, decides COMPLIANT/BREACH for each of
-the 36 cells in the submission template, and writes submission.json.
-
-Layout, deliberately flat — one module per pipeline stage:
-
+"""
     paths       where the dataset lives
     ledger      CSV -> LedgerEntry, scenario derived from txn_id
     categorize  free-text description -> Category
